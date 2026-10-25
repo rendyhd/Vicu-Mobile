@@ -32,6 +32,7 @@ import com.rendyhd.vicu.permission.NotificationPermissionCoordinator
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.NetworkMonitor
 import com.rendyhd.vicu.util.NotificationActions
+import com.rendyhd.vicu.util.RoutineReminderCheck
 import com.rendyhd.vicu.data.sync.CarrierFinder
 import com.rendyhd.vicu.data.sync.LabelRefresher
 import com.rendyhd.vicu.data.sync.ProjectRefresher
@@ -294,6 +295,7 @@ val commonModule = module {
         )
     }
     single { NotificationActions(taskRepository = get(), routineRepository = get(), reminders = get(), hooks = get()) }
+    single { RoutineReminderCheck(repository = get(), prefsStore = get()) }
     single { TokenRefreshRun(authManager = get(), tokenStorage = get(), baseUrlHolder = get()) }
     single {
         TaskWidgetStates(

@@ -10,14 +10,10 @@ import com.rendyhd.vicu.MainActivity
 import com.rendyhd.vicu.putViewTarget
 import com.rendyhd.vicu.ui.navigation.ViewTarget
 import com.rendyhd.vicu.R
-import com.rendyhd.vicu.data.local.RoutinePrefsStore
-import com.rendyhd.vicu.domain.model.OccurrenceStatus
-import com.rendyhd.vicu.domain.repository.RoutineRepository
+import com.rendyhd.vicu.util.RoutineReminderCheck
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -29,13 +25,9 @@ class RoutineAlarmReceiver : BroadcastReceiver(), KoinComponent {
         const val EXTRA_SLOT_ID = "routine_slot_id"
         const val EXTRA_TITLE = "routine_title"
         const val EXTRA_FOLLOW_UP = "routine_follow_up"
-
-        /** How long a reminder of a shared routine waits for the server before it rings anyway. */
-        private const val SHARED_CHECK_TIMEOUT_MS = 8_000L
     }
 
-    private val repository: RoutineRepository by inject()
-    private val prefsStore: RoutinePrefsStore by inject()
+    private val check: RoutineReminderCheck by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val routineId = intent.getStringExtra(EXTRA_ROUTINE_ID) ?: return
@@ -48,26 +40,11 @@ class RoutineAlarmReceiver : BroadcastReceiver(), KoinComponent {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (stillDue(routineId, date, key)) post(context, routineId, date, slotId, title, key, followUp)
+                if (check.stillDue(routineId, date, key)) post(context, routineId, date, slotId, title, key, followUp)
             } finally {
                 pending.finish()
             }
         }
-    }
-
-    /** True while the occurrence is open and this account is still to be reminded of it. */
-    private suspend fun stillDue(routineId: String, date: String, key: String): Boolean {
-        // An alarm left over from before routines were turned off stays quiet.
-        if (!prefsStore.enabled.first()) return false
-        // Someone else may have done a shared routine since this phone last synced: ask the
-        // server first (cross-app semantics 6.9). Offline, or without an answer soon, it rings.
-        if (repository.observeRoutine(routineId).first()?.definition?.shared == true) {
-            withTimeoutOrNull(SHARED_CHECK_TIMEOUT_MS) { repository.refreshRoutine(routineId) }
-        }
-        // Hidden, reminders turned off on this account, or read only for it.
-        if (repository.observeReminderRoutines().first().none { it.definition.id == routineId }) return false
-        val occurrence = repository.observeDay(date).first().occurrences.firstOrNull { it.key == key } ?: return false
-        return occurrence.status != OccurrenceStatus.COMPLETED && occurrence.status != OccurrenceStatus.SKIPPED
     }
 
     private fun post(

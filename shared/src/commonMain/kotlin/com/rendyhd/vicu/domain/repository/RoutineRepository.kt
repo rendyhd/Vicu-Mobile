@@ -105,8 +105,8 @@ interface RoutineRepository {
     suspend fun setHidden(routineId: String, hidden: Boolean) {}
 
     /**
-     * Reads the routine's carrier from the server into the cache (before a reminder of a shared
-     * routine rings). Returns false when the server could not be asked; the cache stays then.
+     * Reads the routine's carrier from the server into the cache (before one of its reminders
+     * rings). Returns false when the server could not be asked; the cache stays then.
      */
     suspend fun refreshRoutine(routineId: String): Boolean = false
 }

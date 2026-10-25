@@ -94,7 +94,7 @@ class RoutineRepositoryImpl(
     private val personal: RoutinePersonalPreferences? = null,
     /** Project permissions, for who is reminded; none: every project counts as writable. */
     private val projectDao: ProjectDao? = null,
-    /** Reads one carrier into the cache before a shared routine's reminder rings; none in tests. */
+    /** Reads one carrier into the cache before a routine reminder rings; none in tests. */
     private val refresher: TaskRefresher? = null,
 ) : RoutineRepository {
     private companion object {
@@ -718,8 +718,13 @@ class RoutineRepositoryImpl(
             ?: return NetworkResult.Error("Routine carrier not found")
         val task = with(taskMapper) { entity.toDomain() }
         val parsed = RoutineEnvelope.parse(task.description, json)
+        // [routine] may be a copy read before another write here changed the carrier: a tick
+        // made while finalizeAndPrune works through the carriers it read at its start. Merged
+        // with the cached copy as it is now, the write never takes that tick away from the cache
+        // or the queue, so its reminder stays quiet.
+        val payload = parsed.payload?.let { RoutineEnvelope.mergePayload(routine.payload, it) } ?: routine.payload
         val description = try {
-            RoutineEnvelope.upsert(parsed.body, routine.payload, json)
+            RoutineEnvelope.upsert(parsed.body, payload, json)
         } catch (e: IllegalArgumentException) {
             return NetworkResult.Error(
                 e.message ?: "The routine's history is too large to save. Connect to your server so it can be archived.",
@@ -738,7 +743,7 @@ class RoutineRepositoryImpl(
         return when (val result = taskRepository.update(completeCarrier)) {
             is NetworkResult.Success -> {
                 platformHooks.routinesChanged()
-                val returnedPayload = RoutineEnvelope.parse(result.data.description, json).payload ?: routine.payload
+                val returnedPayload = RoutineEnvelope.parse(result.data.description, json).payload ?: payload
                 NetworkResult.Success(Routine(result.data.id, returnedPayload))
             }
             is NetworkResult.Error -> result
