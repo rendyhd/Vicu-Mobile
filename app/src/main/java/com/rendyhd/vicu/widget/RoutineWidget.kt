@@ -54,13 +54,24 @@ import com.rendyhd.vicu.domain.repository.RoutineRepository
 import com.rendyhd.vicu.ui.theme.routineMarkColor
 import com.rendyhd.vicu.util.DateDisplayFormat
 import com.rendyhd.vicu.util.DayClock
+import com.rendyhd.vicu.util.TimeSource
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.koin.core.context.GlobalContext
+import java.util.UUID
 
 class RoutineWidget : GlanceAppWidget() {
     companion object {
         private val COMPACT = DpSize(160.dp, 64.dp)
         private val LARGE = DpSize(250.dp, 180.dp)
+
+        /**
+         * Held by a refresh while it works out and writes the state, and by a tap while it queues
+         * its tick and hides the row, so a refresh never reads the pending ticks before a tap queues
+         * one and then writes over that tap's hidden row.
+         */
+        internal val stateLock = Mutex()
     }
 
     override val stateDefinition = RoutineWidgetStateDefinition
@@ -84,19 +95,33 @@ class RoutineWidget : GlanceAppWidget() {
         }
     }
 
-    suspend fun updateAllWidgets(context: Context) {
+    /**
+     * Shows today's routines on every routine widget, with the ticks still being saved laid over
+     * the database (see [RoutineWidgetPendingTicks]). A tick's worker that has just finished with it
+     * leaves it out as [ignoringWork], or as [ignoringRoutine] when it was refused.
+     */
+    suspend fun updateAllWidgets(
+        context: Context,
+        ignoringWork: UUID? = null,
+        ignoringRoutine: String? = null,
+    ) {
         val repository = GlobalContext.get().get<RoutineRepository>()
+        val time = GlobalContext.get().get<TimeSource>()
         // The day is re-read first: this can run long after the clock last ticked.
         val dayClock = GlobalContext.get().get<DayClock>()
         dayClock.refresh()
         val today = dayClock.day.value.date.toString()
         val format = DateDisplayFormat.system(DateFormat.is24HourFormat(context))
-        val state = RoutineWidgetState.from(repository.observeDay(today).first(), format)
-        val manager = GlanceAppWidgetManager(context)
-        manager.getGlanceIds(RoutineWidget::class.java).forEach { glanceId ->
-            updateState(context, glanceId, state)
-            update(context, glanceId)
+        val glanceIds = GlanceAppWidgetManager(context).getGlanceIds(RoutineWidget::class.java)
+        stateLock.withLock {
+            // The database first: a tick missing from it is still pending, because its worker
+            // refreshes (and so waits for this lock) before its work ends.
+            val saved = RoutineWidgetState.from(repository.observeDay(today).first(), format)
+            val pending = RoutineWidgetPendingTicks.read(context, ignoringWork, ignoringRoutine)
+            val state = RoutineWidgetPendingTicks.applyTo(saved, pending, time.now().toEpochMilliseconds())
+            glanceIds.forEach { glanceId -> updateState(context, glanceId, state) }
         }
+        glanceIds.forEach { glanceId -> update(context, glanceId) }
     }
 
     suspend fun updateState(
@@ -137,15 +162,25 @@ class ToggleRoutineWidgetAction : ActionCallback {
         val status = if (parameters[CompletedKey] == true) OccurrenceStatus.PENDING else OccurrenceStatus.COMPLETED
 
         val widget = RoutineWidget()
-        updateAppWidgetState(context, RoutineWidgetStateDefinition, glanceId) { prefs ->
-            val current = RoutineWidgetStateDefinition.parseState(prefs)
-            val updated = current.withStatus(routineId, date, slotId, status)
-            prefs.toMutablePreferences().apply {
-                this[RoutineWidgetStateDefinition.KEY_STATE] =
-                    RoutineWidgetStateDefinition.encodeState(updated)
+        val tick = RoutineWidgetPendingTicks.Tick(
+            routineId = routineId,
+            date = date,
+            slotId = slotId,
+            status = status,
+            at = GlobalContext.get().get<TimeSource>().now().toEpochMilliseconds(),
+        )
+        RoutineWidget.stateLock.withLock {
+            // Queued before the row hides, so every refresh from here on finds the tick pending.
+            RoutineWidgetActionScheduler.enqueue(context, tick)
+            updateAppWidgetState(context, RoutineWidgetStateDefinition, glanceId) { prefs ->
+                val current = RoutineWidgetStateDefinition.parseState(prefs)
+                val updated = current.withStatus(routineId, date, slotId, status)
+                prefs.toMutablePreferences().apply {
+                    this[RoutineWidgetStateDefinition.KEY_STATE] =
+                        RoutineWidgetStateDefinition.encodeState(updated)
+                }
             }
         }
-        RoutineWidgetActionScheduler.enqueue(context, routineId, date, slotId, status)
         widget.update(context, glanceId)
     }
 }
