@@ -31,11 +31,17 @@ fun VicuDragHandle(modifier: Modifier = Modifier) {
             .semantics { contentDescription = "Sheet handle" },
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = 32.dp, height = 4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
-        )
+        VicuDragHandleBar()
     }
+}
+
+/** The bar of [VicuDragHandle] alone, for a sheet header that is itself the place to drag. */
+@Composable
+fun VicuDragHandleBar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(width = 32.dp, height = 4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+    )
 }

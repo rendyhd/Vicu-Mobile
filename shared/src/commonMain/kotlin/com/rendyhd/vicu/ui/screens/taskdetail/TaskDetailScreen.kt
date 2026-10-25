@@ -1,6 +1,9 @@
 package com.rendyhd.vicu.ui.screens.taskdetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,7 +56,13 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import com.rendyhd.vicu.ui.components.shared.VicuDragHandleBar
+import com.rendyhd.vicu.ui.theme.rememberReduceMotion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.rendyhd.vicu.ui.components.task.LabelChip
@@ -276,10 +285,6 @@ fun TaskDetailScreen(
         }
     }
 
-    // Full-screen instead of a ModalBottomSheet: the M3 sheet's anchored-drag has a nested-scroll
-    // anchor-recovery bug (issuetracker.google.com/issues/486562294, fixed only in alpha Compose)
-    // that made a scrollable child shake/spring on drag. A plain screen has no drag-to-dismiss, so
-    // the whole class of bugs is gone. Dismiss via the close icon or system back.
     // Predictive back: the editor follows the gesture (EditorOverlay scales and fades it by
     // backState.progress); a cancelled gesture springs back. Without a gesture (a button press,
     // three-button navigation) the editor just closes.
@@ -290,16 +295,33 @@ fun TaskDetailScreen(
         if (conflict) backState?.let { scope.launch { it.springBack() } }
     }
 
+    // Pulling the sheet down (by its header, or past the top of the list) closes it once let go far
+    // enough or with a flick; otherwise it springs back. With a description conflict the dialog opens
+    // instead and the sheet goes back to rest.
+    val pull = remember { EditorPullState() }
+    val density = LocalDensity.current
+    val reduceMotion = rememberReduceMotion()
+    val releasePull by rememberUpdatedState { velocity: Float ->
+        if (editorPullCloses(pull.offset, velocity, density)) dismissEditor()
+        if (dismissed) {
+            pull.slideOut(scope, velocity, reduceMotion)
+        } else {
+            pull.springBack(scope, velocity, reduceMotion)
+        }
+    }
+    val pullConnection = remember(pull) { EditorPullConnection(pull) { releasePull(it) } }
+
     // A sheet over the list (design concept 4): the list stays in view above it, under a scrim that
     // closes the editor when tapped. Not a ModalBottomSheet: its anchored drag has a nested-scroll
     // bug (issuetracker.google.com/issues/486562294, fixed only in alpha Compose) that made a
-    // scrollable child shake on drag, so the sheet has no drag-to-dismiss. It closes with the
-    // chevron, the scrim or back (predictive: EditorOverlay scales and fades it by
-    // backState.progress).
+    // scrollable child shake on drag, so the pull down is the editor's own (EditorPull.kt): the
+    // sheet only moves by what the list does not scroll. It also closes with the chevron, the scrim
+    // or back (predictive: EditorOverlay scales and fades it by backState.progress).
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = editorPullScrimFraction(pull.offset, pull.sheetHeight) }
                 .background(MaterialTheme.colorScheme.scrim.copy(alpha = EDITOR_SCRIM_ALPHA))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -313,6 +335,8 @@ fun TaskDetailScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = EDITOR_SHEET_TOP_GAP)
+                .onSizeChanged { pull.sheetHeight = it.height.toFloat() }
+                .graphicsLayer { translationY = pull.offset }
                 .clearDescriptionEditorFocusOnHostTap(descriptionEditorController),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -321,9 +345,15 @@ fun TaskDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .navigationBarsPadding()
-                    .imePadding(),
+                    .imePadding()
+                    .nestedScroll(pullConnection),
             ) {
             EditorHeader(
+                modifier = Modifier.draggable(
+                    state = rememberDraggableState { pull.dragBy(it) },
+                    orientation = Orientation.Vertical,
+                    onDragStopped = { velocity -> releasePull(velocity) },
+                ),
                 onClose = dismissEditor,
                 onAddRelation = {
                     viewModel.setRelationSearchQuery("")
@@ -1353,18 +1383,29 @@ private class EditorEntry(
     val row: @Composable () -> Unit,
 )
 
-/** The top of the editor sheet: close on the left, the task menu (relation, delete) on the right. */
+/**
+ * The top of the editor sheet: close on the left, the handle that says it pulls down, the task menu
+ * (relation, delete) on the right.
+ */
 @Composable
-private fun EditorHeader(onClose: () -> Unit, onAddRelation: () -> Unit, onDelete: () -> Unit, menuEnabled: Boolean) {
+private fun EditorHeader(
+    onClose: () -> Unit,
+    onAddRelation: () -> Unit,
+    onDelete: () -> Unit,
+    menuEnabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
     var showMore by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onClose) {
             Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Close")
         }
-        Spacer(modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            VicuDragHandleBar()
+        }
         Box {
             IconButton(onClick = { showMore = true }, enabled = menuEnabled) {
                 Icon(Icons.Default.MoreHoriz, contentDescription = "More")
