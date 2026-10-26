@@ -4,6 +4,7 @@ import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.auth.FakeNetworkMonitor
 import com.rendyhd.vicu.auth.InMemoryTokenStorage
 import com.rendyhd.vicu.auth.RecordingAuthHooks
+import com.rendyhd.vicu.data.repository.ProjectCategoryPreferences
 import com.rendyhd.vicu.data.repository.RecordingRepositoryHooks
 import com.rendyhd.vicu.domain.repository.PlatformRepositoryHooks
 import com.rendyhd.vicu.domain.repository.ProjectRepository
@@ -32,6 +33,7 @@ fun testProjectActions(
     auth: AuthManager = offlineAuthManager(),
     hooks: PlatformRepositoryHooks = RecordingRepositoryHooks(),
     now: Instant = Instant.parse("2026-10-10T10:00:00Z"),
+    categories: ProjectCategoryPreferences? = null,
 ): ProjectActions = ProjectActions(
     projectRepository = projects,
     authManager = auth,
@@ -41,4 +43,5 @@ fun testProjectActions(
         time = FixedTimeSource(now, TimeZone.UTC),
         ticking = false,
     ),
+    categoryPreferences = categories,
 )

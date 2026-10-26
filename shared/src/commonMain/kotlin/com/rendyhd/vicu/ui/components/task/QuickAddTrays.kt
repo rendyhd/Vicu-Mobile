@@ -48,6 +48,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
+import com.rendyhd.vicu.ui.components.category.PickerCategoryHeading
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.domain.model.TaskReminder
@@ -365,10 +367,12 @@ private fun NewTagDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
 /** Project: the project tree with the Inbox first, one radio each. */
 @Composable
 internal fun ProjectTrayContent(projects: List<Project>, inboxProjectId: Long, selectedId: Long, onPick: (Long) -> Unit) {
-    val rows = remember(projects, inboxProjectId) { projectPickerRows(projects, inboxProjectId, "") }
+    val categories = LocalProjectCategories.current
+    val rows = remember(projects, inboxProjectId, categories) { projectPickerRows(projects, inboxProjectId, "", categories) }
     Column {
         rows.forEach { row ->
             val selected = row.project.id == selectedId
+            row.categoryHeader?.let { PickerCategoryHeading(it, Modifier.padding(start = 12.dp)) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

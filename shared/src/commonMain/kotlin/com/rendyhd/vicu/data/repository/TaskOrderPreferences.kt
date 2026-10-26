@@ -17,6 +17,11 @@ interface SyncedEntries {
 
     /** Sets [key]; null puts it back to its default on every device. */
     suspend fun set(key: String, value: JsonElement?)
+
+    /** Sets every key of [values] as one change (one sync), as [set] would one by one. */
+    suspend fun setAll(values: Map<String, JsonElement?>) {
+        for ((key, value) in values) set(key, value)
+    }
 }
 
 /**

@@ -73,4 +73,10 @@ interface SpeechInput {
 
     /** The app's page in the system settings, where the permission can be given again. */
     fun openSettings()
+
+    /**
+     * How long, after [stop], to wait for the last words before adding what was heard. A
+     * recognizer that transcribes on the device after the recording ends (local speech) waits longer.
+     */
+    val finalWaitMs: Long get() = 1_500L
 }

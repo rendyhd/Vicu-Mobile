@@ -184,8 +184,12 @@ class FakeTaskDao(initial: List<TaskEntity> = emptyList()) : TaskDao {
     }
 
     override suspend fun getAllSync(): List<TaskEntity> = lock.withLock { rows.values.toList() }
+
+    /** Runs after each read of every routine carrier, as a change made while a loop works through them. */
+    var afterRoutineCarriersRead: suspend () -> Unit = {}
+
     override suspend fun getRoutineCarriersSync(): List<TaskEntity> =
-        lock.withLock { rows.values.toList() }.routineMetadata()
+        lock.withLock { rows.values.toList() }.routineMetadata().also { afterRoutineCarriersRead() }
 
     override suspend fun deleteById(id: Long) {
         lock.withLock { rows.remove(id) }

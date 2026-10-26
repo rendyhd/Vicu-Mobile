@@ -43,6 +43,19 @@ Branch `feat/shared-routines` (design `docs/shared-routines.md`, contract sectio
   General, Routines lists the hidden ones. They are the account's own: they follow it to every
   device and never change the routine for the other person.
 
+## Changes with project categories
+
+Contract section 13; design-system section 5 for the header.
+
+- **Project categories** are synced preferences of the account: `category.<id>` (name and order)
+  and `category.project.<projectId>` (the category a top-level project is in), written by
+  `ProjectActions` through `ProjectCategoryPreferences` (several keys as one change,
+  `SyncedEntries.setAll`). Two people who share a project each file it in a category of their own.
+  With none, the project list is as before.
+- Which categories are collapsed in the drawer is per device and lasts as long as the app runs
+  (`DrawerSectionsExpanded`, like collapsed projects). The desktop keeps it in `config.json`
+  (`sidebar_collapsed_categories`, account-specific).
+
 ## Summary
 
 | Where | What | Reaches the desktop and other devices | Survives sign-out | In a backup |
@@ -128,6 +141,7 @@ cloud backup and device transfer (section 8). The desktop column names the deskt
 | `ProjectSectionPrefsStore` (`project_section_prefs`) | Collapsed sections, per project. Collapsing a section in a project | Cleared | Included | `sidebar_collapsed_projects` (the sidebar, not sections) |
 | `SavedPlacesStore` (`saved_places`) | Where this phone found each saved place (position and address, by place id), and the one-time move flag. The places' ids and names sync (`place.<id>`, `LocationRepository`); positions never do. Notifications, Places, and "Save as place" in the location reminder | Kept | Excluded (privacy: positions stay on the device) | Reads the synced names, has no positions |
 | `CustomListStore` (`custom_lists`) | The local copy of the synced custom lists and their sync state (`custom_lists_sync_v1`: device id, document, dirty, carrier id, last sync), plus the older plain list kept for widgets and downgrades | Cleared (`clearLocal`) | Excluded | `custom_lists`, `custom_lists_sync` |
+| `AiSettingsStore` (`ai_settings`) | The assistant (`docs/ai-assistant-v1.md`, section 7.2): provider, address, the dictation and Ask models, what Test connection found per model, the feature switches (smart dictation, Ask, Talk, read answers aloud), the providers agreed to, the speech model, its language, downloads on mobile data. Settings, Assistant. A device setting: an Ollama address is `localhost` on a computer and a network address on a phone, so nothing syncs (synced keys starting with `ai.` are reserved) | Kept | Excluded | The desktop's own assistant settings |
 
 Stores that hold app state, not settings:
 
@@ -141,6 +155,10 @@ Stores that hold app state, not settings:
 | `LocationReminderStore` (`location_reminders`) | The location reminders that stay on this phone: at a spot that is not a saved place, or of a task created offline until it has its server id. Reminders at saved places sync as `location_reminder.<taskId>` (`LocationRepository`) | Cleared | Excluded |
 | `NotificationPermissionStore` (`notification_permission`) | How often the app asked for the notification permission, and whether the after-setup prompt ran | Kept | Included |
 | `FabHintStore` (`fab_hint`) | The one-time "Hold + to say a task" hint: tasks added through the + button's quick add (counted up to 5), whether the hint was shown, whether a task was added by holding + | Kept | Included |
+| `ConversationStore` (`ai_conversations`) | The last 5 Ask and Talk conversations, each up to 100 messages, with the task ids their tools returned | Cleared (they name the old account's tasks) | Excluded |
+| `KeptTranscriptStore` (`ai_kept_transcript`) | A dictation the model could not turn into tasks, kept until it is added or discarded | Cleared | Excluded |
+| `AiKeyStore` (Android: Tink-encrypted DataStore `ai_keys`; iOS: the Keychain) | The provider's API key, per provider. Never synced, never logged | Kept (a device setting); "Delete assistant data" removes it | Excluded |
+| Speech models (files in `noBackupFilesDir/speech-models`, iOS Application Support excluded from backup) | Downloaded Whisper and Parakeet models, checked by SHA-256 | Kept | Excluded |
 | `AndroidSpeechInput` (SharedPreferences `speech_input`, Android only) | Whether the first hold of + asked for the microphone, so a refusal is told apart from never asked | Kept | Included |
 
 ---

@@ -38,7 +38,37 @@ android {
         versionName = versionProps.getProperty("versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Local speech (native/speech, whisper.cpp). Built for the processors phones and the
+        // emulators have; the abiFilters here only choose what CMake builds, not what is packaged,
+        // so the other libraries' 32-bit x86 copies stay in the APK and an x86 device still
+        // installs it (without local speech: AndroidSpeechEngineNative.isLoaded is false). The
+        // native code is always optimized, also in the debug app: unoptimized whisper.cpp is far
+        // too slow to try out.
+        externalNativeBuild {
+            cmake {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+                arguments += listOf(
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DVICU_SPEECH_SHARED=ON",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                )
+            }
+        }
     }
+
+    // The NDK and CMake the native build uses (CI installs these two, see .github/workflows).
+    ndkVersion = "27.1.12297006"
+    externalNativeBuild {
+        cmake {
+            path = file("../native/speech/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    // The bundled Silero voice detector (speech.vad in test-fixtures/ai-tools-v1.json), copied out
+    // of the assets on first use (AndroidSpeechStorage).
+    sourceSets.getByName("main").assets.directories.add("../native/speech/models")
 
     if (keystorePropsFile.exists()) {
         signingConfigs {

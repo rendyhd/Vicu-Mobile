@@ -135,7 +135,7 @@ fun CustomListScreen(
                 ScreenFab(
                     onClick = { onShowTaskEntry(addToProject, null) },
                     expanded = !listState.canScrollBackward,
-                    taskDefaults = TaskDefaults(projectId = addToProject),
+                    taskDefaults = TaskDefaults(projectId = addToProject, listName = state.customList?.name),
                 )
             }
         },

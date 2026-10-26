@@ -60,6 +60,7 @@ class ProjectViewModelMenuTest {
                 ProjectMenuEntry.SORT,
                 ProjectMenuEntry.EDIT,
                 ProjectMenuEntry.ADD_SUBPROJECT,
+                ProjectMenuEntry.MOVE_TO_CATEGORY,
                 ProjectMenuEntry.SET_INBOX,
                 ProjectMenuEntry.MARK_REVIEWED,
                 ProjectMenuEntry.ARCHIVE,
@@ -67,8 +68,21 @@ class ProjectViewModelMenuTest {
             ),
             menu.entries(),
         )
-        assertEquals(listOf("Sort tasks", "Edit project", "Add subproject", "Set as Inbox", "Mark reviewed", "Archive", "Delete"), menu.entries().map { it.label })
+        assertEquals(
+            listOf("Sort tasks", "Edit project", "Add subproject", "Move to category…", "Set as Inbox", "Mark reviewed", "Archive", "Delete"),
+            menu.entries().map { it.label },
+        )
         assertTrue(ProjectMenuEntry.DELETE.destructive)
+    }
+
+    @Test
+    fun `only a top-level project can be moved to a category`() {
+        val child = Project(id = 9, title = "Reports", parentProjectId = work.id)
+        val menu = projectMenuState(child, listOf(work, child), inboxProjectId = 5, reviewPrefs = reviewOn, confirmBeforeDelete = true)
+        assertTrue(ProjectMenuEntry.MOVE_TO_CATEGORY !in menu.entries())
+        val archivedParent = work.copy(isArchived = true)
+        val surfaced = projectMenuState(child, listOf(archivedParent, child), inboxProjectId = 5, reviewPrefs = reviewOn, confirmBeforeDelete = true)
+        assertTrue(ProjectMenuEntry.MOVE_TO_CATEGORY in surfaced.entries(), "below an archived project it is top-level")
     }
 
     @Test

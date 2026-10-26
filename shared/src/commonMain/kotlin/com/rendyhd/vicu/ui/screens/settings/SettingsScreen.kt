@@ -27,7 +27,7 @@ import com.rendyhd.vicu.ui.components.shared.VicuTopAppBar
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Settings: the tabs (General, Projects, Notifications, Gestures), their scroll positions and the
+ * Settings: the tabs (General, Projects, Notifications, Gestures, Assistant), their scroll positions and the
  * one open dialog. Everything that has to survive a rotation lives in saveable state here: the tab,
  * whether the archived projects are open, the open dialog (by id, see [SettingsDialog]) and each
  * tab's scroll. The tabs are in GeneralTab, ProjectsTab, NotificationsTab and GesturesTab; the
@@ -38,12 +38,15 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SettingsScreen(
     onOpenDrawer: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
+    assistantViewModel: AssistantSettingsViewModel = koinViewModel(),
 ) {
+    val assistantState by assistantViewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val useDeviceColors by viewModel.useDeviceColors.collectAsStateWithLifecycle()
     val routineHistoryCount by viewModel.routineHistoryCount.collectAsStateWithLifecycle()
     val syncedDataUnsynced by viewModel.syncedDataUnsynced.collectAsStateWithLifecycle()
-    val projectRows by viewModel.projectRows.collectAsStateWithLifecycle()
+    val projectItems by viewModel.projectItems.collectAsStateWithLifecycle()
+    val projectCategories by viewModel.categories.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     // The archived projects start closed each time Settings is opened (not a stored preference).
@@ -55,6 +58,7 @@ fun SettingsScreen(
     val projectsListState = rememberLazyListState()
     val notificationsListState = rememberLazyListState()
     val gesturesListState = rememberLazyListState()
+    val assistantListState = rememberLazyListState()
 
     // Custom completion-sound picker; the platform keeps access to the file across restarts.
     val pickCompletionSound = rememberCompletionSoundPicker { viewModel.setCompletionSoundUri(it) }
@@ -68,7 +72,9 @@ fun SettingsScreen(
         }
     }
 
-    val tabTitles = listOf("General", "Projects", "Notifications", "Gestures")
+    AssistantMessages(assistantState, assistantViewModel) { snackbarHostState.showSnackbar(it) }
+
+    val tabTitles = listOf("General", "Projects", "Notifications", "Gestures", "Assistant")
 
     Scaffold(
         topBar = {
@@ -107,7 +113,8 @@ fun SettingsScreen(
                 )
                 1 -> ProjectsTab(
                     state = state,
-                    projectRows = projectRows,
+                    projectItems = projectItems,
+                    categories = projectCategories,
                     archivedExpanded = archivedProjectsExpanded,
                     onArchivedExpandedChange = { archivedProjectsExpanded = it },
                     viewModel = viewModel,
@@ -123,6 +130,11 @@ fun SettingsScreen(
                 3 -> GesturesTab(
                     scheduleAction = state.behaviorPrefs.scheduleAction,
                     listState = gesturesListState,
+                )
+                4 -> AssistantTab(
+                    state = assistantState,
+                    viewModel = assistantViewModel,
+                    listState = assistantListState,
                 )
             }
         }

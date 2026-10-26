@@ -32,6 +32,7 @@ import com.rendyhd.vicu.permission.NotificationPermissionCoordinator
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.NetworkMonitor
 import com.rendyhd.vicu.util.NotificationActions
+import com.rendyhd.vicu.util.RoutineReminderCheck
 import com.rendyhd.vicu.data.sync.CarrierFinder
 import com.rendyhd.vicu.data.sync.LabelRefresher
 import com.rendyhd.vicu.data.sync.ProjectRefresher
@@ -43,6 +44,10 @@ import com.rendyhd.vicu.util.SystemTimeSource
 import com.rendyhd.vicu.util.TextTaskCreator
 import com.rendyhd.vicu.ui.components.fab.FabHint
 import com.rendyhd.vicu.voice.HoldToTalk
+import com.rendyhd.vicu.voice.SelectingSpeechInput
+import com.rendyhd.vicu.ai.aiModule
+import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.voice.VoiceAddResult
 import com.rendyhd.vicu.util.TimeSource
 import com.rendyhd.vicu.widget.TaskWidgetStates
@@ -213,6 +218,7 @@ val repositoryModule = module {
     // A change redraws the widgets that show a project in its order (SyncedPreferences.set does).
     single { TaskOrderPreferences(synced = get<SyncedPreferences>()) }
     single { RoutinePersonalPreferences(synced = get<SyncedPreferences>()) }
+    single { ProjectCategoryPreferences(synced = get<SyncedPreferences>()) }
     single<CollaborationRepository> {
         CollaborationRepositoryImpl(
             collaborationDao = get(),
@@ -272,17 +278,41 @@ val commonModule = module {
         )
     }
     single { FabHint(store = get(), scope = get()) }
+    // Local speech when a speech model is chosen, else the platform recognizer (holding +, Talk).
+    single {
+        val dictationService = get<DictationService>()
+        SelectingSpeechInput(
+            platform = get(),
+            recorder = get(),
+            host = get(),
+            models = get(),
+            settingsStore = get(),
+            scope = get(),
+            hint = { dictationService.vocabularyHint() },
+        )
+    }
     // Holding the + to say a task: the words go through the same path as the other voice adds.
     single {
         val creator = get<TextTaskCreator>()
         val tasks = get<TaskRepository>()
         val hint = get<FabHint>()
         val messages = get<AppMessages>()
+        val dictation = get<DictationController>()
         HoldToTalk(
-            speech = get(),
+            speech = get<SelectingSpeechInput>(),
             messages = messages,
             scope = get(),
-            addTask = { text, format, defaults ->
+            addTask = addTask@{ text, format, defaults ->
+                // Smart dictation (docs/ai-assistant-v1.md, section 4): the words go to the model and
+                // come back as draft cards; with cards open they are an instruction about them.
+                if (dictation.isOpen) {
+                    dictation.edit(text)
+                    return@addTask VoiceAddResult("")
+                }
+                if (dictation.isReady()) {
+                    dictation.start(text, defaults)
+                    return@addTask VoiceAddResult("")
+                }
                 when (val result = creator.create(text, format, defaults.projectId, defaults.dueDate)) {
                     is TextTaskCreator.Result.Created -> VoiceAddResult(result.confirmation) {
                         messages.postIfRefused(tasks.delete(result.task.id), "undo the task")
@@ -294,6 +324,7 @@ val commonModule = module {
         )
     }
     single { NotificationActions(taskRepository = get(), routineRepository = get(), reminders = get(), hooks = get()) }
+    single { RoutineReminderCheck(repository = get(), prefsStore = get()) }
     single { TokenRefreshRun(authManager = get(), tokenStorage = get(), baseUrlHolder = get()) }
     single {
         TaskWidgetStates(
@@ -362,6 +393,8 @@ val commonModule = module {
             listPositions = get(),
             syncedPreferences = get(),
             locationReminders = get(),
+            assistantConversations = get(),
+            keptTranscript = get(),
         )
     }
     single {
@@ -386,6 +419,9 @@ val commonModule = module {
             dayClock = get(),
             collaboration = get(),
             syncedPreferences = get(),
+            categoryPreferences = get(),
+            appMessages = get(),
+            appScope = get(),
         )
     }
     single {
@@ -451,5 +487,6 @@ val sharedModules = listOf(
     networkModule,
     repositoryModule,
     commonModule,
+    aiModule,
     viewModelModule,
 )

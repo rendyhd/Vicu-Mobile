@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.di
 
+import com.rendyhd.vicu.ui.screens.ask.AskViewModel
+import com.rendyhd.vicu.ui.screens.settings.AssistantSettingsViewModel
 import com.rendyhd.vicu.ui.SyncStateViewModel
 import com.rendyhd.vicu.ui.components.collab.CollabViewModel
 import com.rendyhd.vicu.ui.components.selection.SelectionViewModel
@@ -77,4 +79,6 @@ val viewModelModule = module {
     viewModelOf(::CollabViewModel)
     viewModelOf(::TaskCommentsViewModel)
     viewModelOf(::PlacesViewModel)
+    viewModelOf(::AssistantSettingsViewModel)
+    viewModelOf(::AskViewModel)
 }

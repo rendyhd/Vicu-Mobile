@@ -8,7 +8,7 @@ Test vectors live in `test-fixtures/` in both repos and must stay byte-identical
 
 | Fixture | Covers |
 |---|---|
-| `cross-app-semantics-v1.json` | due-date rules, smart lists, weeks, custom-list windows, review math, completion hold, date display, collaboration, hidden tasks, synced preferences, task order |
+| `cross-app-semantics-v1.json` | due-date rules, smart lists, weeks, custom-list windows, review math, completion hold, date display, collaboration, hidden tasks, synced preferences, task order, project categories |
 | `nlp-corpus-v1.json` | quick-add parsing |
 | `routine-archive-v1.json` | routine merge, pruning and archive rules |
 | `design-tokens-v1.json` | colour roles, type, radii and motion (see `design-system-v1.md`) |
@@ -980,6 +980,8 @@ A key is added here, in both repos, in the release that starts writing it.
 | `location_reminder.<taskId>` | a task's location reminder, `{"place", "trigger", "radius_m"}`, or `null`; section 11.7 | none |
 | `routine_reminders.<routineId>` | `"off"`: no reminders of that shared routine on this account; or `null`. Any other value acts as the default and is kept; section 6.9 | on: the routine's own reminder settings |
 | `routine_hidden.<routineId>` | `true`: that shared routine is hidden on this account; or `null`. Any other value acts as the default and is kept; section 6.9 | shown |
+| `category.<categoryId>` | a project category, `{"name", "order"}`, or `null` (deleted); section 13 | none |
+| `category.project.<projectId>` | the id of the category a top-level project is in, or `null`; section 13 | no category |
 
 ### 11.4 The Inbox
 
@@ -1092,3 +1094,102 @@ the other orders none. The Move up and Move down actions follow the same rule.
 `priority`, `position` (absent: 0), `created` as a UTC instant or `null`). `taskOrder.sort` gives an
 order and the expected ids. `taskOrder.resolve` gives parents, entries and, per project, the order
 used. `taskOrder.drag` gives an order and the ids that can be dragged.
+
+---
+
+## 13. Project categories
+
+A user can group the top-level projects of the project list under named headers, such as "Work"
+and "Home". Categories are optional: without one, the list is exactly as it is without this
+section. They belong to the user and sync through the preferences carrier (section 11), so every
+device of the account shows the same groups, and two people who share a project can each file it
+in a category of their own. Vikunja knows nothing of them.
+
+### 13.1 Keys
+
+- `category.<categoryId>`: `{"name": "<name>", "order": <number>}`, or `null` (deleted).
+  `<categoryId>` is 1 to 64 letters, digits, `-` and `_`, and never `project` (apps use a random
+  UUID). The name is the user's own text, not blank after trimming; apps trim it before writing.
+  `order` is any number, whole or not, negative or not (section 13.4 says how apps choose it).
+- `category.project.<projectId>`: the `<categoryId>` of the category a top-level project is in, or
+  `null` (no category). `<projectId>` is the server's project id, a whole number above 0.
+- A value that does not have that shape reads as none and is kept unchanged (section 11.2). Other
+  fields of a category are allowed and kept whenever an app writes it again (section 10.8).
+- There is one key per category and one per project, so two devices that change different
+  categories or projects never undo each other's change. Entries are small: the carrier's size
+  limit (section 10.8) leaves room for thousands.
+
+### 13.2 Top-level projects
+
+- The project list holds every project that is not archived and is not the Inbox (the Inbox has its
+  own place above it). A listed project is **top-level** when its parent is 0 or is not a listed
+  project: archived, the Inbox, or not visible to the user. Every other listed project is a
+  subproject and stays below its parent.
+- A top-level project is in the category its own entry names when that category is usable: its
+  `category.<categoryId>` entry has the shape of section 13.1. An entry that names no usable
+  category (deleted, never there, or written in a shape this app cannot use) means no category.
+- Only top-level projects use their entry, and nothing is inherited from a parent. The entries of
+  subprojects, archived projects, the Inbox and deleted projects are kept and not used. A project
+  that becomes top-level (moved out of its parent, or its parent archived) is in the category of
+  its own entry, or in none.
+- Projects caught in a loop of parents (a project below itself, or A below B below A), which the
+  server should never allow, have no category and are not covered by the vectors.
+
+### 13.3 Layout
+
+- First come the top-level projects without a category, with no header. Then each usable category
+  follows as a group: its header, then its top-level projects. Each project is followed by its
+  subprojects, as without categories.
+- Categories are ordered by `order` (lower first), then by name lowercased (as titles in section
+  12.2), then by id (UTF-16 code units).
+- Within a group, top-level projects are ordered by position (lower first; a missing position
+  counts as 0), then by id (lower first), as without categories.
+- A category without projects still shows its header, so a project can be moved into it.
+- A header is only a heading: it has no list of its own. It can be collapsed to hide its projects.
+  Which headers are collapsed is kept per device and never synced.
+- The groups show in the project list of the drawer and the sidebar and in the project lists of
+  Settings. A project picker may show the same headers in the same order. Every other list (smart
+  lists, Anytime, Review, search, widgets, custom lists) keeps its own order and shows no
+  categories.
+
+### 13.4 Changes
+
+Positions stay Vikunja's: a category only decides which group a top-level project is in, and its
+position decides where it goes in that group. The **order step** is 65,536.
+
+- **New category**: it goes last, with the highest order of the usable categories plus the step
+  (just the step when there is none).
+- **Moving a category**: it gets an order between its new neighbours: the first one's order minus
+  the step at the start, the last one's plus the step at the end, otherwise the middle of the two.
+  When those two neighbours are less than 1 apart, every usable category gets a new order instead:
+  the n-th in the new display order (counting from 1) gets n times the step. Only categories whose
+  order changes are written, and a category moved to where it already is writes nothing.
+- **Renaming**: writes the category with the new name, trimmed. Its order and other fields stay.
+- **Deleting**: writes `null` to the category and to every `category.project.<id>` that names it,
+  whatever project that is (a subproject, an archived or a deleted one too). Its projects stay,
+  without a category. Deleting a category never deletes a project.
+- **Moving a project to a category** (or to none) from a menu writes its `category.project.<id>`
+  (`null` for none) and nothing else: the project lands where its position puts it in that group.
+  Dragging a top-level project, or a subproject out to the top level, past a header writes the
+  same entry, and its position moves between its new neighbours in that group (in an empty group,
+  after every top-level project). Nothing is written for a project that is already in that
+  category.
+- **Add category above** a top-level project (as a slide deck adds a section): the new category
+  starts at that project. It is placed as a moved category would be: right after the project's own
+  category, or before every category when the project has none (just the step when there is no
+  other category). The project and every project after it in its group move into the new
+  category. Apps do not offer it on the first project of a category, where it would only leave
+  that category empty. On the first project without a category it moves all of those projects.
+
+### 13.5 Vectors
+
+`projectCategories.read` gives entries, a key and the value an app uses (`null`: none), as
+`syncedPrefs.read` does. `projectCategories.layout` and the `split` changes run on
+`projectCategories.projects` (`id`, `parent`, `position` (absent: 0), `archived` (absent: false);
+`title` is only for the reader) with `inboxProjectId`. Each layout vector gives entries and the
+groups in display order: a `category` (`null` for the projects without one, always first, even
+when empty) and its top-level project ids. `projectCategories.changes` gives entries, an `action`
+and every entry the app writes (`expectWrites`; a key that is not listed is not written). The
+actions are `new` (`id`, `name`), `move` (`category`, `to`: its index in the new display order),
+`rename` (`category`, `name`), `delete` (`category`), `assign` (`project`, `category`: a move from
+a menu) and `split` (`project`, `id`, `name`: Add category above).

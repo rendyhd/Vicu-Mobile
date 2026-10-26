@@ -134,7 +134,7 @@ fun InboxScreen(
                 ScreenFab(
                     onClick = { onShowTaskEntry(state.inboxProjectId, null) },
                     expanded = !listState.canScrollBackward,
-                    taskDefaults = TaskDefaults(projectId = state.inboxProjectId),
+                    taskDefaults = TaskDefaults(projectId = state.inboxProjectId, listName = "Inbox"),
                 )
             }
         },

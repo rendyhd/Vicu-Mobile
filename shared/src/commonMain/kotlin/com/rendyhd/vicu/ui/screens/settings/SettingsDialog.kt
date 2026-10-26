@@ -31,6 +31,15 @@ internal sealed interface SettingsDialog {
     data class DeleteProject(val projectId: Long) : SettingsDialog
     data class ArchiveProject(val projectId: Long) : SettingsDialog
 
+    /** The project categories (cross-app semantics 13): a new one, last. */
+    data object NewCategory : SettingsDialog
+    data class RenameCategory(val categoryId: String) : SettingsDialog
+    data class MoveToCategory(val projectId: Long) : SettingsDialog
+
+    /** "New category…" in [MoveToCategory]: a new category that [projectId] moves into. */
+    data class NewCategoryFor(val projectId: Long) : SettingsDialog
+    data class AddCategoryAbove(val projectId: Long) : SettingsDialog
+
     /** [labelId] null creates a label. */
     data class LabelEditor(val labelId: Long?) : SettingsDialog
     data class DeleteLabel(val labelId: Long) : SettingsDialog
@@ -64,6 +73,11 @@ internal fun SettingsDialog.encode(): String = when (this) {
     is SettingsDialog.SubprojectEditor -> withArg("subproject_editor", parentId.toString())
     is SettingsDialog.DeleteProject -> withArg("delete_project", projectId.toString())
     is SettingsDialog.ArchiveProject -> withArg("archive_project", projectId.toString())
+    SettingsDialog.NewCategory -> "new_category"
+    is SettingsDialog.RenameCategory -> withArg("rename_category", categoryId)
+    is SettingsDialog.MoveToCategory -> withArg("move_to_category", projectId.toString())
+    is SettingsDialog.NewCategoryFor -> withArg("new_category_for", projectId.toString())
+    is SettingsDialog.AddCategoryAbove -> withArg("add_category_above", projectId.toString())
     is SettingsDialog.LabelEditor -> withArg("label_editor", labelId?.toString())
     is SettingsDialog.DeleteLabel -> withArg("delete_label", labelId.toString())
     is SettingsDialog.CustomListEditor -> withArg("list_editor", listId)
@@ -100,6 +114,11 @@ internal fun decodeSettingsDialog(encoded: String): SettingsDialog? {
         "subproject_editor" -> arg?.toLongOrNull()?.let { SettingsDialog.SubprojectEditor(it) }
         "delete_project" -> arg?.toLongOrNull()?.let { SettingsDialog.DeleteProject(it) }
         "archive_project" -> arg?.toLongOrNull()?.let { SettingsDialog.ArchiveProject(it) }
+        "new_category" -> SettingsDialog.NewCategory
+        "rename_category" -> arg?.takeIf { it.isNotEmpty() }?.let { SettingsDialog.RenameCategory(it) }
+        "move_to_category" -> arg?.toLongOrNull()?.let { SettingsDialog.MoveToCategory(it) }
+        "new_category_for" -> arg?.toLongOrNull()?.let { SettingsDialog.NewCategoryFor(it) }
+        "add_category_above" -> arg?.toLongOrNull()?.let { SettingsDialog.AddCategoryAbove(it) }
         "label_editor" -> if (arg == null) SettingsDialog.LabelEditor(null) else arg.toLongOrNull()?.let { SettingsDialog.LabelEditor(it) }
         "delete_label" -> arg?.toLongOrNull()?.let { SettingsDialog.DeleteLabel(it) }
         "list_editor" -> SettingsDialog.CustomListEditor(arg?.takeIf { it.isNotEmpty() })

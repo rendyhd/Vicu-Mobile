@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui
 
+import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
 import com.rendyhd.vicu.util.Logger
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
@@ -132,6 +133,13 @@ import com.rendyhd.vicu.ui.screens.taskdetail.TaskDetailScreen
 import com.rendyhd.vicu.ui.screens.taskdetail.TaskDetailViewModel
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.voice.HoldToTalk
+import com.rendyhd.vicu.voice.TaskDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import com.rendyhd.vicu.ai.AiSettings
+import com.rendyhd.vicu.ai.AiSettingsStore
+import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ui.screens.dictation.DictationSheet
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.DateDisplayFormat
 import com.rendyhd.vicu.util.DayClock
@@ -247,6 +255,9 @@ fun VicuApp(
     }
     val currentDestination = navBackStackEntry?.destination
     val authState by authManager.authState.collectAsStateWithLifecycle()
+    val aiSettingsStore: AiSettingsStore = koinInject()
+    val aiSettings by aiSettingsStore.settings.collectAsStateWithLifecycle(initialValue = AiSettings())
+    val dictationController: DictationController = koinInject()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -421,10 +432,16 @@ fun VicuApp(
 
     // Handle share intent → open TaskEntrySheet with shared content
     val sharedContentValue = sharedContent?.collectAsStateWithLifecycle()?.value
+    // Shared text with smart dictation on: "Make tasks from this" or one task (docs/ai-assistant-v1.md, section 4).
+    var shareChoice by remember { mutableStateOf<SharedContent?>(null) }
     LaunchedEffect(sharedContentValue, authState) {
         if (sharedContentValue != null && authState == AuthState.Authenticated) {
-            pendingSharedContent = sharedContentValue
-            showTaskEntrySheet = true
+            if (aiSettings.dictationReady && !sharedContentValue.hasFiles && !sharedContentValue.text.isNullOrBlank()) {
+                shareChoice = sharedContentValue
+            } else {
+                pendingSharedContent = sharedContentValue
+                showTaskEntrySheet = true
+            }
             onSharedContentConsumed()
         }
     }
@@ -531,6 +548,8 @@ fun VicuApp(
     // dragged onto a day or project header.
     val fabHost = remember { AppFabHost() }
     val holdToTalk: HoldToTalk = koinInject()
+    // A dictation the model could not turn into tasks comes back after a restart (docs/ai-assistant-v1.md, 4.6).
+    LaunchedEffect(authState) { if (authState == AuthState.Authenticated) dictationController.restoreKept() }
     val fabHint: FabHint = koinInject()
     val fabController = remember(holdToTalk, fabHint) { FabController(holdToTalk, fabHint) }
     fabController.format = dateFormat
@@ -552,6 +571,7 @@ fun VicuApp(
         LocalDateFormat provides dateFormat,
         LocalTaskRowActions provides taskRowActions,
         LocalCollab provides collabUi,
+        LocalProjectCategories provides drawerUiState.categories,
     )
 
     // Build dynamic bottom bar items from config
@@ -583,6 +603,7 @@ fun VicuApp(
         drawerContent = {
             CompositionLocalProvider(*appLocals) {
                 DrawerContent(
+                    showAsk = aiSettings.askReady,
                     state = drawerUiState,
                     currentRoute = currentRoute,
                     onNavigate = { route ->
@@ -607,7 +628,11 @@ fun VicuApp(
                         scope.launch { drawerState.close() }
                         showNewProjectDialog = true
                     },
-                    onReorderProject = drawerViewModel::reorderProject,
+                    onMoveProject = drawerViewModel::moveProject,
+                    onToggleCategoryCollapsed = drawerViewModel::toggleCategoryCollapsed,
+                    onRenameCategory = drawerViewModel::renameCategory,
+                    onMoveCategory = drawerViewModel::moveCategory,
+                    onDeleteCategory = drawerViewModel::deleteCategory,
                     onReorderList = drawerViewModel::reorderCustomList,
                     onReorderLabel = drawerViewModel::reorderLabel,
                 )
@@ -777,6 +802,30 @@ fun VicuApp(
                 viewModel = commentsViewModel,
                 backState = commentsBackState,
                 backEnabled = backEnabled,
+            )
+        }
+
+        // Smart dictation's draft cards, over the screens and the editor.
+        DictationSheet()
+        shareChoice?.let { shared ->
+            AlertDialog(
+                onDismissRequest = { shareChoice = null },
+                title = { Text("Add what you shared") },
+                text = { Text("Make separate tasks from it with the assistant, or add it as one task.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        shareChoice = null
+                        val text = listOfNotNull(shared.subject, shared.text).joinToString("\n\n")
+                        dictationController.start(text, TaskDefaults(listName = "Inbox"))
+                    }) { Text("Make tasks") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        shareChoice = null
+                        pendingSharedContent = shared
+                        showTaskEntrySheet = true
+                    }) { Text("One task") }
+                },
             )
         }
 

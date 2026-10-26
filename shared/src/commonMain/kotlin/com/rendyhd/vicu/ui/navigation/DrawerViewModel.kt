@@ -24,6 +24,8 @@ import com.rendyhd.vicu.ui.screens.shared.SiblingMoveResult
 import com.rendyhd.vicu.ui.screens.shared.orderNotSavedMessage
 import com.rendyhd.vicu.util.AppDispatchers
 import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.util.ProjectCategory
+import com.rendyhd.vicu.util.ProjectCategoryState
 import com.rendyhd.vicu.util.ProjectProgress
 import com.rendyhd.vicu.util.ReviewMetadata
 import com.rendyhd.vicu.util.ReviewState
@@ -72,6 +74,11 @@ data class DrawerUiState(
     /** What the drawer shows of that tree: in display order, without what is below a collapsed project. */
     val projectRows: List<ProjectRow> = emptyList(),
     val collapsedProjectIds: Set<Long> = emptySet(),
+    /** The user's project categories (section 13); empty when there are none. */
+    val categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
+    val collapsedCategoryIds: Set<String> = emptySet(),
+    /** [projectRows] with the category headers between them: what the drawer lists. */
+    val projectItems: List<ProjectListItem> = emptyList(),
     /** Every active project, the Inbox included: the tree leaves it out, the project pickers need it. */
     val allProjects: List<Project> = emptyList(),
     val labels: List<Label> = emptyList(),
@@ -139,13 +146,13 @@ class DrawerViewModel(
     private val _sectionsExpanded = MutableStateFlow(DrawerSectionsExpanded())
 
     private val sources: Flow<DrawerSources> = combine(
-        projectRepository.getAll(),
+        combine(projectRepository.getAll(), projectActions.categories) { projects, categories -> projects to categories },
         labelRepository.getAll(),
         customListRepository.lists,
         _sectionsExpanded,
         authManager.inboxProjectId,
-    ) { projects, labels, customLists, expanded, inboxId ->
-        DrawerSources(projects, labels, customLists, expanded, inboxId)
+    ) { (projects, categories), labels, customLists, expanded, inboxId ->
+        DrawerSources(projects, labels, customLists, expanded, inboxId, categories)
     }
 
     /**
@@ -341,31 +348,94 @@ class DrawerViewModel(
         }
     }
 
+    /** Opens or closes a category's projects; kept on this device only, as long as the app runs. */
+    fun toggleCategoryCollapsed(categoryId: String) {
+        _sectionsExpanded.update { sections ->
+            val collapsed = sections.collapsedCategoryIds
+            sections.copy(collapsedCategoryIds = if (categoryId in collapsed) collapsed - categoryId else collapsed + categoryId)
+        }
+    }
+
     /**
      * Saves the new order of the projects that share a level after a drag: [idsInNewOrder] is every
-     * project of that level, [movedId] the one that was dragged. The positions are planned and saved
-     * by [ProjectActions.moveAmongSiblings] (the Projects tab of Settings saves the same way). A
-     * refusal is reported and the list goes back to what is stored.
+     * project of that level (for a top-level project, of its category's group), [movedId] the one
+     * that was dragged. The positions are planned and saved by [ProjectActions.moveAmongSiblings]
+     * (the Projects tab of Settings saves the same way). A refusal is reported and the list goes back
+     * to what is stored.
      */
     fun reorderProject(movedId: Long, idsInNewOrder: List<Long>) {
-        val state = stored.value
-        val moved = state.projectRows.firstOrNull { it.project.id == movedId } ?: return
-        val byId = state.allProjects.associateBy { it.id }
-        val ordered = idsInNewOrder.distinct().mapNotNull { byId[it] }
-        val newOrder = ordered.map { it.id }
-        if (movedId !in newOrder || newOrder == siblingIds(state.projectRows, movedId)) return
+        moveProject(movedId, stored.value.categories.categoryOf(movedId)?.id, idsInNewOrder)
+    }
 
-        pendingOrder.update { it.copy(projectParentId = moved.parentId, projectIds = newOrder) }
+    /**
+     * Saves a drop: [movedId] is now in the group of [categoryId] (null: the projects without a
+     * category; it only counts for a top-level project), among [idsInNewOrder], every project of its
+     * level there in the order shown. A drop into another category writes the project's category too
+     * ([ProjectActions.moveIntoCategory]); into a collapsed one it goes last.
+     */
+    fun moveProject(movedId: Long, categoryId: String?, idsInNewOrder: List<Long>) {
+        val state = stored.value
+        val moved = state.projectRows.firstOrNull { it.project.id == movedId }
+            ?: state.projectTree.firstOrNull { it.project.id == movedId }?.let { ProjectRow(it.project, 0, 0L, false, false) }
+            ?: return
+        val byId = state.allProjects.associateBy { it.id }
+        val topLevel = moved.parentId == 0L
+        val fromCategory = state.categories.categoryOf(movedId)?.id
+        val intoOther = topLevel && categoryId != fromCategory
+        var ids = idsInNewOrder.distinct()
+        if (intoOther && categoryId != null && categoryId in state.collapsedCategoryIds) {
+            ids = topLevelGroupIds(state, categoryId).filter { it != movedId } + movedId
+        }
+        val ordered = ids.mapNotNull { byId[it] }
+        val newOrder = ordered.map { it.id }
+        if (movedId !in newOrder) return
+        val unchanged = if (topLevel) newOrder == topLevelGroupIds(state, fromCategory) else newOrder == siblingIds(state.projectRows, movedId)
+        if (!intoOther && unchanged) return
+
+        pendingOrder.update {
+            it.copy(projectParentId = moved.parentId, projectIds = newOrder, movedCategory = if (intoOther) movedId to categoryId else null)
+        }
         viewModelScope.launch {
             reorderMutex.withLock {
-                when (val result = projectActions.moveAmongSiblings(movedId, ordered)) {
-                    SiblingMoveResult.Saved -> awaitStored { siblingIds(it.projectRows, movedId) == newOrder }
+                val result = if (intoOther) {
+                    projectActions.moveIntoCategory(movedId, categoryId, ordered)
+                } else {
+                    projectActions.moveAmongSiblings(movedId, ordered)
+                }
+                when (result) {
+                    SiblingMoveResult.Saved -> awaitStored {
+                        if (topLevel) {
+                            it.categories.categoryOf(movedId)?.id == categoryId && topLevelGroupIds(it, categoryId) == newOrder
+                        } else {
+                            siblingIds(it.projectRows, movedId) == newOrder
+                        }
+                    }
                     is SiblingMoveResult.Failed -> appMessages.post(result.message)
                     SiblingMoveResult.NotMoved -> Unit
                 }
-                pendingOrder.update { if (it.projectIds == newOrder) it.copy(projectIds = null) else it }
+                pendingOrder.update { if (it.projectIds == newOrder) it.copy(projectIds = null, movedCategory = null) else it }
             }
         }
+    }
+
+    // --- Categories: the header's menu --------------------------------------------------------
+
+    fun renameCategory(categoryId: String, name: String) {
+        viewModelScope.launch { postIfFailed(projectActions.renameCategory(categoryId, name)) }
+    }
+
+    /** Moves a category one place up (-1) or down (1). */
+    fun moveCategory(categoryId: String, by: Int) {
+        viewModelScope.launch { postIfFailed(projectActions.moveCategory(categoryId, by)) }
+    }
+
+    /** Deletes [category] (its projects stay) and offers to undo it. */
+    fun deleteCategory(category: ProjectCategory) {
+        viewModelScope.launch { projectActions.deleteCategoryOfferingUndo(category) }
+    }
+
+    private fun postIfFailed(result: ProjectActionResult) {
+        if (result is ProjectActionResult.Failed) appMessages.post(result.error)
     }
 
     /** Saves the new order of the custom lists after a drag: [idsInNewOrder] is every list, [movedId] the dragged one. */
@@ -428,6 +498,8 @@ internal data class PendingDrawerOrder(
     /** The project the reordered projects are below, 0 for the roots. */
     val projectParentId: Long = 0L,
     val projectIds: List<Long>? = null,
+    /** A top-level project dropped into another category's group, and that category (null: none). */
+    val movedCategory: Pair<Long, String?>? = null,
     val listIds: List<String>? = null,
     val labelIds: List<Long>? = null,
 )
@@ -437,8 +509,11 @@ internal fun DrawerUiState.withPendingOrder(pending: PendingDrawerOrder): Drawer
     if (pending.projectIds == null && pending.listIds == null && pending.labelIds == null) return this
     var result = this
     pending.projectIds?.let { ids ->
+        // Other groups keep their own order: the categories regroup the roots after this.
         val tree = reorderSiblings(projectTree, pending.projectParentId, ids)
-        result = result.copy(projectTree = tree, projectRows = visibleProjectRows(tree, collapsedProjectIds))
+        val categories = pending.movedCategory?.let { (projectId, categoryId) -> categories.withAssignment(projectId, categoryId) } ?: categories
+        val items = projectListItems(tree, collapsedProjectIds, categories, collapsedCategoryIds)
+        result = result.copy(projectTree = tree, categories = categories, projectItems = items, projectRows = items.projectRows())
     }
     pending.listIds?.let { ids -> result = result.copy(customLists = orderedBy(customLists, ids) { it.id }) }
     pending.labelIds?.let { ids -> result = result.copy(labels = orderedBy(labels, ids) { it.id }) }
@@ -452,6 +527,8 @@ data class DrawerSectionsExpanded(
     val tags: Boolean = true,
     /** Projects whose children are hidden; every project starts open. */
     val collapsedProjectIds: Set<Long> = emptySet(),
+    /** Categories whose projects are hidden; every category starts open. */
+    val collapsedCategoryIds: Set<String> = emptySet(),
 )
 
 /** What the repositories and the section state hand the drawer: one typed value instead of casts out of a list. */
@@ -461,6 +538,7 @@ internal data class DrawerSources(
     val customLists: List<CustomList>,
     val expanded: DrawerSectionsExpanded,
     val inboxProjectId: Long?,
+    val categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
 )
 
 /** The drawer's state: pure, so it can run on any thread and be tested without a view model. */
@@ -496,11 +574,16 @@ internal fun buildDrawerState(
     val active = projects.filter { !it.isArchived }
     val tree = buildProjectTree(active.filter { it.id != inboxId })
     val collapsed = sources.expanded.collapsedProjectIds
+    val collapsedCategories = sources.expanded.collapsedCategoryIds
+    val items = projectListItems(tree, collapsed, sources.categories, collapsedCategories)
 
     return DrawerUiState(
         projectTree = tree,
-        projectRows = visibleProjectRows(tree, collapsed),
+        projectRows = items.projectRows(),
         collapsedProjectIds = collapsed,
+        categories = sources.categories,
+        collapsedCategoryIds = collapsedCategories,
+        projectItems = items,
         allProjects = active,
         labels = applyLabelOrder(sources.labels, labelOrder),
         customLists = sources.customLists,
@@ -515,6 +598,13 @@ internal fun buildDrawerState(
         routinesEnabled = routinesEnabled,
     )
 }
+
+/** The top-level projects in the group of [categoryId] (null: the ones without a category), in display order. */
+internal fun topLevelGroupIds(state: DrawerUiState, categoryId: String?): List<Long> =
+    state.categories.group(state.projectTree) { it.project.id }
+        .firstOrNull { it.category?.id == categoryId }
+        ?.items?.map { it.project.id }
+        .orEmpty()
 
 /** Orders [labels] by the stored client-side [order]; ids not present fall back to A to Z at the end. */
 private fun applyLabelOrder(labels: List<Label>, order: List<Long>): List<Label> {

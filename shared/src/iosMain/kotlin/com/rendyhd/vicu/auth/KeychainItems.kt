@@ -134,4 +134,18 @@ internal class SystemKeychainItems(private val service: String) : KeychainItems 
     override fun delete(account: String) {
         withQuery(account) { query -> SecItemDelete(query) }
     }
+
+    /** Deletes every item of [service]. */
+    fun deleteAll() {
+        val dict = CFDictionaryCreateMutable(null, 2, kCFTypeDictionaryKeyCallBacks.ptr, kCFTypeDictionaryValueCallBacks.ptr)
+        val serviceName = CFBridgingRetain(service)
+        CFDictionaryAddValue(dict, kSecClass, kSecClassGenericPassword)
+        CFDictionaryAddValue(dict, kSecAttrService, serviceName)
+        try {
+            SecItemDelete(dict)
+        } finally {
+            CFRelease(serviceName)
+            CFRelease(dict)
+        }
+    }
 }

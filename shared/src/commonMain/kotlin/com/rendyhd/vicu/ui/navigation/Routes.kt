@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class CustomListRoute(val listId: String)
 @Serializable object SearchRoute
 @Serializable object SettingsRoute
+@Serializable object AskRoute
 
 /**
  * Returns a project route only when it would open a different project.

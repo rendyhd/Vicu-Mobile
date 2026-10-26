@@ -164,6 +164,16 @@ A done row shows the check and a struck title. States: hover
 - Section header: `section` (13 px, 600) with a count in `text.secondary`.
 - Group header: `group` (12 px, 600) with a dot.
 - Day headers inside Upcoming use `header.day`.
+- Category header (project categories, cross-app semantics section 13): between the groups of
+  top-level projects in the project list of the sidebar or drawer and in Settings. The category's
+  name as the user typed it (never upper case) at the `group` size and weight 500, in
+  `text.secondary`, under a `border` hairline that starts where the text starts. It stays quieter
+  than the Projects section header above it: no upper case and no count while it is open.
+  Collapsed (the sidebar and drawer only; which ones is kept per device) the number of its
+  top-level projects follows the name after a middle dot ("Work · 3"); the chevron is the one the
+  platform's other collapsible headers use. Its menu holds Rename, Move up, Move down and Delete
+  category (desktop: right-click or ⋯; Android: a long press in the drawer, ⋮ in Settings). In a
+  project picker the name alone heads its projects and cannot be picked.
 
 Nothing is smaller than 11 px (11 sp on Android). Radii: `control` for inputs and buttons,
 `popover` for menus and popovers, `card` for cards, `sheet` for Android bottom sheets, `chip` for

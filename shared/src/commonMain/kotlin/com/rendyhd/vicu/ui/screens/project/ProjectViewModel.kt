@@ -22,7 +22,11 @@ import com.rendyhd.vicu.ui.screens.shared.CompletionToast
 import com.rendyhd.vicu.ui.screens.shared.NoCompletionToast
 import com.rendyhd.vicu.ui.screens.shared.ProjectActionResult
 import com.rendyhd.vicu.ui.screens.shared.ProjectActions
+import com.rendyhd.vicu.ui.components.category.CategoryLabels
 import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.util.ProjectCategories
+import com.rendyhd.vicu.util.ProjectCategory
+import com.rendyhd.vicu.util.ProjectCategoryState
 import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.ReviewMetadata
 import com.rendyhd.vicu.util.ReviewState
@@ -73,6 +77,11 @@ data class ProjectMenuState(
     val taskOrder: TaskOrder? = null,
     /** The order the project follows without its own: its nearest parent's, else the global one. */
     val inheritedTaskOrder: TaskOrder = TaskOrder.DEFAULT,
+    /** A top-level project of the project list, which can be in a category (section 13.2). */
+    val canHaveCategory: Boolean = false,
+    /** The user's categories in display order, and the one this project is in. */
+    val categories: List<ProjectCategory> = emptyList(),
+    val category: ProjectCategory? = null,
 )
 
 /**
@@ -87,6 +96,7 @@ internal fun projectMenuState(
     reviewPrefs: ReviewPrefs,
     confirmBeforeDelete: Boolean,
     taskOrders: TaskOrderSettings = TaskOrderSettings(),
+    categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
 ): ProjectMenuState {
     if (project == null || project.isArchived) return ProjectMenuState(confirmBeforeDelete = confirmBeforeDelete)
     val isInbox = inboxProjectId != null && project.id == inboxProjectId
@@ -101,6 +111,9 @@ internal fun projectMenuState(
         confirmBeforeDelete = confirmBeforeDelete,
         taskOrder = taskOrders.projectOverrides[project.id],
         inheritedTaskOrder = taskOrders.inheritedOrderFor(project.id, allProjects),
+        canHaveCategory = ProjectCategories.isTopLevel(project, allProjects, inboxProjectId),
+        categories = categories.categories,
+        category = categories.categoryOf(project.id),
     )
 }
 
@@ -109,6 +122,7 @@ enum class ProjectMenuEntry(val label: String, val destructive: Boolean = false)
     SORT("Sort tasks"),
     EDIT("Edit project"),
     ADD_SUBPROJECT("Add subproject"),
+    MOVE_TO_CATEGORY(CategoryLabels.MOVE_TO),
     SET_INBOX("Set as Inbox"),
     MARK_REVIEWED("Mark reviewed"),
     ARCHIVE("Archive"),
@@ -124,6 +138,7 @@ internal fun ProjectMenuState.entries(): List<ProjectMenuEntry> = buildList {
     add(ProjectMenuEntry.SORT)
     add(ProjectMenuEntry.EDIT)
     add(ProjectMenuEntry.ADD_SUBPROJECT)
+    if (canHaveCategory) add(ProjectMenuEntry.MOVE_TO_CATEGORY)
     if (!isInbox) add(ProjectMenuEntry.SET_INBOX)
     if (canMarkReviewed) add(ProjectMenuEntry.MARK_REVIEWED)
     if (!isInbox) {
@@ -436,9 +451,9 @@ class ProjectViewModel(
         projectRepository.getAll(),
         projectActions.inboxProjectId,
         reviewPrefsStore.getPrefs(),
-        combine(behaviorPrefsStore.getPrefs(), taskOrderPreferences.settings) { behavior, orders -> behavior to orders },
-    ) { project, all, inboxId, reviewPrefs, (behaviorPrefs, taskOrders) ->
-        projectMenuState(project, all, inboxId, reviewPrefs, behaviorPrefs.confirmBeforeDelete, taskOrders)
+        combine(behaviorPrefsStore.getPrefs(), taskOrderPreferences.settings, projectActions.categories, ::Triple),
+    ) { project, all, inboxId, reviewPrefs, (behaviorPrefs, taskOrders, categories) ->
+        projectMenuState(project, all, inboxId, reviewPrefs, behaviorPrefs.confirmBeforeDelete, taskOrders, categories)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectMenuState())
 
     private val _exit = MutableStateFlow(ProjectExit.NONE)
@@ -462,6 +477,16 @@ class ProjectViewModel(
             appMessages.post(result.error)
             false
         }
+    }
+
+    /** "Move to category…": this project into [category], or with null out of its category. */
+    fun moveToCategory(category: ProjectCategory?) {
+        viewModelScope.launch { currentProject()?.let { report(projectActions.assignCategory(it, category)) } }
+    }
+
+    /** "New category…": a new category [name], last, with this project in it. */
+    fun moveToNewCategory(name: String) {
+        viewModelScope.launch { currentProject()?.let { report(projectActions.createCategory(name, it)) } }
     }
 
     /** "Sort tasks": gives this project its own order, or with null makes it follow the default again. */

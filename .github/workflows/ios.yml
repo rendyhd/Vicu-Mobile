@@ -46,6 +46,8 @@ jobs:
       - name: Show Xcode
         run: xcodebuild -version
 
+      # The cinterop of each iOS target first builds native/speech (whisper.cpp) with
+      # iosApp/scripts/build-speech.sh, which takes CMake from PATH (the runner's Homebrew one).
       - name: Shared tests on the iOS simulator
         run: |
           chmod +x gradlew

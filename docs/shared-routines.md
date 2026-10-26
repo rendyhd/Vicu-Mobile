@@ -307,10 +307,10 @@ worth doing even without sharing.
 ### 7.3 Reminders after the other person did it (S11)
 
 - **Android**: `RoutineAlarmReceiver` reads the occurrence from Room when the alarm fires, which
-  can be 30 minutes or more behind the other person. For a shared routine it first fetches the
-  carrier (one `GET`) and stores it; offline, or after a few seconds without an answer, it rings
-  as today. The receiver reads Room with `runBlocking` today, so the fetch needs `goAsync` and a
-  background coroutine.
+  can be 30 minutes or more behind the other person. It first fetches the carrier (one `GET`) and
+  stores it; offline, or after a few seconds without an answer, it rings as Room says. This
+  started with shared routines and now holds for every routine (`RoutineReminderCheck`): a tick
+  on the desktop, or one this phone's copy lost, is the same case with one person.
 - **Desktop**: the routine timers carry the payload from when they were planned (`notifications.ts`:
   at start, after a change on this computer and at 00:05), with no check when they fire. For a
   shared routine, fetch the carrier when the timer fires and skip a finished occurrence.
