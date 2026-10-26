@@ -1,0 +1,10 @@
+# Vicu's local speech engine (native/speech/vicu_speech.h) for the iOS targets. The archive comes
+# from iosApp/scripts/build-speech.sh; shared/build.gradle.kts passes its folder (-libraryPath) and
+# the header's folder, and the klib carries the archive into the framework and the test binaries.
+# A static framework does not apply linkerOpts: the app target links the same frameworks
+# (iosApp/project.yml, OTHER_LDFLAGS).
+package = com.rendyhd.vicu.speech.cinterop
+headers = vicu_speech.h
+headerFilter = vicu_speech.h
+staticLibraries = libvicu_speech_all.a
+linkerOpts = -framework Metal -framework MetalKit -framework Foundation -framework Accelerate -lc++

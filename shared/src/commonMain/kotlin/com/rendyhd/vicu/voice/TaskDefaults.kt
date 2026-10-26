@@ -8,4 +8,9 @@ import androidx.compose.runtime.Immutable
  * date win over these. Null fields mean none: the Inbox, no date.
  */
 @Immutable
-data class TaskDefaults(val projectId: Long? = null, val dueDate: String? = null)
+data class TaskDefaults(
+    val projectId: Long? = null,
+    val dueDate: String? = null,
+    /** The list's name as the assistant's dictation context gives it ("Today", a project's title). */
+    val listName: String? = null,
+)

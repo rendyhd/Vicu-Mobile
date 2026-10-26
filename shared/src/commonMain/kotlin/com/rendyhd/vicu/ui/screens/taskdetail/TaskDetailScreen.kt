@@ -161,6 +161,11 @@ import com.rendyhd.vicu.ui.components.task.NlpVisualTransformation
 import com.rendyhd.vicu.ui.components.task.ParseChipRow
 import com.rendyhd.vicu.permission.NotificationPermissionCoordinator
 import org.koin.compose.koinInject
+import com.rendyhd.vicu.ai.AiSettings
+import com.rendyhd.vicu.ai.AiSettingsStore
+import com.rendyhd.vicu.ai.AiText
+import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.voice.TaskDefaults
 import org.koin.compose.viewmodel.koinViewModel
 import com.rendyhd.vicu.location.label
 import com.rendyhd.vicu.ui.components.location.LocationReminderDialog
@@ -196,6 +201,8 @@ fun TaskDetailScreen(
     var showLabelPicker by remember { mutableStateOf(false) }
     var showReminderPicker by remember { mutableStateOf(false) }
     val notificationPermission: NotificationPermissionCoordinator = koinInject()
+    val dictation: DictationController = koinInject()
+    val aiSettings by koinInject<AiSettingsStore>().settings.collectAsStateWithLifecycle(initialValue = AiSettings())
     // The location reminder lives on this device only, apart from the task (PlacesViewModel).
     val placesViewModel: PlacesViewModel = koinViewModel()
     val editorTaskId = state.task?.id ?: taskId
@@ -331,6 +338,17 @@ fun TaskDetailScreen(
                 },
                 onDelete = viewModel::requestDeleteTask,
                 menuEnabled = state.task != null,
+                // Break into steps (docs/ai-assistant-v1.md, section 4): the model's tasks become subtasks.
+                onBreakIntoSteps = state.task?.takeIf { aiSettings.dictationReady && !it.done }?.let { task ->
+                    {
+                        val notes = AiText.htmlToPlain(task.description)
+                        dictation.start(
+                            transcript = if (notes.isEmpty()) task.title else task.title + "\n\n" + notes,
+                            defaults = TaskDefaults(projectId = task.projectId),
+                            parentTaskId = task.id,
+                        )
+                    }
+                },
             )
             val task = state.task
 
@@ -1355,7 +1373,13 @@ private class EditorEntry(
 
 /** The top of the editor sheet: close on the left, the task menu (relation, delete) on the right. */
 @Composable
-private fun EditorHeader(onClose: () -> Unit, onAddRelation: () -> Unit, onDelete: () -> Unit, menuEnabled: Boolean) {
+private fun EditorHeader(
+    onClose: () -> Unit,
+    onAddRelation: () -> Unit,
+    onDelete: () -> Unit,
+    menuEnabled: Boolean,
+    onBreakIntoSteps: (() -> Unit)? = null,
+) {
     var showMore by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -1377,6 +1401,15 @@ private fun EditorHeader(onClose: () -> Unit, onAddRelation: () -> Unit, onDelet
                         onAddRelation()
                     },
                 )
+                if (onBreakIntoSteps != null) {
+                    DropdownMenuItem(
+                        text = { Text("Break into steps") },
+                        onClick = {
+                            showMore = false
+                            onBreakIntoSteps()
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Delete task", color = MaterialTheme.colorScheme.error) },
                     onClick = {

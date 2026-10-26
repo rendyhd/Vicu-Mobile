@@ -23,6 +23,7 @@ import com.rendyhd.vicu.ui.screens.review.ReviewScreen
 import com.rendyhd.vicu.ui.screens.routines.RoutinesScreen
 import com.rendyhd.vicu.ui.screens.search.SearchScreen
 import com.rendyhd.vicu.ui.screens.settings.SettingsScreen
+import com.rendyhd.vicu.ui.screens.ask.AskScreen
 import com.rendyhd.vicu.ui.screens.setup.SetupScreen
 import com.rendyhd.vicu.ui.screens.tag.TagScreen
 import com.rendyhd.vicu.ui.screens.today.TodayScreen
@@ -190,6 +191,13 @@ fun AppNavHost(
         screen<SettingsRoute>(reveal) {
             SettingsScreen(
                 onOpenDrawer = onOpenDrawer,
+            )
+        }
+        screen<AskRoute>(reveal) {
+            AskScreen(
+                onOpenDrawer = onOpenDrawer,
+                onTaskClick = onTaskClick,
+                onOpenSettings = { navController.navigateTopLevel(SettingsRoute) },
             )
         }
     }

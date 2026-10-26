@@ -31,6 +31,9 @@ targets:
     sources:
       - path: Vicu
       - path: Shared
+      # The bundled Silero voice detector for local speech (IosSpeechStorage reads it from here).
+      - path: ../native/speech/models/ggml-silero-v6.2.0.bin
+        buildPhase: resources
     dependencies:
       - target: VicuWidgets
       - target: VicuShare
@@ -100,7 +103,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
-        OTHER_LDFLAGS: $(inherited) -framework shared
+        # The shared framework is static, so the app links what its speech library needs
+        # (shared/src/nativeInterop/cinterop/vicuSpeech.def).
+        OTHER_LDFLAGS: $(inherited) -framework shared -framework Metal -framework MetalKit -framework Accelerate -lc++
         LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
     preBuildScripts:
       - name: Build the shared Kotlin framework

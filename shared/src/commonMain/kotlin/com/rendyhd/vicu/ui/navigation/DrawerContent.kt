@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
@@ -116,6 +117,8 @@ fun DrawerContent(
     onReorderProject: (movedId: Long, idsInNewOrder: List<Long>) -> Unit = { _, _ -> },
     onReorderList: (movedId: String, idsInNewOrder: List<String>) -> Unit = { _, _ -> },
     onReorderLabel: (movedId: Long, idsInNewOrder: List<Long>) -> Unit = { _, _ -> },
+    /** The assistant's Ask is set up and on (docs/ai-assistant-v1.md, section 5). */
+    showAsk: Boolean = false,
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
@@ -445,6 +448,23 @@ fun DrawerContent(
                 // Settings
                 item(key = "divider_settings", contentType = "divider") {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+                if (showAsk) {
+                    item(key = "ask", contentType = "smart") {
+                        NavigationDrawerItem(
+                            label = { Text("Ask") },
+                            icon = {
+                                Icon(
+                                    Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            selected = currentRoute == "AskRoute",
+                            onClick = { onNavigate(AskRoute) },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                        )
+                    }
                 }
                 item(key = "settings", contentType = "smart") {
                     NavigationDrawerItem(

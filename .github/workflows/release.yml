@@ -32,6 +32,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The local speech library (native/speech, whisper.cpp) is built with the NDK and CMake that
+      # app/build.gradle.kts pins; the runner's SDK may hold other versions (licences are accepted).
+      - name: Install the NDK and CMake
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.1.12297006" "cmake;3.22.1" > /dev/null
+
       - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}

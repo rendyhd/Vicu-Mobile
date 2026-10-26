@@ -3,6 +3,16 @@ package com.rendyhd.vicu.di
 import com.rendyhd.vicu.voice.IosSpeechBridgeHolder
 import com.rendyhd.vicu.voice.IosSpeechInput
 import com.rendyhd.vicu.voice.SpeechInput
+import com.rendyhd.vicu.ai.AiKeyStore
+import com.rendyhd.vicu.ai.IosAiKeyStore
+import com.rendyhd.vicu.speech.AudioRecorder
+import com.rendyhd.vicu.speech.IosAudioRecorder
+import com.rendyhd.vicu.speech.IosSpeechEngineNative
+import com.rendyhd.vicu.speech.IosSpeechOutput
+import com.rendyhd.vicu.speech.IosSpeechStorage
+import com.rendyhd.vicu.speech.SpeechEngineNative
+import com.rendyhd.vicu.speech.SpeechOutput
+import com.rendyhd.vicu.speech.SpeechStorage
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
@@ -164,6 +174,13 @@ val iosModule = module {
     single { IosLocationBridgeHolder() }
     single { IosSpeechBridgeHolder() }
     single<SpeechInput> { IosSpeechInput(get()) }
+    // Local speech (docs/ai-assistant-v1.md, section 3) and the AI provider keys (7.2). None of
+    // them touches the audio session, the Keychain or the network until first used.
+    single<SpeechEngineNative> { IosSpeechEngineNative() }
+    single<AudioRecorder> { IosAudioRecorder() }
+    single<SpeechOutput> { IosSpeechOutput() }
+    single<SpeechStorage> { IosSpeechStorage() }
+    single<AiKeyStore> { IosAiKeyStore() }
     single { IosLocationPermissionPlatform(get()) }
     single<LocationPermissionPlatform> { get<IosLocationPermissionPlatform>() }
     single<PlatformGeofencer> { IosGeofencer(get()) }

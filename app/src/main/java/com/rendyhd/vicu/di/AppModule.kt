@@ -2,6 +2,16 @@ package com.rendyhd.vicu.di
 
 import com.rendyhd.vicu.voice.AndroidSpeechInput
 import com.rendyhd.vicu.voice.SpeechInput
+import com.rendyhd.vicu.ai.AiKeyStore
+import com.rendyhd.vicu.ai.AndroidAiKeyStore
+import com.rendyhd.vicu.speech.AndroidAudioRecorder
+import com.rendyhd.vicu.speech.AndroidSpeechEngineNative
+import com.rendyhd.vicu.speech.AndroidSpeechOutput
+import com.rendyhd.vicu.speech.AndroidSpeechStorage
+import com.rendyhd.vicu.speech.AudioRecorder
+import com.rendyhd.vicu.speech.SpeechEngineNative
+import com.rendyhd.vicu.speech.SpeechOutput
+import com.rendyhd.vicu.speech.SpeechStorage
 import org.koin.dsl.module
 import org.koin.android.ext.koin.androidContext
 import coil3.ImageLoader
@@ -85,6 +95,13 @@ val appModule = module {
     single<LocationPermissionPlatform> { get<AndroidLocationPermissionPlatform>() }
     single { AndroidSpeechInput(androidContext()) }
     single<SpeechInput> { get<AndroidSpeechInput>() }
+    // Local speech (docs/ai-assistant-v1.md, section 3) and the AI provider keys (7.2). The
+    // recorder asks for the microphone through the same prompt as holding +.
+    single<SpeechEngineNative> { AndroidSpeechEngineNative() }
+    single<AudioRecorder> { AndroidAudioRecorder(get()) }
+    single<SpeechOutput> { AndroidSpeechOutput(androidContext()) }
+    single<SpeechStorage> { AndroidSpeechStorage(androidContext()) }
+    single<AiKeyStore> { AndroidAiKeyStore(androidContext()) }
     single<PlatformGeofencer> { AndroidGeofencer(androidContext()) }
     single<DeviceLocation> { AndroidDeviceLocation(androidContext()) }
     single<LocationNotifier> { AndroidLocationNotifier(androidContext()) }

@@ -38,6 +38,15 @@ most iOS breakage without a Mac.
   macOS runner has 7 GB, too little for the TestFlight job in `ios.yml`: it needs a larger
   runner (or a link that needs less memory). Until then, upload from a Mac with
   `iosApp/scripts/testflight.sh` (see [Release](#release)).
+- Local speech (`native/speech`, whisper.cpp with Metal and Accelerate) is a static library per
+  SDK, `shared/build/speech-ios/<iphoneos|iphonesimulator>/lib/libvicu_speech_all.a`, built by
+  `iosApp/scripts/build-speech.sh` (CMake from PATH, Homebrew or the Android SDK; whisper.cpp
+  downloaded by CMake and checked by SHA-256, or `VICU_WHISPER_SOURCE_DIR`) before each iOS
+  target's cinterop (`shared/src/nativeInterop/cinterop/vicuSpeech.def`). The first build of an
+  SDK takes about 4 minutes; it is skipped while `native/speech` and the script are unchanged. The
+  Metal shaders are embedded as source and compiled on the device, so no Metal toolchain is
+  needed. The framework is static, so the app target itself links Metal, MetalKit, Accelerate
+  and libc++ (`OTHER_LDFLAGS` in `project.yml`); the Silero model is in the app bundle.
 - Signing: put `DEVELOPMENT_TEAM = <your team id>` in `iosApp/Configuration/Local.xcconfig`
   (git-ignored) to run on a device.
 - Debug and release install side by side: `com.rendyhd.vicu.debug` ("Vicu Debug", URL scheme
@@ -186,6 +195,20 @@ permission (While Using, then Always) and reads the current position; place sear
 through `IosSpeechInput`. Speech recognition and the microphone are asked for on the first hold
 (`NSSpeechRecognitionUsageDescription`, `NSMicrophoneUsageDescription` in `project.yml`). The
 simulator has a recognizer, but its microphone is the Mac's. See `docs/voice-input.md`.
+
+### Local speech and the AI keys
+
+For the AI assistant (`docs/ai-assistant-v1.md`, sections 3 and 7.2), `iosModule` binds:
+`IosSpeechEngineNative` (the C API of `native/speech/vicu_speech.h` through cinterop),
+`IosAudioRecorder` (`AVAudioEngine`'s input tap converted to 16 kHz mono float by
+`AVAudioConverter`; the same record / measurement session as the recognizer bridge; a call or a
+route change that stops the engine ends the recording), `IosSpeechOutput` (`AVSpeechSynthesizer`,
+its delegate held by the class, switching the session to playback while it speaks),
+`IosSpeechStorage` (downloaded models in Application Support `speech-models/`, out of backups;
+the Silero model read from the app bundle; unmetered means a path that is neither expensive nor
+constrained) and `IosAiKeyStore` (Keychain service `com.rendyhd.vicu.ai`; the first use in an
+install deletes keys an earlier install left). `IosSpeechEngineNativeTest` runs the bundled
+voice detector on the simulator from the repository's copy.
 
 ### Background work
 

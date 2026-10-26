@@ -157,7 +157,7 @@ fun TodayScreen(
                 ScreenFab(
                     onClick = { onShowTaskEntry(null, today) },
                     expanded = !listState.canScrollBackward,
-                    taskDefaults = TaskDefaults(dueDate = today),
+                    taskDefaults = TaskDefaults(dueDate = today, listName = "Today"),
                 )
             }
         },

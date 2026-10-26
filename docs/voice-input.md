@@ -98,6 +98,17 @@ A place phrase works here too: "call mom when I get home" sets the location remi
 - `VoiceAddActivity` uses `RecognizerIntent`, the system's speech screen, so it needs no
   microphone permission (only holding + does). Without a speech service it opens quick add instead.
 
+## With the assistant
+
+With smart dictation on (Settings, Assistant; `docs/ai-assistant-v1.md`), letting go of + sends
+the words to the user's own model instead of adding one task: it turns a ramble into several
+draft tasks (`DictationSheet`), checked against the same parser and fields as quick add, to
+change by hand or by holding the microphone again ("make the first one Friday") before Add. When
+the model cannot be reached the words wait on the card with Retry and Add as one task, which is
+the path above. With a speech model chosen there (Whisper or Parakeet through whisper.cpp), the
+words are recognised on the phone (`SelectingSpeechInput`, `LocalSpeechSession`) instead of by
+the system recognizer, and the card waits for the last phrase after the finger lifts.
+
 ## For later
 
 - **One sentence on iOS (Siri AI)**: iOS 27 has an App Schema domain for reminders

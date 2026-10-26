@@ -132,3 +132,11 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# =============================================================================
+# Local speech (JNI)
+# =============================================================================
+# libvicu_speech.so binds its functions by class and method name (native/speech/vicu_speech_jni.cpp).
+-keep class com.rendyhd.vicu.speech.VicuSpeechJni {
+    native <methods>;
+}

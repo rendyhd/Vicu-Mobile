@@ -139,7 +139,7 @@ class HoldToTalk(
                 speech.stop()
                 // The recognizer's last words normally come within a moment; do not wait for ever.
                 finishWait = scope.launch {
-                    delay(FINAL_WAIT_MS)
+                    delay(speech.finalWaitMs)
                     finish()
                 }
             }
@@ -255,7 +255,7 @@ class HoldToTalk(
             if (undo != null) {
                 onVoiceAdded()
                 messages.post(result.message, "Undo") { scope.launch { undo() } }
-            } else {
+            } else if (result.message.isNotEmpty()) {
                 messages.post(result.message)
             }
         }

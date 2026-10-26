@@ -14,6 +14,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.rendyhd.vicu.speech.MicrophoneAccess
 import com.rendyhd.vicu.util.Logger
 
 /**
@@ -53,6 +54,16 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         prefs.edit { putBoolean(KEY_ASKED, true) }
         pendingPermission = onResult
         launch()
+    }
+
+    /**
+     * The microphone permission for the local recorder (`AndroidAudioRecorder`), which asks through
+     * this same prompt and remembers the same "asked" mark.
+     */
+    fun microphoneAccess(): MicrophoneAccess = when {
+        granted() -> MicrophoneAccess.GRANTED
+        prefs.getBoolean(KEY_ASKED, false) -> MicrophoneAccess.DENIED
+        else -> MicrophoneAccess.NOT_ASKED
     }
 
     /** The answer to the prompt [attach]'s launcher showed. */

@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.data.local
 
+import com.rendyhd.vicu.ai.ask.ConversationStore
+import com.rendyhd.vicu.ai.dictation.KeptTranscriptStore
 import com.rendyhd.vicu.data.local.dao.LocalDataDao
 import com.rendyhd.vicu.data.repository.ListPositioner
 import com.rendyhd.vicu.data.repository.SyncedPreferences
@@ -50,6 +52,12 @@ class LocalDataWiper(
     private val syncedPreferences: SyncedPreferences? = null,
     /** The account's location reminders (device-only; the saved places are a device setting and stay). */
     private val locationReminders: LocationReminderStore? = null,
+    /**
+     * The assistant's conversations and a kept dictation name the old account's tasks. The
+     * assistant's settings and key belong to the device and stay (docs/ai-assistant-v1.md, 7.2).
+     */
+    private val assistantConversations: ConversationStore? = null,
+    private val keptTranscript: KeptTranscriptStore? = null,
 ) {
     /**
      * Entries of routine history that have not been uploaded to the server yet (the phone-only
@@ -112,6 +120,8 @@ class LocalDataWiper(
             syncStaleness.reset()
             // Clearing them stops the watched regions too (LocationReminderCoordinator).
             locationReminders?.clear()
+            assistantConversations?.clear()
+            keptTranscript?.clear()
         }
         // The old account's reminders must not keep firing for a signed-out (or switched) account.
         platformHooks.cancelAllAlarms()
