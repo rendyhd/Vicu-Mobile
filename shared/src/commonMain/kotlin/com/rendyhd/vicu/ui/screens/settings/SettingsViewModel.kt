@@ -47,8 +47,14 @@ import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.ReviewMetadata
 import com.rendyhd.vicu.util.ReviewState
 import com.rendyhd.vicu.ui.navigation.PENDING_ORDER_TIMEOUT_MS
+import com.rendyhd.vicu.ui.navigation.ProjectListItem
 import com.rendyhd.vicu.ui.navigation.ProjectNode
 import com.rendyhd.vicu.ui.navigation.ProjectRow
+import com.rendyhd.vicu.ui.navigation.projectListItems
+import com.rendyhd.vicu.ui.navigation.projectRows
+import com.rendyhd.vicu.ui.navigation.topLevelGroupOf
+import com.rendyhd.vicu.util.ProjectCategory
+import com.rendyhd.vicu.util.ProjectCategoryState
 import com.rendyhd.vicu.ui.navigation.buildProjectTree
 import com.rendyhd.vicu.ui.navigation.reorderSiblings
 import com.rendyhd.vicu.ui.navigation.siblingIds
@@ -444,46 +450,111 @@ class SettingsViewModel(
         .map { projects -> buildProjectTree(projects.filter { !it.isArchived }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** A sibling order just dropped and not stored yet: the projects below [parentId] (0 for the roots) in the order of [ids]. */
-    private data class PendingSiblingOrder(val parentId: Long, val ids: List<Long>)
+    /**
+     * A sibling order just dropped and not stored yet: the projects below [parentId] (0 for the
+     * roots) in the order of [ids], and a top-level project dropped into another category's group.
+     */
+    private data class PendingSiblingOrder(val parentId: Long, val ids: List<Long>, val movedCategory: Pair<Long, String?>? = null)
 
     private val pendingProjectOrder = MutableStateFlow<PendingSiblingOrder?>(null)
 
     /**
-     * The Projects tab's rows: every active project, the Inbox included, depth first with siblings
-     * in position order (the drawer's order). An order just dropped is shown until it is stored, so
-     * the row does not jump back to its old place in between.
+     * The user's project categories (section 13) as the Projects tab shows them: the Inbox, listed
+     * among the projects here, never has one.
      */
-    val projectRows: StateFlow<List<ProjectRow>> = combine(storedProjectTree, pendingProjectOrder) { tree, pending ->
-        val ordered = if (pending == null) tree else reorderSiblings(tree, pending.parentId, pending.ids)
-        visibleProjectRows(ordered, emptySet())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val categories: StateFlow<ProjectCategoryState> = combine(projectActions.categories, _inboxProjectId) { categories, inboxId ->
+        inboxId?.let { categories.withAssignment(it, null) } ?: categories
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectCategoryState.EMPTY)
 
     /**
-     * Saves the new order of the projects that share a level after a drag (or a screen reader's
-     * move): [idsInNewOrder] is every project of that level, [movedId] the one that moved. The
-     * saving is the drawer's ([ProjectActions.moveAmongSiblings]); a refusal is reported and the
-     * list goes back to what is stored.
+     * The Projects tab's items: every active project, the Inbox included, depth first with siblings
+     * in position order (the drawer's order), under the headers of the categories. An order just
+     * dropped is shown until it is stored, so the row does not jump back to its old place in between.
      */
+    val projectItems: StateFlow<List<ProjectListItem>> = combine(storedProjectTree, pendingProjectOrder, categories) { tree, pending, categories ->
+        val ordered = if (pending == null) tree else reorderSiblings(tree, pending.parentId, pending.ids)
+        val shown = pending?.movedCategory?.let { (projectId, categoryId) -> categories.withAssignment(projectId, categoryId) } ?: categories
+        projectListItems(ordered, emptySet(), shown)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** The rows of [projectItems], without the headers. */
+    val projectRows: StateFlow<List<ProjectRow>> = projectItems.map { it.projectRows() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Saves a sibling order after a drag within a level: the project keeps its category. */
     fun reorderProject(movedId: Long, idsInNewOrder: List<Long>) {
-        val rows = visibleProjectRows(storedProjectTree.value, emptySet())
+        moveProject(movedId, categories.value.categoryOf(movedId)?.id, idsInNewOrder)
+    }
+
+    /**
+     * Saves a drop (or a screen reader's move): [movedId] is now in the group of [categoryId] (null:
+     * none; it only counts for a top-level project), among [idsInNewOrder], every project of its
+     * level there. The saving is the drawer's ([ProjectActions.moveAmongSiblings], and
+     * [ProjectActions.moveIntoCategory] for another category); a refusal is reported and the list
+     * goes back to what is stored.
+     */
+    fun moveProject(movedId: Long, categoryId: String?, idsInNewOrder: List<Long>) {
+        val tree = storedProjectTree.value
+        val rows = visibleProjectRows(tree, emptySet())
         val moved = rows.firstOrNull { it.project.id == movedId } ?: return
+        val stored = categories.value
+        val topLevel = moved.parentId == 0L
+        val intoOther = topLevel && categoryId != stored.categoryOf(movedId)?.id
         val siblings = rows.filter { it.parentId == moved.parentId }.associateBy { it.project.id }
         val ordered = idsInNewOrder.distinct().mapNotNull { siblings[it]?.project }
         val newOrder = ordered.map { it.id }
-        if (movedId !in newOrder || newOrder == siblingIds(rows, movedId)) return
+        if (movedId !in newOrder) return
+        val current = { tree: List<ProjectNode>, state: ProjectCategoryState ->
+            if (topLevel) topLevelGroupOf(tree, state, movedId) else siblingIds(visibleProjectRows(tree, emptySet()), movedId)
+        }
+        if (!intoOther && newOrder == current(tree, stored)) return
 
-        pendingProjectOrder.value = PendingSiblingOrder(moved.parentId, newOrder)
+        pendingProjectOrder.value = PendingSiblingOrder(moved.parentId, newOrder, if (intoOther) movedId to categoryId else null)
         viewModelScope.launch {
-            when (val result = projectActions.moveAmongSiblings(movedId, ordered)) {
+            val result = if (intoOther) {
+                projectActions.moveIntoCategory(movedId, categoryId, ordered)
+            } else {
+                projectActions.moveAmongSiblings(movedId, ordered)
+            }
+            when (result) {
                 SiblingMoveResult.Saved -> withTimeoutOrNull(PENDING_ORDER_TIMEOUT_MS) {
-                    storedProjectTree.first { tree -> siblingIds(visibleProjectRows(tree, emptySet()), movedId) == newOrder }
+                    combine(storedProjectTree, categories) { tree, state -> tree to state }.first { (tree, state) ->
+                        (!topLevel || state.categoryOf(movedId)?.id == categoryId) && current(tree, state) == newOrder
+                    }
                 }
                 is SiblingMoveResult.Failed -> _messages.update { result.message to null }
                 SiblingMoveResult.NotMoved -> Unit
             }
             pendingProjectOrder.update { if (it?.ids == newOrder) null else it }
         }
+    }
+
+    // --- Categories (section 13) ---
+
+    fun createCategory(name: String, project: Project? = null) {
+        viewModelScope.launch { report(projectActions.createCategory(name, project)) }
+    }
+
+    fun renameCategory(categoryId: String, name: String) {
+        viewModelScope.launch { report(projectActions.renameCategory(categoryId, name)) }
+    }
+
+    /** Moves a category one place up (-1) or down (1). */
+    fun moveCategory(categoryId: String, by: Int) {
+        viewModelScope.launch { report(projectActions.moveCategory(categoryId, by)) }
+    }
+
+    /** Deletes [category] (its projects stay); the app-wide snackbar offers to undo it. */
+    fun deleteCategory(category: ProjectCategory) {
+        viewModelScope.launch { projectActions.deleteCategoryOfferingUndo(category) }
+    }
+
+    fun assignCategory(project: Project, category: ProjectCategory?) {
+        viewModelScope.launch { report(projectActions.assignCategory(project, category)) }
+    }
+
+    fun addCategoryAbove(projectId: Long, name: String) {
+        viewModelScope.launch { report(projectActions.addCategoryAbove(projectId, name)) }
     }
 
     // --- Labels ---

@@ -45,7 +45,8 @@ fun SettingsScreen(
     val useDeviceColors by viewModel.useDeviceColors.collectAsStateWithLifecycle()
     val routineHistoryCount by viewModel.routineHistoryCount.collectAsStateWithLifecycle()
     val syncedDataUnsynced by viewModel.syncedDataUnsynced.collectAsStateWithLifecycle()
-    val projectRows by viewModel.projectRows.collectAsStateWithLifecycle()
+    val projectItems by viewModel.projectItems.collectAsStateWithLifecycle()
+    val projectCategories by viewModel.categories.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     // The archived projects start closed each time Settings is opened (not a stored preference).
@@ -112,7 +113,8 @@ fun SettingsScreen(
                 )
                 1 -> ProjectsTab(
                     state = state,
-                    projectRows = projectRows,
+                    projectItems = projectItems,
+                    categories = projectCategories,
                     archivedExpanded = archivedProjectsExpanded,
                     onArchivedExpandedChange = { archivedProjectsExpanded = it },
                     viewModel = viewModel,

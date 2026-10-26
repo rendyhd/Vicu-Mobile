@@ -122,18 +122,21 @@ class SyncedPreferences(
         store.load() ?: SyncedPrefsLocalState(deviceId = randomUuid()).also { store.save(it) }
 
     /** Sets [key] to [value]; null resets it to the default on every device. Nothing when it already is. */
-    override suspend fun set(key: String, value: JsonElement?) {
+    override suspend fun set(key: String, value: JsonElement?) = setAll(mapOf(key to value))
+
+    /** Sets every key of [values] in one change, so a sync never sends half of it. Keys already at their value are left alone. */
+    override suspend fun setAll(values: Map<String, JsonElement?>) {
         val changed = engine.mutate {
             val state = loadState()
-            val current = state.document.entries[key]
-            if (current != null && current.value == value) return@mutate false
-            if (current == null && value == null) return@mutate false
-            store.save(
-                state.copy(
-                    document = SyncedPrefsEnvelope.set(state.document, key, value, state.deviceId, now()),
-                    dirty = true,
-                ),
-            )
+            var document = state.document
+            for ((key, value) in values) {
+                val current = document.entries[key]
+                if (current != null && current.value == value) continue
+                if (current == null && value == null) continue
+                document = SyncedPrefsEnvelope.set(document, key, value, state.deviceId, now())
+            }
+            if (document == state.document) return@mutate false
+            store.save(state.copy(document = document, dirty = true))
             true
         }
         if (changed) {

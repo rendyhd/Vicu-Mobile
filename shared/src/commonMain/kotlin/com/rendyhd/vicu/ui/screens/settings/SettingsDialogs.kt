@@ -23,6 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.domain.model.Project
+import com.rendyhd.vicu.ui.components.category.CategoryLabels
+import com.rendyhd.vicu.ui.components.category.CategoryNameDialog
+import com.rendyhd.vicu.ui.components.category.MoveToCategoryDialog
 import com.rendyhd.vicu.ui.components.shared.ArchiveProjectDialog
 import com.rendyhd.vicu.ui.components.shared.TaskOrderDialog
 import com.rendyhd.vicu.ui.components.shared.BottomBarSlotEditor
@@ -59,6 +64,7 @@ internal fun SettingsDialogHost(
     open: (SettingsDialog) -> Unit,
     dismiss: () -> Unit,
 ) {
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     when (dialog) {
         null -> Unit
 
@@ -305,6 +311,65 @@ internal fun SettingsDialogHost(
             failedCount = state.failedActionCount,
             onConfirm = {
                 viewModel.clearFailedActions()
+                dismiss()
+            },
+            onDismiss = dismiss,
+        )
+
+        SettingsDialog.NewCategory -> CategoryNameDialog(
+            title = CategoryLabels.NEW,
+            confirmLabel = "Create",
+            onConfirm = { name ->
+                viewModel.createCategory(name)
+                dismiss()
+            },
+            onDismiss = dismiss,
+        )
+
+        is SettingsDialog.RenameCategory -> categories.category(dialog.categoryId)?.let { category ->
+            CategoryNameDialog(
+                title = CategoryLabels.RENAME_TITLE,
+                confirmLabel = "Save",
+                initialName = category.name,
+                onConfirm = { name ->
+                    viewModel.renameCategory(category.id, name)
+                    dismiss()
+                },
+                onDismiss = dismiss,
+            )
+        }
+
+        is SettingsDialog.MoveToCategory -> state.projects.find { it.id == dialog.projectId }?.let { project ->
+            MoveToCategoryDialog(
+                projectTitle = project.title,
+                categories = categories.categories,
+                currentId = categories.categoryOf(project.id)?.id,
+                onChoose = { category ->
+                    viewModel.assignCategory(project, category)
+                    dismiss()
+                },
+                onNewCategory = { open(SettingsDialog.NewCategoryFor(project.id)) },
+                onDismiss = dismiss,
+            )
+        }
+
+        is SettingsDialog.NewCategoryFor -> state.projects.find { it.id == dialog.projectId }?.let { project ->
+            CategoryNameDialog(
+                title = CategoryLabels.NEW,
+                confirmLabel = "Create",
+                onConfirm = { name ->
+                    viewModel.createCategory(name, project)
+                    dismiss()
+                },
+                onDismiss = dismiss,
+            )
+        }
+
+        is SettingsDialog.AddCategoryAbove -> CategoryNameDialog(
+            title = CategoryLabels.NEW,
+            confirmLabel = "Create",
+            onConfirm = { name ->
+                viewModel.addCategoryAbove(dialog.projectId, name)
                 dismiss()
             },
             onDismiss = dismiss,

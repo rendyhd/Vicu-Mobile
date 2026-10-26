@@ -43,6 +43,19 @@ Branch `feat/shared-routines` (design `docs/shared-routines.md`, contract sectio
   General, Routines lists the hidden ones. They are the account's own: they follow it to every
   device and never change the routine for the other person.
 
+## Changes with project categories
+
+Contract section 13; design-system section 5 for the header.
+
+- **Project categories** are synced preferences of the account: `category.<id>` (name and order)
+  and `category.project.<projectId>` (the category a top-level project is in), written by
+  `ProjectActions` through `ProjectCategoryPreferences` (several keys as one change,
+  `SyncedEntries.setAll`). Two people who share a project each file it in a category of their own.
+  With none, the project list is as before.
+- Which categories are collapsed in the drawer is per device and lasts as long as the app runs
+  (`DrawerSectionsExpanded`, like collapsed projects). The desktop keeps it in `config.json`
+  (`sidebar_collapsed_categories`, account-specific).
+
 ## Summary
 
 | Where | What | Reaches the desktop and other devices | Survives sign-out | In a backup |

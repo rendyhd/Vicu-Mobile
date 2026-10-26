@@ -218,6 +218,7 @@ val repositoryModule = module {
     // A change redraws the widgets that show a project in its order (SyncedPreferences.set does).
     single { TaskOrderPreferences(synced = get<SyncedPreferences>()) }
     single { RoutinePersonalPreferences(synced = get<SyncedPreferences>()) }
+    single { ProjectCategoryPreferences(synced = get<SyncedPreferences>()) }
     single<CollaborationRepository> {
         CollaborationRepositoryImpl(
             collaborationDao = get(),
@@ -418,6 +419,9 @@ val commonModule = module {
             dayClock = get(),
             collaboration = get(),
             syncedPreferences = get(),
+            categoryPreferences = get(),
+            appMessages = get(),
+            appScope = get(),
         )
     }
     single {

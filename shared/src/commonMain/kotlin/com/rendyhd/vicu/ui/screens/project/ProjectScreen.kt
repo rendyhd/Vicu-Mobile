@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.project
 
+import com.rendyhd.vicu.ui.components.category.CategoryLabels
+import com.rendyhd.vicu.ui.components.category.CategoryNameDialog
+import com.rendyhd.vicu.ui.components.category.MoveToCategoryDialog
 import com.rendyhd.vicu.ui.screens.routines.RoutineSharing
 import com.rendyhd.vicu.ui.screens.routines.rememberSharedRoutineLookup
 import com.rendyhd.vicu.ui.screens.routines.rememberSharedRoutineNames
@@ -174,6 +177,7 @@ fun ProjectScreen(
                                         ProjectMenuEntry.SORT -> openDialog = ProjectDialog.SORT.name
                                         ProjectMenuEntry.EDIT -> openDialog = ProjectDialog.EDIT.name
                                         ProjectMenuEntry.ADD_SUBPROJECT -> openDialog = ProjectDialog.SUBPROJECT.name
+                                        ProjectMenuEntry.MOVE_TO_CATEGORY -> openDialog = ProjectDialog.MOVE_TO_CATEGORY.name
                                         ProjectMenuEntry.SET_INBOX -> viewModel.setAsInbox()
                                         ProjectMenuEntry.MARK_REVIEWED -> viewModel.markReviewed()
                                         ProjectMenuEntry.ARCHIVE -> openDialog = ProjectDialog.ARCHIVE.name
@@ -385,6 +389,26 @@ fun ProjectScreen(
                 },
                 onDismiss = dismissDialog,
             )
+            ProjectDialog.MOVE_TO_CATEGORY -> MoveToCategoryDialog(
+                projectTitle = menuProject.title,
+                categories = menu.categories,
+                currentId = menu.category?.id,
+                onChoose = { category ->
+                    viewModel.moveToCategory(category)
+                    dismissDialog()
+                },
+                onNewCategory = { openDialog = ProjectDialog.NEW_CATEGORY.name },
+                onDismiss = dismissDialog,
+            )
+            ProjectDialog.NEW_CATEGORY -> CategoryNameDialog(
+                title = CategoryLabels.NEW,
+                confirmLabel = "Create",
+                onConfirm = { name ->
+                    viewModel.moveToNewCategory(name)
+                    dismissDialog()
+                },
+                onDismiss = dismissDialog,
+            )
             ProjectDialog.ARCHIVE -> ArchiveProjectDialog(
                 project = menuProject,
                 onConfirm = {
@@ -416,7 +440,7 @@ fun ProjectScreen(
 }
 
 /** The dialogs the options menu opens. */
-private enum class ProjectDialog { SORT, EDIT, SUBPROJECT, ARCHIVE, DELETE }
+private enum class ProjectDialog { SORT, EDIT, SUBPROJECT, MOVE_TO_CATEGORY, NEW_CATEGORY, ARCHIVE, DELETE }
 
 /** The top bar's "more" button and the project's options. */
 @Composable

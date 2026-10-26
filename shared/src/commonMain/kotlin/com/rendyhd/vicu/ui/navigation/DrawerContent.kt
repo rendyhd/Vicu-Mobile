@@ -62,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.domain.model.BottomBarSlotType
 import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.Label
+import com.rendyhd.vicu.ui.components.category.CategoryHeader
+import com.rendyhd.vicu.ui.components.category.CategoryLabels
+import com.rendyhd.vicu.ui.components.category.CategoryNameDialog
 import com.rendyhd.vicu.ui.components.section.sectionStateDescription
 import com.rendyhd.vicu.ui.components.shared.DragClickGuard
 import com.rendyhd.vicu.ui.components.shared.IconRegistry
@@ -72,6 +75,7 @@ import com.rendyhd.vicu.ui.components.shared.dragClickGuardPresses
 import com.rendyhd.vicu.ui.components.task.moveCustomActions
 import com.rendyhd.vicu.ui.theme.LocalVicuColors
 import com.rendyhd.vicu.util.countOf
+import com.rendyhd.vicu.util.ProjectCategory
 import com.rendyhd.vicu.util.ProjectProgress
 import com.rendyhd.vicu.util.moveIdBy
 import com.rendyhd.vicu.util.parseHexColor
@@ -87,11 +91,13 @@ private val ProjectIndent = 16.dp
 private val CountColumnWidth = 28.dp
 
 /**
- * The navigation drawer: the smart lists, then the projects (a tree, any depth), the custom lists
- * and the labels. It is one lazy list, so only the rows that are on screen are composed however
- * many projects there are. Long-pressing a project, list or label drags it among the rows of its
- * own group (a project among its siblings); the drop is reported through the `onReorder` callbacks
- * with the ids of the group in their new order.
+ * The navigation drawer: the smart lists, then the projects (a tree, any depth, under the headers
+ * of the user's categories when there are any), the custom lists and the labels. It is one lazy
+ * list, so only the rows that are on screen are composed however many projects there are.
+ * Long-pressing a project, list or label drags it among the rows of its own group (a project among
+ * its siblings; a top-level project also past a category's header, into that category); the drop is
+ * reported through [onMoveProject] and the `onReorder` callbacks with the ids in their new order.
+ * A category's header opens and closes it; a long press offers Rename, Move up, Move down and Delete.
  *
  * A project row with tasks shows a [ProgressRing] from [projectProgress]. While [progressActive]
  * (the drawer is open) the projects whose rows are on screen are reported through
@@ -114,7 +120,15 @@ fun DrawerContent(
     onProgressRows: (Set<Long>) -> Unit = {},
     onCreateNewList: () -> Unit = {},
     onCreateProject: () -> Unit = {},
-    onReorderProject: (movedId: Long, idsInNewOrder: List<Long>) -> Unit = { _, _ -> },
+    /**
+     * A project was dropped: it is now in the group of the category (null: none; it only counts for
+     * a top-level project) among the ids of its level there, in their new order.
+     */
+    onMoveProject: (movedId: Long, categoryId: String?, idsInNewOrder: List<Long>) -> Unit = { _, _, _ -> },
+    onToggleCategoryCollapsed: (categoryId: String) -> Unit = {},
+    onRenameCategory: (categoryId: String, name: String) -> Unit = { _, _ -> },
+    onMoveCategory: (categoryId: String, by: Int) -> Unit = { _, _ -> },
+    onDeleteCategory: (ProjectCategory) -> Unit = {},
     onReorderList: (movedId: String, idsInNewOrder: List<String>) -> Unit = { _, _ -> },
     onReorderLabel: (movedId: Long, idsInNewOrder: List<Long>) -> Unit = { _, _ -> },
     /** The assistant's Ask is set up and on (docs/ai-assistant-v1.md, section 5). */
@@ -126,29 +140,38 @@ fun DrawerContent(
 
     // While a row is dragged, its group is drawn in the order being made. At the drop the view
     // model takes over: it keeps the new order on show until the stored order says the same.
-    var liveProjects by remember { mutableStateOf<List<ProjectRow>?>(null) }
+    var liveProjects by remember { mutableStateOf<List<ProjectListItem>?>(null) }
     var liveLists by remember { mutableStateOf<List<CustomList>?>(null) }
     var liveLabels by remember { mutableStateOf<List<Label>?>(null) }
-    val projectRows = liveProjects ?: state.projectRows
+    var renaming by remember { mutableStateOf<ProjectCategory?>(null) }
+    val projectItems = liveProjects ?: state.projectItems
     val customLists = liveLists ?: state.customLists
     val labels = liveLabels ?: state.labels
     // What a screen reader (which cannot drag) moves by: the ids of each group in display order, and
-    // for projects the ids of each level. A move is reported like the drop of a drag.
-    val projectSiblings = remember(projectRows) { projectRows.groupBy({ it.parentId }, { it.project.id }) }
+    // for projects the ids of each level within its category. A move is reported like the drop of a drag.
+    val projectSiblings = remember(projectItems) { levelSiblings(projectItems) }
+    val categoryIds = remember(state.categories) { state.categories.categories.map { it.id } }
     val listIds = remember(customLists) { customLists.map { it.id } }
     val labelIds = remember(labels) { labels.map { it.id } }
 
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         val source = parseDrawerKey(from.key) ?: return@rememberReorderableLazyListState
         val target = parseDrawerKey(to.key) ?: return@rememberReorderableLazyListState
-        if (source.group != target.group) return@rememberReorderableLazyListState
+        // A project goes over projects and category headers; the others stay in their own group.
+        val sameGroup = source.group == target.group || (source.group == DrawerGroup.PROJECT && target.group == DrawerGroup.CATEGORY)
+        if (!sameGroup) return@rememberReorderableLazyListState
         val moved = when (source.group) {
             DrawerGroup.PROJECT -> {
                 val sourceId = source.id.toLongOrNull() ?: return@rememberReorderableLazyListState
-                val targetId = target.id.toLongOrNull() ?: return@rememberReorderableLazyListState
-                moveProjectRow(liveProjects ?: state.projectRows, sourceId, targetId)
-                    ?.also { liveProjects = it } != null
+                val current = liveProjects ?: state.projectItems
+                val targetIndex = if (target.group == DrawerGroup.CATEGORY) {
+                    current.indexOfCategory(target.id)
+                } else {
+                    target.id.toLongOrNull()?.let { current.indexOfProject(it) } ?: return@rememberReorderableLazyListState
+                }
+                moveProjectItem(current, sourceId, targetIndex)?.also { liveProjects = it } != null
             }
+            DrawerGroup.CATEGORY -> false
             DrawerGroup.LIST ->
                 moveItem(liveLists ?: state.customLists, source.id, target.id) { it.id }
                     ?.also { liveLists = it } != null
@@ -288,33 +311,65 @@ fun DrawerContent(
                 }
                 if (state.projectsExpanded) {
                     items(
-                        projectRows,
-                        key = { drawerKey(DrawerGroup.PROJECT, it.project.id) },
-                        contentType = { "project" },
-                    ) { row ->
-                        val projectId = row.project.id
-                        val siblings = projectSiblings[row.parentId].orEmpty()
-                        LongPressReorderableRow(
-                            reorderState = reorderState,
-                            key = drawerKey(DrawerGroup.PROJECT, projectId),
-                            onDragStopped = {
-                                liveProjects?.let { onReorderProject(projectId, siblingIds(it, projectId)) }
-                                liveProjects = null
-                            },
-                        ) { clickGuard ->
-                            ProjectItem(
-                                row = row,
-                                progress = projectProgress[projectId],
-                                openCount = projectOpenCounts[projectId],
-                                countColumn = projectOpenCounts.isNotEmpty(),
-                                selected = currentRoute == "ProjectRoute/$projectId",
-                                onClick = clickGuard.guarded { onNavigate(ProjectRoute(projectId)) },
-                                onToggleCollapsed = clickGuard.guarded { onToggleProjectCollapsed(projectId) },
-                                onMoveUp = moveIdBy(siblings, projectId, -1)
-                                    ?.let { order -> { onReorderProject(projectId, order) } },
-                                onMoveDown = moveIdBy(siblings, projectId, 1)
-                                    ?.let { order -> { onReorderProject(projectId, order) } },
-                            )
+                        projectItems,
+                        key = { item ->
+                            when (item) {
+                                is ProjectListItem.Header -> drawerKey(DrawerGroup.CATEGORY, item.category.id)
+                                is ProjectListItem.Row -> drawerKey(DrawerGroup.PROJECT, item.row.project.id)
+                            }
+                        },
+                        contentType = { if (it is ProjectListItem.Header) "category" else "project" },
+                    ) { item ->
+                        when (item) {
+                            is ProjectListItem.Header -> {
+                                val category = item.category
+                                val index = categoryIds.indexOf(category.id)
+                                // A target of the drag, never dragged itself: it has no drag handle.
+                                ReorderableItem(reorderState, key = drawerKey(DrawerGroup.CATEGORY, category.id)) {
+                                    CategoryHeader(
+                                        category = category,
+                                        count = item.count,
+                                        collapsed = item.collapsed,
+                                        startPadding = 28.dp,
+                                        onToggle = { onToggleCategoryCollapsed(category.id) },
+                                        onRename = { renaming = category },
+                                        onMoveUp = if (index > 0) ({ onMoveCategory(category.id, -1) }) else null,
+                                        onMoveDown = if (index in 0 until categoryIds.lastIndex) ({ onMoveCategory(category.id, 1) }) else null,
+                                        onDelete = { onDeleteCategory(category) },
+                                    )
+                                }
+                            }
+                            is ProjectListItem.Row -> {
+                                val row = item.row
+                                val projectId = row.project.id
+                                val siblings = projectSiblings[projectId].orEmpty()
+                                LongPressReorderableRow(
+                                    reorderState = reorderState,
+                                    key = drawerKey(DrawerGroup.PROJECT, projectId),
+                                    // Carried as one row: its open subprojects would be left behind, rows to pass.
+                                    onDragStarted = { liveProjects = (liveProjects ?: state.projectItems).withoutDescendants(projectId) },
+                                    onDragStopped = {
+                                        liveProjects?.let { items ->
+                                            droppedPlace(items, projectId)?.let { (categoryId, ids) -> onMoveProject(projectId, categoryId, ids) }
+                                        }
+                                        liveProjects = null
+                                    },
+                                ) { clickGuard ->
+                                    ProjectItem(
+                                        row = row,
+                                        progress = projectProgress[projectId],
+                                        openCount = projectOpenCounts[projectId],
+                                        countColumn = projectOpenCounts.isNotEmpty(),
+                                        selected = currentRoute == "ProjectRoute/$projectId",
+                                        onClick = clickGuard.guarded { onNavigate(ProjectRoute(projectId)) },
+                                        onToggleCollapsed = clickGuard.guarded { onToggleProjectCollapsed(projectId) },
+                                        onMoveUp = moveIdBy(siblings, projectId, -1)
+                                            ?.let { order -> { onMoveProject(projectId, item.categoryId, order) } },
+                                        onMoveDown = moveIdBy(siblings, projectId, 1)
+                                            ?.let { order -> { onMoveProject(projectId, item.categoryId, order) } },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -490,6 +545,19 @@ fun DrawerContent(
             Spacer(Modifier.height(8.dp))
         }
     }
+
+    renaming?.let { category ->
+        CategoryNameDialog(
+            title = CategoryLabels.RENAME_TITLE,
+            confirmLabel = "Save",
+            initialName = category.name,
+            onConfirm = { name ->
+                onRenameCategory(category.id, name)
+                renaming = null
+            },
+            onDismiss = { renaming = null },
+        )
+    }
 }
 
 /**
@@ -504,6 +572,7 @@ internal fun LazyItemScope.LongPressReorderableRow(
     reorderState: ReorderableLazyListState,
     key: String,
     onDragStopped: () -> Unit,
+    onDragStarted: () -> Unit = {},
     content: @Composable (clickGuard: DragClickGuard) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -520,6 +589,7 @@ internal fun LazyItemScope.LongPressReorderableRow(
                     onDragStarted = {
                         clickGuard.dragStarted()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onDragStarted()
                     },
                     onDragStopped = onDragStopped,
                 ),

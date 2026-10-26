@@ -5,6 +5,9 @@ internal enum class DrawerGroup(val prefix: String) {
     PROJECT("project"),
     LIST("list"),
     LABEL("label"),
+
+    /** A category's header: never dragged, but a project dragged over it changes category. */
+    CATEGORY("category"),
 }
 
 /** A draggable row: the group it is in and its id there. */

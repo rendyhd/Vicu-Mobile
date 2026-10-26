@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui
 
+import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
 import com.rendyhd.vicu.util.Logger
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
@@ -570,6 +571,7 @@ fun VicuApp(
         LocalDateFormat provides dateFormat,
         LocalTaskRowActions provides taskRowActions,
         LocalCollab provides collabUi,
+        LocalProjectCategories provides drawerUiState.categories,
     )
 
     // Build dynamic bottom bar items from config
@@ -626,7 +628,11 @@ fun VicuApp(
                         scope.launch { drawerState.close() }
                         showNewProjectDialog = true
                     },
-                    onReorderProject = drawerViewModel::reorderProject,
+                    onMoveProject = drawerViewModel::moveProject,
+                    onToggleCategoryCollapsed = drawerViewModel::toggleCategoryCollapsed,
+                    onRenameCategory = drawerViewModel::renameCategory,
+                    onMoveCategory = drawerViewModel::moveCategory,
+                    onDeleteCategory = drawerViewModel::deleteCategory,
                     onReorderList = drawerViewModel::reorderCustomList,
                     onReorderLabel = drawerViewModel::reorderLabel,
                 )

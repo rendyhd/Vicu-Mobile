@@ -31,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.domain.model.Project
+import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
+import com.rendyhd.vicu.ui.components.category.PickerCategoryHeading
 import com.rendyhd.vicu.util.parseHexColor
 
 @Composable
@@ -42,8 +44,9 @@ fun ProjectPickerDialog(
     inboxProjectId: Long = 0L,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val rows = remember(projects, inboxProjectId, query) {
-        projectPickerRows(projects, inboxProjectId, query)
+    val categories = LocalProjectCategories.current
+    val rows = remember(projects, inboxProjectId, query, categories) {
+        projectPickerRows(projects, inboxProjectId, query, categories)
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -71,50 +74,54 @@ fun ProjectPickerDialog(
                         val project = row.project
                         val isSelected = project.id == selectedProjectId
                         val indent = (row.depth * 16).coerceAtMost(48).dp
+                        // One item, so the heading and its first project stay together.
+                        Column {
+                            row.categoryHeader?.let { PickerCategoryHeading(it, Modifier.padding(horizontal = 4.dp)) }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onProjectSelected(project.id)
-                                    onDismiss()
-                                }
-                                .padding(vertical = 10.dp, horizontal = 4.dp)
-                                .padding(start = indent),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            // Color dot
-                            val color = parseHexColor(project.hexColor)
-                                ?: MaterialTheme.colorScheme.primary
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onProjectSelected(project.id)
+                                        onDismiss()
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp)
+                                    .padding(start = indent),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                // Color dot
+                                val color = parseHexColor(project.hexColor)
+                                    ?: MaterialTheme.colorScheme.primary
 
-                            Surface(
-                                shape = CircleShape,
-                                color = color,
-                                modifier = Modifier.size(10.dp),
-                            ) {}
+                                Surface(
+                                    shape = CircleShape,
+                                    color = color,
+                                    modifier = Modifier.size(10.dp),
+                                ) {}
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = project.title,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                row.parentTitle?.let { parent ->
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "in $parent",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        text = project.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                    row.parentTitle?.let { parent ->
+                                        Text(
+                                            text = "in $parent",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
-                            }
-
-                            if (isSelected) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
                             }
                         }
                     }

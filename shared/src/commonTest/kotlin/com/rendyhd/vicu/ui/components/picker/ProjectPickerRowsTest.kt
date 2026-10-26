@@ -1,6 +1,10 @@
 package com.rendyhd.vicu.ui.components.picker
 
 import com.rendyhd.vicu.domain.model.Project
+import com.rendyhd.vicu.util.ProjectCategories
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,6 +28,21 @@ class ProjectPickerRowsTest {
         assertEquals(listOf(1L, 2L, 3L, 4L, 5L), ids(rows))
         assertEquals(listOf(0, 0, 1, 0, 1), rows.map { it.depth })
         assertTrue(rows.all { it.parentTitle == null }, "the tree itself shows where a project sits")
+    }
+
+    @Test
+    fun `with categories the inbox comes first - then the projects without one - then each category under its heading`() {
+        val categories = ProjectCategories.state(
+            mapOf(
+                "category.c" to buildJsonObject { put("name", "Chores"); put("order", 1) },
+                "category.e" to buildJsonObject { put("name", "Empty"); put("order", 2) },
+                "category.project.2" to JsonPrimitive("c"),
+            ),
+        )
+        val rows = projectPickerRows(all, inboxProjectId = 1, query = "", categories = categories)
+        assertEquals(listOf(1L, 4L, 5L, 2L, 3L), ids(rows))
+        assertEquals(listOf(null, null, null, "Chores", null), rows.map { it.categoryHeader?.name }, "an empty category has nothing to pick")
+        assertTrue(projectPickerRows(all, 1, "sprint", categories).all { it.categoryHeader == null }, "a search stays flat")
     }
 
     @Test
