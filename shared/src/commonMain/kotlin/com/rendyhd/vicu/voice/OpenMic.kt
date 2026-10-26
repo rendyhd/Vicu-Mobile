@@ -19,11 +19,12 @@ data class TurnSettings(
     val idleMs: Long,
 ) {
     companion object {
-        fun fromContract(): TurnSettings {
+        /** [brainDump]: the longer quiet a brain dump allows before the microphone turns off (section 4.8). */
+        fun fromContract(brainDump: Boolean = false): TurnSettings {
             val o = AiContract.speech.getValue("turn").jsonObject
             return TurnSettings(
                 endOfTurnMs = o.getValue("end_of_turn_ms").jsonPrimitive.long,
-                idleMs = o.getValue("idle_s").jsonPrimitive.long * 1_000,
+                idleMs = o.getValue(if (brainDump) "dump_idle_s" else "idle_s").jsonPrimitive.long * 1_000,
             )
         }
     }

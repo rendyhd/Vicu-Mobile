@@ -10,6 +10,7 @@ import com.rendyhd.vicu.voice.SpeechError
 import com.rendyhd.vicu.voice.TaskDefaults
 import com.rendyhd.vicu.voice.TurnListener
 import com.rendyhd.vicu.voice.TurnSender
+import com.rendyhd.vicu.voice.TurnSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,12 +37,13 @@ data class DictationMicUi(
  * sliding up from a held + (or Try it in Settings), each turn goes to the model, the first as a
  * dictation and later ones as edits of the drafts, so the cards appear and change while the person
  * talks. Talking again cancels a request still running; its words go out with the next turn's. The
- * microphone goes off with the sheet.
+ * microphone goes off with the sheet. In a brain dump (section 4.8) a turn is not sent: its words
+ * are added to the dump, or after the plan to what waits for Update.
  */
 class DictationMic(
     private val controller: DictationController,
     private val speech: SelectingSpeechInput,
-    settingsStore: AiSettingsStore,
+    private val settingsStore: AiSettingsStore,
     private val messages: AppMessages,
     private val scope: CoroutineScope,
 ) {
@@ -50,6 +52,11 @@ class DictationMic(
 
     /** Smart dictation can run: holding + offers the lock. */
     val ready: StateFlow<Boolean> = settingsStore.settings.map { it.dictationReady }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** The Brain dump switch as the person last left it: the sheet opens that way. */
+    private val brainDumpChosen: StateFlow<Boolean> = settingsStore.settings.map { it.brainDump }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    private val brainDump: Boolean get() = controller.state.value?.brainDump == true
 
     private var mic: OpenMic? = null
     private val sender = TurnSender()
@@ -62,7 +69,7 @@ class DictationMic(
 
     /** The lock: the sheet opens for the list [defaults] describes; [listen] follows with the words said before. */
     fun open(defaults: TaskDefaults) {
-        controller.listen(defaults)
+        controller.listen(defaults, brainDumpChosen.value)
         sender.reset()
         _state.value = DictationMicUi(starting = true)
     }
@@ -74,14 +81,34 @@ class DictationMic(
             return
         }
         _state.value = DictationMicUi()
-        sender.turn(heard)?.let(::dispatch)
+        if (brainDump) controller.addWords(heard) else sender.turn(heard)?.let(::dispatch)
         on()
     }
 
-    /** Try it (Settings): smart dictation for the Inbox, listening. */
-    fun tryIt() {
+    /** Try it (Settings): smart dictation for the Inbox, listening; [brainDump] opens it as one, without remembering that. */
+    fun tryIt(brainDump: Boolean = false) {
         open(TaskDefaults(listName = "Inbox"))
+        if (brainDump) controller.setBrainDump(true)
         listen("")
+    }
+
+    /**
+     * The sheet's Brain dump switch: remembered, and the microphone listens with its timing. Turned
+     * off with words in the dump, they go out at once as smart dictation's first turn.
+     */
+    fun setBrainDump(on: Boolean) {
+        val before = controller.state.value
+        controller.setBrainDump(on)
+        scope.launch { settingsStore.update { it.copy(brainDump = on) } }
+        if (!on && before?.brainDump == true && before.phase == DictationPhase.LISTENING && before.transcript.isNotBlank()) {
+            // The dump is the running turn, so talking again carries it into the next one.
+            sender.reset()
+            if (sender.turn(before.transcript) != null) dispatch("")
+        }
+        if (mic != null) {
+            off()
+            on()
+        }
     }
 
     /** The sheet's microphone button. */
@@ -107,7 +134,7 @@ class DictationMic(
             }
         }
         _state.value = DictationMicUi(on = true, words = sender.waiting)
-        mic = speech.openMic(listener)
+        mic = speech.openMic(listener, TurnSettings.fromContract(brainDump))
     }
 
     fun off() {
@@ -122,7 +149,7 @@ class DictationMic(
         override fun onLevel(level: Float) = _state.update { it.copy(level = level) }
 
         override fun onSpeechStart() {
-            if (controller.isBusy && sender.interrupt()) {
+            if (!brainDump && controller.isBusy && sender.interrupt()) {
                 request = null
                 controller.cancelRequest()
             }
@@ -131,7 +158,13 @@ class DictationMic(
 
         override fun onTurn(text: String) {
             _state.update { it.copy(words = "") }
-            sender.turn(text)?.let(::dispatch)
+            when {
+                !brainDump -> sender.turn(text)?.let(::dispatch)
+                !controller.addWords(text) -> {
+                    off()
+                    messages.post("That is as long as one brain dump can be. Tap Organize, then keep going.")
+                }
+            }
         }
 
         override fun onOff(error: SpeechError?) {

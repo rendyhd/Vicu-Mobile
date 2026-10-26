@@ -39,7 +39,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.dictation.CheckedDraft
+import com.rendyhd.vicu.ai.dictation.CheckedProject
 import com.rendyhd.vicu.ai.dictation.DictationChecks
 import com.rendyhd.vicu.ai.dictation.DictationContext
 import com.rendyhd.vicu.ai.dictation.DraftLabel
@@ -67,21 +69,25 @@ fun Modifier.dashedOutline(color: Color, active: Boolean): Modifier =
         }
     }
 
-/** Why a field was left empty, in words for the card. */
-fun droppedText(d: DroppedField): String = when (d.field) {
+/** Why a field was left empty, in words for the card; [brainDump] for a brain dump's limits (section 4.8.3). */
+fun droppedText(d: DroppedField, brainDump: Boolean = false): String = when (d.field) {
     "when" -> "Did not understand the date “${d.value.toString().trim('"')}”"
     "priority" -> "Left out the priority"
     "repeat" -> "Left out the repeat"
     "reminder" -> "Left out the reminder"
     "place" -> "No saved place matches"
     "title" -> "Skipped a task without a title"
-    "task" -> "More than 25 tasks: the rest were left out"
+    "task" -> "More than ${if (brainDump) AiContract.limits.brainDumpTasksMax else AiContract.limits.draftsMax} tasks: the rest were left out"
+    "project" -> "More than ${AiContract.limits.brainDumpProjectsMax} new projects: the rest were left out"
+    "project_title" -> "Skipped a new project without a name"
+    "parent" -> "Its parent project was not found, so it goes at the top level"
     else -> "Left out ${d.field}"
 }
 
 /**
  * One draft task on a card: its title (editable), notes, and chips for the date, project, labels,
  * priority, repeat, reminder, place and subtasks. [editable] lets the chips change it by hand.
+ * [newProjects] are a brain dump's new projects, which the project chip offers too.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -94,6 +100,8 @@ fun DraftCard(
     onChange: (CheckedDraft) -> Unit,
     onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    newProjects: List<CheckedProject> = emptyList(),
+    brainDump: Boolean = false,
 ) {
     val outline = MaterialTheme.colorScheme.tertiary
     val highlight = MaterialTheme.colorScheme.secondaryContainer
@@ -141,7 +149,7 @@ fun DraftCard(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 DueChip(draft, editable, "when" in guessed, "when" in changed, onChange)
-                ProjectChip(draft, context, editable, "project" in guessed, "project" in changed, onChange)
+                ProjectChip(draft, context, newProjects, editable, "project" in guessed, "project" in changed, onChange)
                 for (label in draft.labels) {
                     DraftChip(
                         text = "#" + label.title + if (label.id == null) " (new)" else "",
@@ -187,7 +195,7 @@ fun DraftCard(
             }
             for (d in dropped) {
                 Text(
-                    droppedText(d),
+                    droppedText(d, brainDump),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = 4.dp, top = 2.dp),
@@ -237,17 +245,33 @@ private fun DueChip(draft: CheckedDraft, editable: Boolean, guessed: Boolean, ch
 }
 
 @Composable
-private fun ProjectChip(draft: CheckedDraft, context: DictationContext?, editable: Boolean, guessed: Boolean, changed: Boolean, onChange: (CheckedDraft) -> Unit) {
+private fun ProjectChip(
+    draft: CheckedDraft,
+    context: DictationContext?,
+    newProjects: List<CheckedProject>,
+    editable: Boolean,
+    guessed: Boolean,
+    changed: Boolean,
+    onChange: (CheckedDraft) -> Unit,
+) {
     val projects = context?.projects.orEmpty()
-    val name = projects.firstOrNull { it.id == draft.projectId }?.path ?: "Inbox"
+    val name = draft.projectRef?.let { ref -> newProjects.firstOrNull { it.ref == ref }?.let { it.title + " (new)" } }
+        ?: projects.firstOrNull { it.id == draft.projectId }?.path
+        ?: "Inbox"
     var open by remember { mutableStateOf(false) }
     Box {
-        DraftChip(name, guessed, changed, if (editable && projects.isNotEmpty()) ({ open = true }) else null)
+        DraftChip(name, guessed, changed, if (editable && (projects.isNotEmpty() || newProjects.isNotEmpty())) ({ open = true }) else null)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (p in newProjects) {
+                DropdownMenuItem(text = { Text(p.title + " (new)") }, onClick = {
+                    open = false
+                    onChange(draft.copy(projectRef = p.ref, guessed = draft.guessed - "project"))
+                })
+            }
             for (p in projects) {
                 DropdownMenuItem(text = { Text(p.path) }, onClick = {
                     open = false
-                    onChange(draft.copy(projectId = p.id, guessed = draft.guessed - "project"))
+                    onChange(draft.copy(projectId = p.id, projectRef = null, guessed = draft.guessed - "project"))
                 })
             }
         }

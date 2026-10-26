@@ -37,7 +37,10 @@
     "conversations_kept": 5,
     "conversation_max_messages": 100,
     "request_max_messages": 40,
-    "context_refresh_minutes": 30
+    "context_refresh_minutes": 30,
+    "brain_dump_projects_max": 12,
+    "brain_dump_tasks_max": 60,
+    "brain_dump_max_tokens": 16000
   },
   "protocols": {
     "openai-chat": {"chat": "/chat/completions", "models": "/models"},
@@ -183,7 +186,8 @@
     },
     "turn": {
       "end_of_turn_ms": 1000,
-      "idle_s": 60
+      "idle_s": 60,
+      "dump_idle_s": 300
     },
     "decode": {
       "temperature": 0,
@@ -1694,6 +1698,829 @@
       }
     ]
   },
+  "brainDump": {
+    "answerSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projects", "tasks", "unclear"],
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ref", "title", "parent_id", "parent_ref"],
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "p1, p2, p3 and so on, in order. When editing, keep each project's ref."
+              },
+              "title": {"type": "string", "description": "A short name for the project."},
+              "parent_id": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "A project id from context.projects to put this one under, or null."
+              },
+              "parent_ref": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "The ref of a new project listed before this one to put it under, or null."
+              }
+            }
+          },
+          "description": "New projects, only for tasks no project in context.projects fits."
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ref",
+              "title",
+              "notes",
+              "when",
+              "project_id",
+              "project_ref",
+              "labels",
+              "priority",
+              "repeat",
+              "reminder",
+              "place",
+              "subtasks",
+              "unsure"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "d1, d2, d3 and so on, in order. When editing, keep each draft's ref."
+              },
+              "title": {
+                "type": "string",
+                "description": "Short, starting with the action, without date, project, label or place words."
+              },
+              "notes": {
+                "type": "string",
+                "description": "Details worth keeping that are not in the title, plain text. Empty string when none."
+              },
+              "when": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["said", "date", "time"],
+                "properties": {
+                  "said": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}],
+                    "description": "The person's exact words for the date and time, or null."
+                  },
+                  "date": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}],
+                    "description": "Your reading of those words: YYYY-MM-DD, or null."
+                  },
+                  "time": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}],
+                    "description": "Your reading of those words: HH:MM, 24-hour, or null."
+                  }
+                }
+              },
+              "project_id": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "A project id from context.projects, or null."
+              },
+              "project_ref": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "The ref of a new project in projects when the task goes there (project_id null), or null."
+              },
+              "labels": {"type": "array", "items": {"type": "string"}, "description": "Label names."},
+              "priority": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "1 low, 2 medium, 3 high, 4 urgent, or null."
+              },
+              "repeat": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["every", "unit"],
+                    "properties": {
+                      "every": {"type": "integer", "description": "How many units between repeats, 1 or more."},
+                      "unit": {"type": "string", "enum": ["day", "week", "month", "year"]}
+                    }
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "reminder": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["before_due_minutes", "at"],
+                    "properties": {
+                      "before_due_minutes": {
+                        "anyOf": [{"type": "integer"}, {"type": "null"}],
+                        "description": "Minutes before the due date, or null."
+                      },
+                      "at": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                        "description": "A moment, YYYY-MM-DDTHH:MM, or null."
+                      }
+                    },
+                    "description": "Set exactly one of the two."
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "place": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "trigger"],
+                    "properties": {
+                      "name": {"type": "string", "description": "A name from context.places."},
+                      "trigger": {"type": "string", "enum": ["arrive", "leave"]}
+                    }
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "subtasks": {"type": "array", "items": {"type": "string"}, "description": "Subtask titles."},
+              "unsure": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "title",
+                    "notes",
+                    "when",
+                    "project",
+                    "labels",
+                    "priority",
+                    "repeat",
+                    "reminder",
+                    "place",
+                    "subtasks"
+                  ]
+                },
+                "description": "Fields you are not sure about."
+              }
+            }
+          }
+        },
+        "unclear": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Short notes on what you heard but could not place."
+        }
+      }
+    },
+    "checks": [
+      {
+        "name": "new-projects-and-subprojects",
+        "answer": {
+          "projects": [
+            {"ref": "p1", "title": "Garden", "parent_id": 12, "parent_ref": null},
+            {"ref": "p2", "title": "Vegetable patch", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "p3", "title": "Side business", "parent_id": null, "parent_ref": null}
+          ],
+          "tasks": [
+            {
+              "ref": "d1",
+              "title": "Prune the apple tree",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p1",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d2",
+              "title": "Order seed potatoes",
+              "notes": "The early ones, Charlotte",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p2",
+              "labels": [],
+              "priority": 2,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": ["Compare suppliers", "Check the delivery dates"],
+              "unsure": ["priority"]
+            },
+            {
+              "ref": "d3",
+              "title": "Register the business name",
+              "notes": "",
+              "when": {"said": "next friday", "date": "2026-10-16", "time": null},
+              "project_id": null,
+              "project_ref": "p3",
+              "labels": [],
+              "priority": 4,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d4",
+              "title": "Buy a new hose",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": 15,
+              "project_ref": null,
+              "labels": ["errands"],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            }
+          ],
+          "unclear": ["Maybe learn to bake bread"]
+        },
+        "reference": "2026-10-06T10:00:00",
+        "locale": "en-US",
+        "defaultDue": "2026-10-06",
+        "expect": {
+          "projects": [
+            {"ref": "p1", "title": "Garden", "parent_id": 12, "parent_ref": null},
+            {"ref": "p2", "title": "Vegetable patch", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "p3", "title": "Side business", "parent_id": null, "parent_ref": null}
+          ],
+          "drafts": [
+            {
+              "ref": "d1",
+              "title": "Prune the apple tree",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p1",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d2",
+              "title": "Order seed potatoes",
+              "notes": "The early ones, Charlotte",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p2",
+              "labels": [],
+              "priority": 2,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": ["Compare suppliers", "Check the delivery dates"],
+              "guessed": ["priority"]
+            },
+            {
+              "ref": "d3",
+              "title": "Register the business name",
+              "notes": "",
+              "due": "2026-10-16T23:59:59",
+              "project_id": null,
+              "project_ref": "p3",
+              "labels": [],
+              "priority": 4,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d4",
+              "title": "Buy a new hose",
+              "notes": "",
+              "due": null,
+              "project_id": 15,
+              "project_ref": null,
+              "labels": [{"id": 3, "title": "errands"}],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            }
+          ],
+          "dropped": [],
+          "unclear": ["Maybe learn to bake bread"]
+        }
+      },
+      {
+        "name": "a-new-project-that-already-exists",
+        "answer": {
+          "projects": [
+            {"ref": "p1", "title": "home", "parent_id": null, "parent_ref": null},
+            {"ref": "p2", "title": "Lisbon trip", "parent_id": null, "parent_ref": null},
+            {"ref": "p3", "title": "Lisbon Trip ", "parent_id": null, "parent_ref": null},
+            {"ref": "p4", "title": "Packing", "parent_id": null, "parent_ref": "p3"},
+            {"ref": "p5", "title": "Bookings", "parent_id": 20, "parent_ref": null},
+            {"ref": "p6", "title": "Garden shed", "parent_id": null, "parent_ref": "p1"}
+          ],
+          "tasks": [
+            {
+              "ref": "d1",
+              "title": "Fix the gate",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p1",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d2",
+              "title": "Pack the adapters",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p4",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d3",
+              "title": "Buy sunscreen",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p3",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d4",
+              "title": "Book the hotel",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p5",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d5",
+              "title": "Paint the shed",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p6",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            }
+          ],
+          "unclear": []
+        },
+        "reference": "2026-10-06T10:00:00",
+        "locale": "en-US",
+        "defaultDue": null,
+        "expect": {
+          "projects": [
+            {"ref": "p2", "title": "Lisbon trip", "parent_id": null, "parent_ref": null},
+            {"ref": "p4", "title": "Packing", "parent_id": null, "parent_ref": "p2"},
+            {"ref": "p5", "title": "Bookings", "parent_id": 20, "parent_ref": null},
+            {"ref": "p6", "title": "Garden shed", "parent_id": 12, "parent_ref": null}
+          ],
+          "drafts": [
+            {
+              "ref": "d1",
+              "title": "Fix the gate",
+              "notes": "",
+              "due": null,
+              "project_id": 12,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d2",
+              "title": "Pack the adapters",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p4",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d3",
+              "title": "Buy sunscreen",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p2",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d4",
+              "title": "Book the hotel",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p5",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d5",
+              "title": "Paint the shed",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p6",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            }
+          ],
+          "dropped": [],
+          "unclear": []
+        }
+      },
+      {
+        "name": "parents-and-titles-that-fail",
+        "answer": {
+          "projects": [
+            {"ref": "p1", "title": "Fitness", "parent_id": null, "parent_ref": "p2"},
+            {"ref": "p2", "title": "Running", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "p3", "title": "Old stuff", "parent_id": 99, "parent_ref": null},
+            {"ref": "p4", "title": "  ", "parent_id": null, "parent_ref": null},
+            {"ref": "p5", "title": "Reading\nlist", "parent_id": null, "parent_ref": null},
+            {"ref": "p6", "title": "Paperbacks", "parent_id": null, "parent_ref": "p4"}
+          ],
+          "tasks": [
+            {
+              "ref": "d1",
+              "title": "Sign up for the 10k",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p2",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d2",
+              "title": "Return the library books",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p4",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d3",
+              "title": "Clear out the garage",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": 12,
+              "project_ref": "p9",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d4",
+              "title": "Buy a lamp",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": 99,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d5",
+              "title": "Finish the novel",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p5",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            }
+          ],
+          "unclear": []
+        },
+        "reference": "2026-10-06T10:00:00",
+        "locale": "en-US",
+        "defaultDue": null,
+        "expect": {
+          "projects": [
+            {"ref": "p1", "title": "Fitness", "parent_id": null, "parent_ref": null},
+            {"ref": "p2", "title": "Running", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "p3", "title": "Old stuff", "parent_id": null, "parent_ref": null},
+            {"ref": "p5", "title": "Reading list", "parent_id": null, "parent_ref": null},
+            {"ref": "p6", "title": "Paperbacks", "parent_id": null, "parent_ref": null}
+          ],
+          "drafts": [
+            {
+              "ref": "d1",
+              "title": "Sign up for the 10k",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p2",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d2",
+              "title": "Return the library books",
+              "notes": "",
+              "due": null,
+              "project_id": 1,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": ["project"]
+            },
+            {
+              "ref": "d3",
+              "title": "Clear out the garage",
+              "notes": "",
+              "due": null,
+              "project_id": 12,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": ["project"]
+            },
+            {
+              "ref": "d4",
+              "title": "Buy a lamp",
+              "notes": "",
+              "due": null,
+              "project_id": 1,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": ["project"]
+            },
+            {
+              "ref": "d5",
+              "title": "Finish the novel",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p5",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            }
+          ],
+          "dropped": [
+            {"ref": "p1", "field": "parent", "value": "p2"},
+            {"ref": "p3", "field": "parent", "value": 99},
+            {"ref": "p4", "field": "project_title", "value": "  "},
+            {"ref": "p6", "field": "parent", "value": "p4"}
+          ],
+          "unclear": []
+        }
+      },
+      {
+        "name": "project-refs-renumbered",
+        "answer": {
+          "projects": [
+            {"ref": "p1", "title": "Music", "parent_id": null, "parent_ref": null},
+            {"ref": "p1", "title": "Guitar", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "", "title": "Piano", "parent_id": null, "parent_ref": "p1"}
+          ],
+          "tasks": [
+            {
+              "ref": "d1",
+              "title": "Restring the guitar",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": null,
+              "project_ref": "p1",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            },
+            {
+              "ref": "d2",
+              "title": "Tune the piano",
+              "notes": "",
+              "when": {"said": null, "date": null, "time": null},
+              "project_id": 15,
+              "project_ref": "",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "unsure": []
+            }
+          ],
+          "unclear": []
+        },
+        "reference": "2026-10-06T10:00:00",
+        "locale": "en-US",
+        "defaultDue": null,
+        "expect": {
+          "projects": [
+            {"ref": "p1", "title": "Music", "parent_id": null, "parent_ref": null},
+            {"ref": "p2", "title": "Guitar", "parent_id": null, "parent_ref": "p1"},
+            {"ref": "p3", "title": "Piano", "parent_id": null, "parent_ref": "p1"}
+          ],
+          "drafts": [
+            {
+              "ref": "d1",
+              "title": "Restring the guitar",
+              "notes": "",
+              "due": null,
+              "project_id": null,
+              "project_ref": "p1",
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            },
+            {
+              "ref": "d2",
+              "title": "Tune the piano",
+              "notes": "",
+              "due": null,
+              "project_id": 15,
+              "project_ref": null,
+              "labels": [],
+              "priority": null,
+              "repeat": null,
+              "reminder": null,
+              "place": null,
+              "subtasks": [],
+              "guessed": []
+            }
+          ],
+          "dropped": [],
+          "unclear": []
+        }
+      },
+      {
+        "name": "at-most-12-projects",
+        "answer": {
+          "projects": [
+            {"ref": "p1", "title": "Area 1", "parent_id": null, "parent_ref": null},
+            {"ref": "p2", "title": "Area 2", "parent_id": null, "parent_ref": null},
+            {"ref": "p3", "title": "Area 3", "parent_id": null, "parent_ref": null},
+            {"ref": "p4", "title": "Area 4", "parent_id": null, "parent_ref": null},
+            {"ref": "p5", "title": "Area 5", "parent_id": null, "parent_ref": null},
+            {"ref": "p6", "title": "Area 6", "parent_id": null, "parent_ref": null},
+            {"ref": "p7", "title": "Area 7", "parent_id": null, "parent_ref": null},
+            {"ref": "p8", "title": "Area 8", "parent_id": null, "parent_ref": null},
+            {"ref": "p9", "title": "Area 9", "parent_id": null, "parent_ref": null},
+            {"ref": "p10", "title": "Area 10", "parent_id": null, "parent_ref": null},
+            {"ref": "p11", "title": "Area 11", "parent_id": null, "parent_ref": null},
+            {"ref": "p12", "title": "Area 12", "parent_id": null, "parent_ref": null},
+            {"ref": "p13", "title": "Area 13", "parent_id": null, "parent_ref": null}
+          ],
+          "tasks": [],
+          "unclear": []
+        },
+        "reference": "2026-10-06T10:00:00",
+        "locale": "en-US",
+        "defaultDue": null,
+        "expect": {
+          "projects": [
+            {"ref": "p1", "title": "Area 1", "parent_id": null, "parent_ref": null},
+            {"ref": "p2", "title": "Area 2", "parent_id": null, "parent_ref": null},
+            {"ref": "p3", "title": "Area 3", "parent_id": null, "parent_ref": null},
+            {"ref": "p4", "title": "Area 4", "parent_id": null, "parent_ref": null},
+            {"ref": "p5", "title": "Area 5", "parent_id": null, "parent_ref": null},
+            {"ref": "p6", "title": "Area 6", "parent_id": null, "parent_ref": null},
+            {"ref": "p7", "title": "Area 7", "parent_id": null, "parent_ref": null},
+            {"ref": "p8", "title": "Area 8", "parent_id": null, "parent_ref": null},
+            {"ref": "p9", "title": "Area 9", "parent_id": null, "parent_ref": null},
+            {"ref": "p10", "title": "Area 10", "parent_id": null, "parent_ref": null},
+            {"ref": "p11", "title": "Area 11", "parent_id": null, "parent_ref": null},
+            {"ref": "p12", "title": "Area 12", "parent_id": null, "parent_ref": null}
+          ],
+          "drafts": [],
+          "dropped": [{"ref": "p13", "field": "project", "value": "Area 13"}],
+          "unclear": []
+        }
+      }
+    ]
+  },
   "ask": {
     "taskSummary": {
       "type": "object",
@@ -2172,6 +2999,24 @@
       "lines": [
         "The user message also has a <drafts> block with the tasks made so far, in the shape of your answer. Here the <transcript> is what the person said next: it may change or remove drafts (\"make the first one Friday\"), add more tasks (\"and call mum tomorrow\"), or both.",
         "Answer with the whole list: keep every draft's ref, give a new draft the next free ref, leave out a draft the person removed, and change only what they asked."
+      ]
+    },
+    "brainDump": {
+      "version": 1,
+      "lines": [
+        "This transcript is a brain dump: the person thought out loud, maybe for many minutes, jumping between topics and coming back to them. Organise all of it:",
+        "- Gather what belongs together, even when it was said far apart. One task for each thing to do, its steps as subtasks, and background, ideas and open questions about it in its notes.",
+        "- projects: when several tasks belong to an area or goal that no project in context.projects fits, or the person asked for a new project, add one: ref p1, p2 and so on in order, a short title, and parent_id (a project in context.projects) or parent_ref (a new project listed before it) to make it a subproject, else both null. Never add a project that repeats one in context.projects.",
+        "- Put each task in the project that fits it best, even when the person did not name it: project_id for a project in context.projects, or project_ref with the ref of a new project and project_id null. Otherwise project_ref is null.",
+        "- priority: also when the dump makes clear how urgent or important something is; then list priority in unsure.",
+        "- unclear: also thoughts that lead to nothing to do, in a few words each."
+      ]
+    },
+    "brainDumpEdit": {
+      "version": 1,
+      "lines": [
+        "The user message also has a <plan> block with the projects and tasks made so far, in the shape of your answer. Here the <transcript> is what the person said or typed next: it may change, move or remove projects and tasks, add more, or both.",
+        "Answer with the whole plan: keep every project's and task's ref, give a new one the next free ref, leave out what the person removed, and change only what they asked."
       ]
     },
     "ask": {

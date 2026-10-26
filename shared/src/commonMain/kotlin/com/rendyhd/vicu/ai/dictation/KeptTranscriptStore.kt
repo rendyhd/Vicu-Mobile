@@ -19,6 +19,8 @@ data class KeptTranscript(
     val dueDate: String? = null,
     /** Break into steps: the drafts become subtasks of this task. */
     val parentTaskId: Long? = null,
+    /** A brain dump (section 4.8.6): it comes back with Retry and Edit. */
+    val brainDump: Boolean = false,
 )
 
 class KeptTranscriptStore(private val dataStore: DataStore<Preferences>) {

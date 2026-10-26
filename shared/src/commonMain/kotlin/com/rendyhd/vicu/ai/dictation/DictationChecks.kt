@@ -39,17 +39,25 @@ object DictationChecks {
         locale = locale,
     )
 
-    /** [answer] matches `dictation.answerSchema` (the caller checked it). */
-    fun check(answer: JsonObject, context: DictationContext): CheckResult {
+    /**
+     * [answer] matches `dictation.answerSchema` (the caller checked it). A brain dump (section 4.8.3)
+     * allows [draftsMax] drafts and reads each task's `project_ref` through [resolveProjectRef].
+     */
+    fun check(
+        answer: JsonObject,
+        context: DictationContext,
+        draftsMax: Int = limits.draftsMax,
+        resolveProjectRef: ((String) -> ProjectTarget?)? = null,
+    ): CheckResult {
         val fields = AiContract.dictationFields
         val dropped = mutableListOf<DroppedField>()
         val all = answer["tasks"]?.jsonArray.orEmpty().map { it.jsonObject }
 
         // 1. Drafts: at most 25; refs renumbered when one is empty or repeated.
-        for (extra in all.drop(limits.draftsMax)) {
+        for (extra in all.drop(draftsMax)) {
             dropped += DroppedField(extra.str("ref"), "task", extra["title"] ?: JsonNull)
         }
-        val tasks = all.take(limits.draftsMax)
+        val tasks = all.take(draftsMax)
         val refs = tasks.map { it.str("ref").orEmpty() }
         val renumber = refs.any { it.isEmpty() } || refs.toSet().size != refs.size
 
@@ -94,9 +102,14 @@ object DictationChecks {
                 dueHasTime = false
             }
 
-            // 5. Project.
+            // 5. Project, after a brain dump's new project (section 4.8.3, step 5).
+            val givenRef = if (resolveProjectRef != null) task.str("project_ref")?.takeIf { it.isNotEmpty() } else null
+            val target = givenRef?.let { resolveProjectRef?.invoke(it) }
+            if (givenRef != null && target == null) guessed += "project"
             val modelProject = (task["project_id"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.longOrNull
             val projectId = when {
+                target is ProjectTarget.New -> context.defaultProjectId
+                target is ProjectTarget.Existing -> target.id
                 modelProject == null -> context.defaultProjectId
                 modelProject in projectIds -> modelProject
                 else -> {
@@ -181,6 +194,7 @@ object DictationChecks {
                 due = due,
                 dueHasTime = dueHasTime,
                 projectId = projectId,
+                projectRef = (target as? ProjectTarget.New)?.ref,
                 labels = labels.take(limits.labelsMax),
                 priority = priority,
                 repeat = repeat,

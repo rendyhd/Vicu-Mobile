@@ -40,6 +40,9 @@ object AiContract {
 
     val dictationAnswerSchema: JsonObject get() = root.obj("dictation").obj("answerSchema")
 
+    /** The brain dump's answer: the dictation answer with new projects (section 4.8.2). */
+    val brainDumpAnswerSchema: JsonObject get() = root.obj("brainDump").obj("answerSchema")
+
     /** The draft fields in the order `guessed` lists them. */
     val dictationFields: List<String> by lazy { root.obj("dictation").getValue("fields").jsonArray.map { it.jsonPrimitive.content } }
 
@@ -115,6 +118,9 @@ class AiLimits(private val o: JsonObject) {
     val conversationMaxMessages get() = n("conversation_max_messages")
     val requestMaxMessages get() = n("request_max_messages")
     val contextRefreshMinutes get() = n("context_refresh_minutes")
+    val brainDumpProjectsMax get() = n("brain_dump_projects_max")
+    val brainDumpTasksMax get() = n("brain_dump_tasks_max")
+    val brainDumpMaxTokens get() = n("brain_dump_max_tokens")
 }
 
 /** A provider preset (section 2.1). */

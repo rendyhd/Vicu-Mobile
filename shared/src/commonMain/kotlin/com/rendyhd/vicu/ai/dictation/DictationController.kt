@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ai.dictation
 
+import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.provider.LlmException
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.DateDisplayFormat
@@ -7,6 +8,7 @@ import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.TextTaskCreator
 import com.rendyhd.vicu.util.postIfRefused
 import com.rendyhd.vicu.domain.repository.TaskRepository
+import com.rendyhd.vicu.voice.HoldToTalk
 import com.rendyhd.vicu.voice.TaskDefaults
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -15,16 +17,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 
 enum class DictationPhase {
-    /** The microphone is on and nothing went to the model yet (smart dictation's lock, section 4). */
+    /** The microphone is on and nothing went to the model yet (smart dictation's lock, section 4); in a brain dump, the dump grows. */
     LISTENING,
 
-    /** The model is reading the transcript. */
+    /** The model is reading the transcript (a brain dump: organizing it). */
     THINKING,
 
-    /** Draft cards are on screen. */
+    /** Draft cards are on screen (a brain dump: the plan). */
     REVIEW,
 
     /** The request failed: the transcript waits with Retry and Add as one task. */
@@ -50,7 +53,18 @@ data class DictationUi(
     /** A voice instruction is being applied to the drafts. */
     val editing: Boolean = false,
     val adding: Boolean = false,
-)
+    /** Brain dump (section 4.8): the transcript is the dump, sent only by Organize. */
+    val brainDump: Boolean = false,
+    /** A brain dump's new projects, parents first. */
+    val projects: List<CheckedProject> = emptyList(),
+    /** The refs of the new projects the last Update added or changed. */
+    val changedProjects: Set<String> = emptySet(),
+    /** What was said or typed after a brain dump's plan, waiting for Update. */
+    val pending: String = "",
+) {
+    /** Something to add: drafts, or a brain dump's projects on their own. */
+    val hasPlan: Boolean get() = drafts.isNotEmpty() || projects.isNotEmpty()
+}
 
 /**
  * Smart dictation's flow across the app: a transcript comes in (holding +, Make tasks from this,
@@ -60,6 +74,7 @@ data class DictationUi(
 class DictationController(
     private val service: DictationService,
     private val writer: DraftWriter,
+    private val planWriter: PlanWriter,
     private val kept: KeptTranscriptStore,
     private val textTasks: TextTaskCreator,
     private val tasks: TaskRepository,
@@ -89,14 +104,124 @@ class DictationController(
                 transcript = k.transcript,
                 defaults = TaskDefaults(k.projectId, k.dueDate, k.listName),
                 parentTaskId = k.parentTaskId,
-                error = "This dictation was not turned into tasks yet.",
+                error = if (k.brainDump) "This brain dump was not organized yet." else "This dictation was not turned into tasks yet.",
+                brainDump = k.brainDump,
             )
         }
     }
 
     /** Opens the sheet with the microphone on and nothing said yet, for the list [defaults] describes. */
-    fun listen(defaults: TaskDefaults) {
-        if (_state.value == null) _state.value = DictationUi(DictationPhase.LISTENING, "", defaults)
+    fun listen(defaults: TaskDefaults, brainDump: Boolean = false) {
+        if (_state.value == null) _state.value = DictationUi(DictationPhase.LISTENING, "", defaults, brainDump = brainDump)
+    }
+
+    /** The Brain dump switch, offered while nothing was sent (section 4.8). */
+    fun setBrainDump(on: Boolean) {
+        _state.update { s -> if (s?.phase == DictationPhase.LISTENING) s.copy(brainDump = on) else s }
+    }
+
+    /**
+     * A turn of a brain dump: added to the end of the dump, or after the plan to the words that wait
+     * for Update. False when the dump is as long as one can be (the words that fit are kept).
+     */
+    fun addWords(text: String): Boolean {
+        if (text.isBlank()) return true
+        var fits = true
+        _state.update { s ->
+            when {
+                s == null || !s.brainDump -> s
+                s.phase == DictationPhase.LISTENING || s.phase == DictationPhase.FAILED -> {
+                    val dump = HoldToTalk.joinWords(s.transcript, text)
+                    fits = dump.length <= maxDump
+                    s.copy(transcript = dump.takeUtf16(maxDump))
+                }
+                else -> s.copy(pending = HoldToTalk.joinWords(s.pending, text).takeUtf16(maxDump))
+            }
+        }
+        return fits
+    }
+
+    /** The dump as the person typed or corrected it. */
+    fun setDump(text: String) {
+        _state.update { s -> if (s?.brainDump == true && s.phase == DictationPhase.LISTENING) s.copy(transcript = text.takeUtf16(maxDump)) else s }
+    }
+
+    /** What waits for Update, as the person typed or corrected it. */
+    fun setPending(text: String) {
+        _state.update { s -> if (s?.brainDump == true) s.copy(pending = text.takeUtf16(maxDump)) else s }
+    }
+
+    /** Organize: the whole dump in one request (section 4.8.1). */
+    fun organize(): Job? {
+        val s = _state.value ?: return null
+        if (!s.brainDump || s.transcript.isBlank() || s.phase == DictationPhase.THINKING || s.phase == DictationPhase.REVIEW) return null
+        _state.value = s.copy(phase = DictationPhase.THINKING, error = null)
+        return run()
+    }
+
+    /** Back to the dump to change or extend it: Edit after a failure, or Cancel while organizing. */
+    fun backToDump() {
+        job?.cancel()
+        job = null
+        _state.update { s ->
+            if (s == null || !s.brainDump || s.phase == DictationPhase.REVIEW) {
+                s
+            } else {
+                s.copy(phase = DictationPhase.LISTENING, transcript = HoldToTalk.joinWords(s.transcript, s.pending), pending = "", error = null)
+            }
+        }
+    }
+
+    /** Update: what was said or typed since the plan, as an edit of it (section 4.8.4). */
+    fun update(): Job? {
+        val current = _state.value ?: return null
+        val context = current.context ?: return null
+        val words = current.pending.trim()
+        if (!current.brainDump || current.phase != DictationPhase.REVIEW || words.isEmpty() || current.editing) return null
+        _state.value = current.copy(editing = true, pending = "")
+        job?.cancel()
+        return scope.launch {
+            try {
+                val plan = CheckResult(current.drafts, emptyList(), emptyList(), current.projects)
+                val result = service.runBrainDump(words, context, plan)
+                val before = current.drafts.associateBy { it.ref }
+                val changed = result.drafts.associate { d -> d.ref to changedFields(before[d.ref], d) }.filterValues { it.isNotEmpty() }
+                val projectsBefore = current.projects.associateBy { it.ref }
+                _state.update {
+                    it?.copy(
+                        phase = if (result.drafts.isEmpty() && result.projects.isEmpty()) DictationPhase.EMPTY else DictationPhase.REVIEW,
+                        drafts = result.drafts,
+                        projects = result.projects,
+                        dropped = result.dropped,
+                        unclear = result.unclear,
+                        changed = changed,
+                        changedProjects = result.projects.filter { p -> projectsBefore[p.ref] != p }.mapTo(HashSet()) { p -> p.ref },
+                        editing = false,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The words wait again, before anything said since.
+                _state.update { it?.copy(editing = false, pending = HoldToTalk.joinWords(words, it.pending)) }
+                messages.post((e as? LlmException)?.message ?: "Could not change the plan.")
+            }
+        }.also { job = it }
+    }
+
+    fun renameProject(ref: String, title: String) {
+        val name = DictationChecks.oneLine(title)
+        _state.update { s -> s?.copy(projects = s.projects.map { if (it.ref == ref) it.copy(title = name) else it }) }
+    }
+
+    /** Removes a new project: its tasks and new subprojects go to its parent (section 4.8.5). */
+    fun removeProject(ref: String) {
+        _state.update { s ->
+            if (s == null) return@update null
+            val defaultProject = s.context?.defaultProjectId ?: s.drafts.firstOrNull()?.projectId ?: 0L
+            val (projects, drafts) = BrainDumpChecks.removeProject(ref, s.projects, s.drafts, defaultProject)
+            s.copy(projects = projects, drafts = drafts, phase = if (drafts.isEmpty() && projects.isEmpty()) DictationPhase.EMPTY else s.phase)
+        }
     }
 
     fun start(transcript: String, defaults: TaskDefaults, parentTaskId: Long? = null): Job? {
@@ -118,12 +243,14 @@ class DictationController(
             val current = _state.value ?: return@launch
             try {
                 val context = service.context(current.defaults)
-                val result = service.run(current.transcript, context)
+                val result = if (current.brainDump) service.runBrainDump(current.transcript, context) else service.run(current.transcript, context)
                 kept.clear()
                 _state.update {
                     it?.copy(
-                        phase = if (result.drafts.isEmpty()) DictationPhase.EMPTY else DictationPhase.REVIEW,
+                        phase = if (result.drafts.isEmpty() && result.projects.isEmpty()) DictationPhase.EMPTY else DictationPhase.REVIEW,
                         drafts = result.drafts,
+                        projects = result.projects,
+                        changedProjects = emptySet(),
                         dropped = result.dropped,
                         unclear = result.unclear,
                         context = context,
@@ -134,8 +261,16 @@ class DictationController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                kept.keep(KeptTranscript(current.transcript, current.defaults.listName, current.defaults.projectId, current.defaults.dueDate, current.parentTaskId))
-                _state.update { it?.copy(phase = DictationPhase.FAILED, error = (e as? LlmException)?.message ?: "The model did not answer.") }
+                // Words said while a brain dump was being organized join the dump.
+                val failed = _state.updateAndGet {
+                    it?.copy(
+                        phase = DictationPhase.FAILED,
+                        error = (e as? LlmException)?.message ?: "The model did not answer.",
+                        transcript = HoldToTalk.joinWords(it.transcript, it.pending),
+                        pending = "",
+                    )
+                } ?: return@launch
+                kept.keep(KeptTranscript(failed.transcript, failed.defaults.listName, failed.defaults.projectId, failed.defaults.dueDate, failed.parentTaskId, failed.brainDump))
             }
         }.also { job = it }
     }
@@ -195,13 +330,14 @@ class DictationController(
     fun removeDraft(ref: String) {
         _state.update { s ->
             val drafts = s?.drafts?.filterNot { it.ref == ref } ?: return@update s
-            s.copy(drafts = drafts, phase = if (drafts.isEmpty()) DictationPhase.EMPTY else s.phase)
+            s.copy(drafts = drafts, phase = if (drafts.isEmpty() && s.projects.isEmpty()) DictationPhase.EMPTY else s.phase)
         }
     }
 
     /** Add: creates the drafts in order, one message with Undo. */
     fun add() {
         val current = _state.value ?: return
+        if (current.brainDump) return addPlan(current)
         if (current.drafts.isEmpty() || current.adding) return
         _state.value = current.copy(adding = true)
         scope.launch {
@@ -217,6 +353,31 @@ class DictationController(
                         if (added.failed > 0) ", ${added.failed} failed" else ""
                     messages.post(text, "Undo") { scope.launch { writer.undo(added) } }
                 }
+            }
+        }
+    }
+
+    /** A brain dump's Add (section 4.8.5): the projects, then the tasks, with one Undo. */
+    private fun addPlan(current: DictationUi) {
+        if (!current.hasPlan || current.adding || current.editing) return
+        if (current.projects.any { it.title.isBlank() }) {
+            messages.post("Give every new project a name first.")
+            return
+        }
+        _state.value = current.copy(adding = true)
+        scope.launch {
+            val added = planWriter.add(CheckResult(current.drafts, emptyList(), emptyList(), current.projects), dayClock.day.value.zone)
+            if (added.error != null) {
+                _state.update { it?.copy(adding = false) }
+                messages.post(added.error)
+                return@launch
+            }
+            _state.value = null
+            kept.clear()
+            val tasks = added.drafts?.taskIds?.size ?: 0
+            val failed = added.drafts?.failed ?: 0
+            messages.post(addedText(added.projectIds.size, tasks) + if (failed > 0) ", $failed failed" else "", "Undo") {
+                scope.launch { planWriter.undo(added) }
             }
         }
     }
@@ -248,7 +409,7 @@ class DictationController(
         if (before.title != after.title) fields += "title"
         if (before.notes != after.notes) fields += "notes"
         if (before.due != after.due || before.dueHasTime != after.dueHasTime) fields += "when"
-        if (before.projectId != after.projectId) fields += "project"
+        if (before.projectId != after.projectId || before.projectRef != after.projectRef) fields += "project"
         if (before.labels != after.labels) fields += "labels"
         if (before.priority != after.priority) fields += "priority"
         if (before.repeat != after.repeat) fields += "repeat"
@@ -256,5 +417,20 @@ class DictationController(
         if (before.place != after.place) fields += "place"
         if (before.subtasks != after.subtasks) fields += "subtasks"
         return fields
+    }
+
+    companion object {
+        private val maxDump get() = AiContract.limits.transcriptMaxChars
+
+        /** "Added 2 projects and 14 tasks" (section 4.8.5). */
+        fun addedText(projects: Int, tasks: Int): String {
+            val p = if (projects == 1) "1 project" else "$projects projects"
+            val t = if (tasks == 1) "1 task" else "$tasks tasks"
+            return when {
+                projects == 0 -> "Added $t"
+                tasks == 0 -> "Added $p"
+                else -> "Added $p and $t"
+            }
+        }
     }
 }

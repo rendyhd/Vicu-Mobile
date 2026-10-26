@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ai
 
+import com.rendyhd.vicu.ai.dictation.BrainDumpChecks
 import com.rendyhd.vicu.ai.dictation.CheckResult
 import com.rendyhd.vicu.ai.dictation.ContextLabel
 import com.rendyhd.vicu.ai.dictation.ContextPlace
@@ -30,6 +31,7 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -68,34 +70,50 @@ class AiToolsFixtureTest {
     fun dictationCheckVectors() {
         val dictation = fixture.getValue("dictation").jsonObject
         val defaultContext = dictation.getValue("context").jsonObject
-        val zone = TimeZone.of("Europe/Amsterdam")
         for (vector in dictation.getValue("checks").jsonArray.map { it.jsonObject }) {
             val name = vector.getValue("name").jsonPrimitive.content
-            val ctx = (vector["context"] as? JsonObject) ?: defaultContext
-            val context = DictationContext(
-                now = LocalDateTime.parse(vector.getValue("reference").jsonPrimitive.content),
-                zone = zone,
-                list = "Inbox",
-                defaultProjectId = ctx.getValue("default_project_id").jsonPrimitive.long,
-                defaultDue = (vector["defaultDue"] as? JsonPrimitive)?.contentOrNull?.let { LocalDate.parse(it) },
-                projects = ctx.getValue("projects").jsonArray.map {
-                    val o = it.jsonObject
-                    ContextProject(o.getValue("id").jsonPrimitive.long, o.getValue("title").jsonPrimitive.content, o.getValue("path").jsonPrimitive.content)
-                },
-                labels = ctx.getValue("labels").jsonArray.map {
-                    val o = it.jsonObject
-                    ContextLabel(o.getValue("id").jsonPrimitive.long, o.getValue("title").jsonPrimitive.content)
-                },
-                places = ctx.getValue("places").jsonArray.map {
-                    val o = it.jsonObject
-                    ContextPlace(o.getValue("id").jsonPrimitive.content, o.getValue("name").jsonPrimitive.content)
-                },
-                locale = vector["locale"]?.jsonPrimitive?.contentOrNull,
-            )
+            val context = contextOf(vector, (vector["context"] as? JsonObject) ?: defaultContext)
             val answer = vector.getValue("answer").jsonObject
             val actual = toJson(DictationChecks.check(answer, context))
             val expect = vector.getValue("expect").jsonObject
             assertEquals(expect, actual, name)
+        }
+    }
+
+    private fun contextOf(vector: JsonObject, ctx: JsonObject): DictationContext {
+        val zone = TimeZone.of("Europe/Amsterdam")
+        return DictationContext(
+            now = LocalDateTime.parse(vector.getValue("reference").jsonPrimitive.content),
+            zone = zone,
+            list = "Inbox",
+            defaultProjectId = ctx.getValue("default_project_id").jsonPrimitive.long,
+            defaultDue = (vector["defaultDue"] as? JsonPrimitive)?.contentOrNull?.let { LocalDate.parse(it) },
+            projects = ctx.getValue("projects").jsonArray.map {
+                val o = it.jsonObject
+                ContextProject(o.getValue("id").jsonPrimitive.long, o.getValue("title").jsonPrimitive.content, o.getValue("path").jsonPrimitive.content)
+            },
+            labels = ctx.getValue("labels").jsonArray.map {
+                val o = it.jsonObject
+                ContextLabel(o.getValue("id").jsonPrimitive.long, o.getValue("title").jsonPrimitive.content)
+            },
+            places = ctx.getValue("places").jsonArray.map {
+                val o = it.jsonObject
+                ContextPlace(o.getValue("id").jsonPrimitive.content, o.getValue("name").jsonPrimitive.content)
+            },
+            locale = vector["locale"]?.jsonPrimitive?.contentOrNull,
+        )
+    }
+
+    @Test
+    fun brainDumpCheckVectors() {
+        val ctx = fixture.getValue("dictation").jsonObject.getValue("context").jsonObject
+        for (vector in fixture.getValue("brainDump").jsonObject.getValue("checks").jsonArray.map { it.jsonObject }) {
+            val name = vector.getValue("name").jsonPrimitive.content
+            val context = contextOf(vector, ctx)
+            val answer = vector.getValue("answer").jsonObject
+            assertNull(JsonSchema.firstProblem(answer, AiContract.brainDumpAnswerSchema), name)
+            val actual = toJson(BrainDumpChecks.check(answer, context), brainDump = true)
+            assertEquals(vector.getValue("expect").jsonObject, actual, name)
         }
     }
 
@@ -112,7 +130,10 @@ class AiToolsFixtureTest {
     @Test
     fun everySchemaAModelSeesIsInsideTheStrictSubset() {
         val keywords = fixture.getValue("schemaSubset").jsonObject.getValue("keywords").jsonArray.map { it.jsonPrimitive.content }.toSet()
-        val schemas = mutableMapOf<String, JsonObject>("dictation.answerSchema" to AiContract.dictationAnswerSchema)
+        val schemas = mutableMapOf(
+            "dictation.answerSchema" to AiContract.dictationAnswerSchema,
+            "brainDump.answerSchema" to AiContract.brainDumpAnswerSchema,
+        )
         for (tool in AiContract.askTools) schemas["tool ${tool.name}"] = tool.parameters
         val probe = fixture.getValue("probe").jsonObject
         schemas["probe.structured"] = probe.getValue("structured").jsonObject.getValue("schema").jsonObject
@@ -147,7 +168,24 @@ class AiToolsFixtureTest {
         assertEquals("tasks[0].when.date is not string or null", JsonSchema.firstProblem(wrong, schema))
     }
 
-    private fun toJson(result: CheckResult): JsonObject = buildJsonObject {
+    private fun toJson(result: CheckResult, brainDump: Boolean = false): JsonObject = buildJsonObject {
+        if (brainDump) {
+            put(
+                "projects",
+                buildJsonArray {
+                    for (p in result.projects) {
+                        add(
+                            buildJsonObject {
+                                put("ref", p.ref)
+                                put("title", p.title)
+                                put("parent_id", p.parentId?.let { JsonPrimitive(it) } ?: JsonNull)
+                                put("parent_ref", p.parentRef?.let { JsonPrimitive(it) } ?: JsonNull)
+                            },
+                        )
+                    }
+                },
+            )
+        }
         put(
             "drafts",
             buildJsonArray {
@@ -158,7 +196,12 @@ class AiToolsFixtureTest {
                             put("title", d.title)
                             put("notes", d.notes)
                             put("due", d.due?.let { JsonPrimitive(wall(it)) } ?: JsonNull)
-                            put("project_id", d.projectId)
+                            if (brainDump) {
+                                put("project_id", if (d.projectRef != null) JsonNull else JsonPrimitive(d.projectId))
+                                put("project_ref", d.projectRef?.let { JsonPrimitive(it) } ?: JsonNull)
+                            } else {
+                                put("project_id", d.projectId)
+                            }
                             put("labels", buildJsonArray { d.labels.forEach { l -> add(buildJsonObject { put("id", l.id?.let { JsonPrimitive(it) } ?: JsonNull); put("title", l.title) }) } })
                             put("priority", d.priority?.let { JsonPrimitive(it) } ?: JsonNull)
                             put("repeat", d.repeat?.let { r -> buildJsonObject { put("every", r.every); put("unit", r.unit) } } ?: JsonNull)

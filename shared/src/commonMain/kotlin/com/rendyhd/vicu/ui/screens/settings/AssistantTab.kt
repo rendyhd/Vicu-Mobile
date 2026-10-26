@@ -195,13 +195,26 @@ internal fun AssistantTab(
             item(key = "dictation") {
                 SwitchRow(
                     label = "Smart dictation",
-                    description = "Hold +, slide up to the lock and keep talking: your tasks appear as cards while you talk, " +
+                    description = "Hold +, slide up to the sparkle and keep talking: your tasks appear as cards while you talk, " +
                         "with dates, projects and labels, for you to check before adding. Holding + and letting go still " +
                         "adds one task at once. Also Break into steps in a task's menu, and Make tasks when you share text to Vicu.",
                     checked = settings.dictationOn,
                     onCheckedChange = { viewModel.setFeature(AssistantFeature.DICTATION, it) },
                 )
-                TryIt(enabled = settings.dictationReady, onClick = smartDictation::tryIt)
+                TryIt(enabled = settings.dictationReady, onClick = { smartDictation.tryIt() })
+            }
+            if (settings.dictationOn) {
+                item(key = "brain_dump") {
+                    SwitchRow(
+                        label = "Brain dump",
+                        description = "Smart dictation starts as a brain dump: talk as long as you like and nothing is sent " +
+                            "until you tap Organize. Then everything you said is sorted into projects, subprojects, tasks, " +
+                            "subtasks and notes, for you to check before adding. The same switch is at the top of the dictation sheet.",
+                        checked = settings.brainDump,
+                        onCheckedChange = viewModel::setBrainDump,
+                    )
+                    TryIt(enabled = settings.dictationReady, onClick = { smartDictation.tryIt(brainDump = true) })
+                }
             }
             item(key = "ask") {
                 SwitchRow(

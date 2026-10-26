@@ -263,6 +263,11 @@ class AssistantSettingsViewModel(
         viewModelScope.launch { store.update { it.copy(speakAnswers = on) } }
     }
 
+    /** Smart dictation opens as a brain dump (section 4.8); the same switch as the dictation sheet's. */
+    fun setBrainDump(on: Boolean) {
+        viewModelScope.launch { store.update { it.copy(brainDump = on) } }
+    }
+
     fun chooseSpeechModel(id: String?) {
         viewModelScope.launch {
             store.update { it.copy(speechModelId = id) }

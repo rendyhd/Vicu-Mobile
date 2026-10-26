@@ -34,8 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -238,10 +238,10 @@ private fun VoiceCard(capture: VoiceCapture, controller: FabController, reduceMo
                     }
                 }
                 if (capture.canLock && !capture.handsFree) {
-                    // Where the finger goes to keep talking (smart dictation).
+                    // Where the finger goes to keep talking: smart dictation, marked with the assistant's sparkle.
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = scheme.onSurfaceVariant)
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(20.dp))
                     }
                 }
             }

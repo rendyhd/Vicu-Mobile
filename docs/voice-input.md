@@ -41,8 +41,8 @@ to the Inbox, undated (their names still go to the assistant as the list you are
 pills before anything is said. Routines' + adds a routine, so holding it does not listen.
 
 Sliding the finger down by more than 56 dp arms the cancel ("Let go to cancel"); letting go there
-adds nothing. With smart dictation ready, sliding up by more than 72 dp locks it (a lock above an
-arrow on the card shows where): smart dictation takes over and keeps listening (see "With the
+adds nothing. With smart dictation ready, sliding up by more than 72 dp locks it (the assistant's sparkle
+above an arrow on the card shows where): smart dictation takes over and keeps listening (see "With the
 assistant"); the card goes, and the words said so far become its first. A pause while still holding does not end the task:
 Android's recognizer ends an utterance at a pause, and the next one is joined to it. After the
 finger lifts the app waits up to 1.5 s for the recognizer's last words, then adds what it has.
@@ -105,7 +105,8 @@ A place phrase works here too: "call mom when I get home" sets the location remi
 
 Holding + and letting go is always quick capture, the path above, with no model: fast, one task.
 With smart dictation on (Settings, Assistant; `docs/ai-assistant-v1.md`, sections 3.7 and 4),
-sliding up to the lock opens the draft sheet (`DictationSheet`) with the microphone on
+sliding up to the lock opens the draft sheet (`DictationSheet`: small at the bottom until there
+are cards to check, then 80% of the screen, as Ask) with the microphone on
 (`DictationMic`): each pause sends what was said to the user's own model, the first time as a
 dictation and after that as an edit of the drafts, so the cards appear and change while the
 person keeps talking ("and call mum tomorrow", "make the first one Friday"). Talking again while
@@ -113,6 +114,13 @@ the model works cancels that request; its words go out with the next ones. The m
 on the sheet turns it off and on; Add adds the drafts, checked against the same parser and fields
 as quick add. When the model cannot be reached the words wait on the card with Retry and Add as
 one task, which is the path above. Settings, Assistant has Try it, which opens the same sheet.
+
+The sheet's **Brain dump** switch (section 4.8; a note under it says what it does, and the app
+remembers it) changes what a pause does: nothing is sent, the words are added to the dump, which
+the person can also type into, and the microphone waits `dump_idle_s` (5 minutes) of quiet before
+it turns off. Organize sends the whole dump once; the answer can add new projects and subprojects,
+and the plan lists the tasks under their projects. What is said or typed after that waits for
+Update, and Add creates the new projects (this needs a connection) before the tasks.
 
 With a speech model, recording starts at once while the model loads (seconds the first time; the
 phrases wait for it), and after the finger lifts the card shows "Turning your words into text…" with

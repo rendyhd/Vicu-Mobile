@@ -63,7 +63,10 @@ data class CheckedDraft(
     /** Local wall-clock due date; a date-only one is 23:59:59 with [dueHasTime] false. */
     val due: LocalDateTime?,
     val dueHasTime: Boolean,
+    /** With [projectRef] set, the project Add falls back to; otherwise the task's project. */
     val projectId: Long,
+    /** A brain dump's new project the task goes in (section 4.8.3), or null. */
+    val projectRef: String? = null,
     val labels: List<DraftLabel>,
     val priority: Int?,
     val repeat: DraftRepeat?,
@@ -72,6 +75,15 @@ data class CheckedDraft(
     val subtasks: List<String>,
     /** Field names (in `dictation.fields` order) Vicu filled in itself or the model was unsure of. */
     val guessed: List<String>,
+)
+
+/** A new project of a brain dump's plan (section 4.8.3): under a context project, under an earlier new one, or at the top. */
+@Serializable
+data class CheckedProject(
+    val ref: String,
+    val title: String,
+    val parentId: Long? = null,
+    val parentRef: String? = null,
 )
 
 /** A field the checks rejected, for the card to explain. */
@@ -83,4 +95,6 @@ data class CheckResult(
     val drafts: List<CheckedDraft>,
     val dropped: List<DroppedField>,
     val unclear: List<String>,
+    /** A brain dump's new projects, parents first. */
+    val projects: List<CheckedProject> = emptyList(),
 )

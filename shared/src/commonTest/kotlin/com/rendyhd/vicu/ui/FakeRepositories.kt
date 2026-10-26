@@ -316,9 +316,12 @@ class FakeProjectRepository(initial: List<Project> = emptyList()) : ProjectRepos
     /** Projects passed to [create], in call order. */
     val creates = mutableListOf<Project>()
 
+    /** What [create] answers; the default hands the project back as given. */
+    var createResult: (Project) -> NetworkResult<Project> = { NetworkResult.Success(it) }
+
     override suspend fun create(project: Project): NetworkResult<Project> {
         creates += project
-        return NetworkResult.Success(project)
+        return createResult(project)
     }
 
     /** Projects passed to [update], in call order. */

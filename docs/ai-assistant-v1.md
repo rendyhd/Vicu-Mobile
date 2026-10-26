@@ -12,7 +12,7 @@ every device. The file is kept identical in both repos (`docs/ai-assistant-v1.md
 
 | Fixture | Covers |
 |---|---|
-| `ai-tools-v1.json` | provider presets, the speech models and settings, the vocabulary hint, the draft task and dictation answer schemas, the Ask tools, the prompts, the limits, the spoken confirmation words, and vectors for the checks |
+| `ai-tools-v1.json` | provider presets, the speech models and settings, the vocabulary hint, the draft task, dictation and brain dump answer schemas, the Ask tools, the prompts, the limits, the spoken confirmation words, and vectors for the checks |
 | `ai-dictation-corpus-v1.json` (planned) | transcripts with the tasks they should give, run against real models by an eval script; not a CI gate |
 
 The shared-contract identity tests keep both copies equal, and both apps' test suites run the
@@ -231,6 +231,9 @@ listening only while a button is held. The microphone button turns it on and off
 - **Off.** The microphone turns off after `speech.turn.idle_s` without speech, when the person
   turns it off, and when the app goes to the background (phones). A turn whose speech gave no
   words sends nothing, unless it carries the words of an interrupted request.
+- **Brain dump.** In a brain dump (4.8) a turn is not sent: its words are added to the dump, so
+  nothing interrupts, and the microphone turns off after `speech.turn.dump_idle_s` without speech
+  instead.
 
 The values in the fixture are starting values.
 
@@ -251,7 +254,8 @@ Voice has two ways in, and both stay available:
   voice shortcut to latch it instead of holding it). The microphone stays on (3.7) until Done. The
   first turn is a dictation request (4.1); each later turn is an edit (4.4) with the drafts so
   far, so cards appear and change while the person talks. The lock is offered only when smart
-  dictation is on and ready.
+  dictation is on and ready. With the sheet's **Brain dump** switch on, nothing is sent until the
+  person taps Organize, and the answer can add projects (4.8).
 
 ### 4.1 Request
 
@@ -416,6 +420,120 @@ model's answer, and the checked drafts with `dropped` and `unclear`. A vector wi
 uses `dictation.context` (projects, the default project, labels with ids, places with ids). Slash
 dates in `said` are read with the vector's `locale`.
 
+### 4.8 Brain dump
+
+A long ramble organised in one go, into new projects and subprojects as well as tasks, subtasks
+and notes. It is smart dictation with the sheet's **Brain dump** switch on; the switch is offered
+while nothing has been sent, and the app remembers it (a device setting). Under the switch a note
+says what it does: on, that the person can talk as long as they like, nothing is sent until they
+tap Organize, and then everything is sorted into projects, tasks, subtasks and notes; off, that
+each pause turns what they said into task cards.
+
+- **Dumping.** The microphone stays on (3.7), but a turn is not sent: its words are added to the
+  end of the dump, which the person can also type into and correct. The dump is at most 20,000
+  characters (4.1); at that length the microphone turns off and the sheet says so.
+- **Organize** sends the whole dump in one request (4.8.1). Nothing goes to the model before.
+- **The plan** shows the new projects and the tasks grouped by project (4.8.5). What the person
+  says or types next waits until **Update**, which sends it as an edit (4.8.4).
+- **Add** creates the projects, then the tasks (4.8.5).
+
+#### 4.8.1 Request
+
+- System: the `dictation` prompt, a blank line, then the `brainDump` prompt.
+- One user message as in 4.1, with the same context: `list` and `default_project_id` come from the
+  list the person is in.
+- The answer may use up to `limits.brain_dump_max_tokens` tokens.
+
+#### 4.8.2 Answer
+
+The `brainDump.answerSchema` schema of the fixture: the dictation answer (4.2) with `projects`
+first and `project_ref` after each task's `project_id`:
+
+```json
+{
+  "projects": [
+    { "ref": "p1", "title": "Garden", "parent_id": 12, "parent_ref": null },
+    { "ref": "p2", "title": "Vegetable patch", "parent_id": null, "parent_ref": "p1" }
+  ],
+  "tasks": [{ "ref": "d1", "title": "Order seed potatoes", "...": "...", "project_id": null, "project_ref": "p2" }],
+  "unclear": []
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `projects[].ref` | the new project's handle, `p1`, `p2`, ... |
+| `projects[].title` | its name |
+| `projects[].parent_id` | a project from the context to put it under, or `null` |
+| `projects[].parent_ref` | a new project listed before it to put it under, or `null` |
+| `tasks[].project_ref` | the new project the task goes in (then `project_id` is `null`), or `null` |
+
+#### 4.8.3 Checks
+
+The projects are checked first, in order, then the tasks; `dropped` lists the projects' entries
+before the tasks'. A `parent_ref` or `project_ref` that is an empty string counts as `null`.
+
+1. **Projects**: at most `limits.brain_dump_projects_max`; the rest are dropped (`field`
+   `"project"`, `ref` as given, `value` the title). When any `ref` is empty or used by an earlier
+   project, every project is renumbered `p1`, `p2`, ... by position. A `parent_ref` or
+   `project_ref` names the first project that was given that `ref`, whatever it is renumbered to.
+2. **Title**: line breaks replaced by spaces, trimmed. Empty: the project is dropped (`field`
+   `"project_title"`, `value` the title as given). Longer than 250 characters: cut at the last
+   space at or before position 250 (without one, at 250), the space removed.
+3. **Parent**: `parent_ref` when it is not `null`, else `parent_id`. `parent_ref` must name a
+   project before this one that was kept or merged (step 4), `parent_id` a project in the
+   context's `projects`. Anything else is dropped (`field` `"parent"`, `value` as given) and the
+   project goes at the top level. A parent merged into a context project becomes that
+   `parent_id`; one merged into an earlier new project becomes that project's `parent_ref`.
+4. **Same project**: a new project's path is its parent's path (a context project's `path`, or
+   the new parent's path), `" / "`, and its title; at the top level, its title. When a context
+   project has the same path, ignoring case, the new project is that project: it is left out of
+   the plan, and every `parent_ref` and `project_ref` naming it means that project. Otherwise,
+   when an earlier kept new project has the same path, ignoring case, it is merged into that one
+   the same way.
+5. **Tasks**: the checks of 4.3, with at most `limits.brain_dump_tasks_max` drafts instead of 25,
+   without the list's default due date, and with this before step 5: a `project_ref` that names a
+   kept new project puts the task there (`project_ref` that project's `ref`, `project_id` `null`);
+   one that names a project merged into a context project puts it in that project; any other
+   `project_ref` leaves step 5 to decide with `project_id`, and `project` is marked guessed.
+
+A checked project has `ref`, `title`, `parent_id` and `parent_ref`, at most one of the two not
+`null`. A checked draft has `project_ref` after `project_id`; `project_id` is `null` when
+`project_ref` is set. Vectors: `brainDump.checks`, with the context of `dictation.context`.
+
+#### 4.8.4 Editing
+
+**Update** sends what the person said or typed since the plan as an edit:
+
+- System: the `dictation` prompt, a blank line, the `brainDump` prompt, a blank line, then the
+  `brainDumpEdit` prompt. User message: the context block, then `<plan>` with the projects and
+  drafts in the answer's own shape (as in 4.4: after the checks, with the person's own changes,
+  labels as names, the due date back as `when` with `said` `null`, `unsure` empty), written as
+  `{"projects": [...], "tasks": [...]}` with each object's keys in the schema's order, then
+  `<transcript>` with the words. Each block's tag is on a line of its own.
+- The answer is the whole plan again. The checks run again; fields whose value changed are
+  highlighted, and a `ref` no longer present removes its card or project.
+
+#### 4.8.5 Review and adding
+
+- The plan lists the tasks under the project they go in, the projects in the order their first
+  task comes in the answer, then new projects without tasks. An existing project is named by its
+  `path`; a new one is marked new and says where it goes ("in Home"). A new project can be renamed
+  or removed: removing it moves its tasks and its new subprojects to its parent, or at the top
+  level its tasks to `default_project_id` and its subprojects to the top level.
+- A draft's project chip offers the context's projects and the plan's new projects.
+- Creating a project is not queued, so Add needs a connection when the plan has new projects. It
+  creates the projects in order (a parent always comes first) through the app's own New project
+  path, then the drafts as in 4.5. When a project cannot be created, Add stops before any task,
+  deletes the projects it created, and leaves the plan on screen with the error.
+- One message, "Added 2 projects and 14 tasks", with Undo, which deletes the tasks and then the
+  projects Add created.
+
+#### 4.8.6 Failures
+
+As in 4.6, the dump is kept with **Retry**, and it survives the app closing until it is added or
+discarded; **Edit** goes back to the dump to change or extend it. There is no Add as one task.
+
 ---
 
 ## 5. Ask
@@ -548,7 +666,7 @@ without phrases in the fixture confirms by tap only. Vectors: `talk.confirmVecto
 
 | Feature | Sent to the chosen model |
 |---|---|
-| Dictation | the transcript (never audio), the context of 4.1: project, label and place names, the list's name, date, time and zone |
+| Dictation, brain dump | the transcript (never audio), the context of 4.1: project, label and place names, the list's name, date, time and zone |
 | Ask, Talk | the user's messages, the overview (counts, project, label and custom list names), and the tasks the tools return, with the names in `by` and `assignees` |
 
 Never sent: audio (unless the user chose a provider's transcription), hidden tasks, comment
@@ -584,3 +702,4 @@ agreement; a local server (Ollama or Open WebUI at a local address) skips it.
   prompts that use it goes up.
 - `dictationEdit` 2 lets a later turn add tasks as well as change them; `ask` 2 and `talk` 2 ask
   for shorter answers (the answer first, at most three bullets in Ask, one sentence in Talk).
+- `brainDump` 1 and `brainDumpEdit` 1 are new with the brain dump (4.8).

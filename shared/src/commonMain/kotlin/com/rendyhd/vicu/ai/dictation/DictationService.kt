@@ -129,6 +129,29 @@ class DictationService(
         return DictationChecks.check(answer, context)
     }
 
+    /**
+     * Organizes a brain dump into new projects and checked drafts (section 4.8); with the [plan] so
+     * far, [transcript] is what the person said or typed next about it. Throws [LlmException].
+     */
+    suspend fun runBrainDump(transcript: String, context: DictationContext, plan: CheckResult? = null): CheckResult {
+        val s = settings.current()
+        val connection = providers.connection(s) ?: throw LlmException(LlmException.Kind.BAD_REQUEST, "Set up the assistant first.")
+        val answer = providers.structured.request(
+            connection,
+            ChatRequest(
+                model = s.dictationModel,
+                system = DictationRequests.brainDumpSystem(editing = plan != null),
+                messages = listOf(ChatMessage.User(DictationRequests.brainDumpMessage(context, transcript, plan))),
+                schema = DictationRequests.brainDumpSchema,
+                structuredMode = s.structuredMode(s.dictationModel),
+                deterministic = true,
+                idleTimeoutSeconds = AiContract.limits.dictationIdleTimeoutSeconds,
+                maxTokens = AiContract.limits.brainDumpMaxTokens,
+            ),
+        )
+        return BrainDumpChecks.check(answer, context)
+    }
+
     private fun <T> List<T>?.orEmpty(): List<T> = this ?: emptyList()
 
     companion object {

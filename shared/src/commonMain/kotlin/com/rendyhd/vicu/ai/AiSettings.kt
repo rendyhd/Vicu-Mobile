@@ -40,6 +40,8 @@ data class AiSettings(
     val providerTranscription: Boolean = false,
     /** Talk reads answers aloud. */
     val speakAnswers: Boolean = true,
+    /** The dictation sheet's Brain dump switch, as the person last left it (section 4.8). */
+    val brainDump: Boolean = false,
 ) {
     val isSetUp: Boolean get() = providerId != null && address.isNotBlank()
 

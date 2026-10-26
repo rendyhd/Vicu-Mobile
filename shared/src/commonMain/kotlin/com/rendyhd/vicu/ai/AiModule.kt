@@ -11,6 +11,7 @@ import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.ai.dictation.DraftWriter
 import com.rendyhd.vicu.ai.dictation.KeptTranscriptStore
+import com.rendyhd.vicu.ai.dictation.PlanWriter
 import com.rendyhd.vicu.ai.provider.LlmClient
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.local.ReviewPrefsStore
@@ -98,11 +99,13 @@ val aiModule = module {
         )
     }
     single { DraftWriter(tasks = get(), labels = get(), notificationPrefs = get(), locations = get()) }
+    single { PlanWriter(projects = get(), drafts = get()) }
     single { Proposals(tasks = get(), labels = get(), drafts = get()) }
     single {
         DictationController(
             service = get(),
             writer = get(),
+            planWriter = get(),
             kept = get(),
             textTasks = get(),
             tasks = get(),
