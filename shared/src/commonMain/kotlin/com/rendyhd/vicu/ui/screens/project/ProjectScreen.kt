@@ -200,7 +200,7 @@ fun ProjectScreen(
                 ScreenFab(
                     onClick = { onShowTaskEntry(projectId, null) },
                     expanded = !listState.canScrollBackward,
-                    taskDefaults = TaskDefaults(projectId = projectId),
+                    taskDefaults = TaskDefaults(projectId = projectId, listName = state.project?.title),
                 )
             }
         },

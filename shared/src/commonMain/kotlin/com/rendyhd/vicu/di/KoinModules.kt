@@ -46,7 +46,7 @@ import com.rendyhd.vicu.ui.components.fab.FabHint
 import com.rendyhd.vicu.voice.HoldToTalk
 import com.rendyhd.vicu.voice.SelectingSpeechInput
 import com.rendyhd.vicu.ai.aiModule
-import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.voice.VoiceAddResult
 import com.rendyhd.vicu.util.TimeSource
@@ -291,28 +291,19 @@ val commonModule = module {
             hint = { dictationService.vocabularyHint() },
         )
     }
-    // Holding the + to say a task: the words go through the same path as the other voice adds.
+    // Holding the + to say a task: quick capture, the words through the same path as the other voice
+    // adds. Sliding up to the lock hands over to smart dictation (docs/ai-assistant-v1.md, section 4).
     single {
         val creator = get<TextTaskCreator>()
         val tasks = get<TaskRepository>()
         val hint = get<FabHint>()
         val messages = get<AppMessages>()
-        val dictation = get<DictationController>()
+        val smart = get<DictationMic>()
         HoldToTalk(
             speech = get<SelectingSpeechInput>(),
             messages = messages,
             scope = get(),
-            addTask = addTask@{ text, format, defaults ->
-                // Smart dictation (docs/ai-assistant-v1.md, section 4): the words go to the model and
-                // come back as draft cards; with cards open they are an instruction about them.
-                if (dictation.isOpen) {
-                    dictation.edit(text)
-                    return@addTask VoiceAddResult("")
-                }
-                if (dictation.isReady()) {
-                    dictation.start(text, defaults)
-                    return@addTask VoiceAddResult("")
-                }
+            addTask = { text, format, defaults ->
                 when (val result = creator.create(text, format, defaults.projectId, defaults.dueDate)) {
                     is TextTaskCreator.Result.Created -> VoiceAddResult(result.confirmation) {
                         messages.postIfRefused(tasks.delete(result.task.id), "undo the task")
@@ -321,6 +312,9 @@ val commonModule = module {
                 }
             },
             onVoiceAdded = hint::onVoiceUsed,
+            canLock = { smart.ready.value },
+            onLock = smart::open,
+            onLockedWords = smart::listen,
         )
     }
     single { NotificationActions(taskRepository = get(), routineRepository = get(), reminders = get(), hooks = get()) }

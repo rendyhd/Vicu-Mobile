@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -100,7 +102,9 @@ private val ABOVE_FAB = 88.dp
 @Composable
 fun BoxScope.FabOverlays(controller: FabController, fabAlignStart: Boolean) {
     val reduceMotion = rememberReduceMotion()
-    val capture by controller.holdToTalk.state.collectAsState()
+    val held by controller.holdToTalk.state.collectAsState()
+    // Locked, smart dictation's sheet has taken over: the card goes while the last words come in.
+    val capture = held?.takeIf { !it.locked }
     val hintVisible by controller.hint.visible.collectAsState()
     // A session outlives no screen: a recreated activity (rotation) starts without one.
     DisposableEffect(controller) { onDispose { controller.holdToTalk.cancel() } }
@@ -193,7 +197,7 @@ private fun VoiceCard(capture: VoiceCapture, controller: FabController, reduceMo
                         Text(
                             text = when (capture.phase) {
                                 VoicePhase.LISTENING -> "Listening…"
-                                VoicePhase.FINISHING -> "Adding…"
+                                VoicePhase.FINISHING -> "Turning your words into text…"
                                 VoicePhase.HEARD -> "Didn't catch that"
                             },
                             style = MaterialTheme.typography.titleMedium,
@@ -233,13 +237,29 @@ private fun VoiceCard(capture: VoiceCapture, controller: FabController, reduceMo
                         }
                     }
                 }
+                if (capture.canLock && !capture.handsFree) {
+                    // Where the finger goes to keep talking (smart dictation).
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = scheme.onSurfaceVariant)
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(20.dp))
+                    }
+                }
             }
             Spacer(Modifier.height(16.dp))
             if (capture.handsFree) {
                 HandsFreeButtons(capture, controller)
+            } else if (capture.phase == VoicePhase.FINISHING) {
+                // The finger is off: a speech model on the phone can take a while with the last words.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = controller.holdToTalk::cancel) { Text("Cancel") }
+                }
             } else {
                 Text(
-                    text = if (capture.cancelArmed) "Let go to cancel" else "Let go to add · slide down to cancel",
+                    text = when {
+                        capture.cancelArmed -> "Let go to cancel"
+                        capture.canLock -> "Let go to add · slide up to keep talking · down to cancel"
+                        else -> "Let go to add · slide down to cancel"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = if (capture.cancelArmed) scheme.error else scheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
@@ -254,6 +274,10 @@ private fun HandsFreeButtons(capture: VoiceCapture, controller: FabController) {
     val voice = controller.holdToTalk
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         TextButton(onClick = voice::cancel) { Text("Cancel") }
+        if (capture.canLock) {
+            // Smart dictation: the microphone stays on and the words become task cards.
+            TextButton(onClick = voice::lock) { Text("Keep talking") }
+        }
         Spacer(Modifier.size(8.dp))
         if (capture.phase == VoicePhase.HEARD && capture.text.isBlank()) {
             Button(onClick = voice::listenAgain) { Text("Try again") }

@@ -35,6 +35,7 @@ import com.rendyhd.vicu.ui.components.section.openCount
 import com.rendyhd.vicu.ui.components.section.showsGroupHeader
 import com.rendyhd.vicu.ui.components.shared.FabClearance
 import com.rendyhd.vicu.util.parseHexColor
+import com.rendyhd.vicu.voice.TaskDefaults
 import org.koin.compose.viewmodel.koinViewModel
 import com.rendyhd.vicu.ui.components.selection.SelectionAction
 import com.rendyhd.vicu.ui.components.selection.SelectionPickers
@@ -103,7 +104,11 @@ fun TagScreen(
         },
         floatingActionButton = {
             if (!selectionActive) {
-                ScreenFab(onClick = { onShowTaskEntry(null, null) }, expanded = !listState.canScrollBackward)
+                ScreenFab(
+                    onClick = { onShowTaskEntry(null, null) },
+                    expanded = !listState.canScrollBackward,
+                    taskDefaults = TaskDefaults(listName = state.label?.title),
+                )
             }
         },
         floatingActionButtonPosition = if (LocalFabAlignStart.current) FabPosition.Start else FabPosition.End,

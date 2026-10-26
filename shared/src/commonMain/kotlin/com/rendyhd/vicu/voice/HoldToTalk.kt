@@ -32,6 +32,10 @@ data class VoiceCapture(
     val handsFree: Boolean = false,
     /** What the list the + was held in gives the task (its project, Today's date). */
     val defaults: TaskDefaults = TaskDefaults(),
+    /** Sliding up to the lock is offered: smart dictation is on and ready. */
+    val canLock: Boolean = false,
+    /** Locked: the card is gone and the words go to smart dictation once the recognizer gives its last. */
+    val locked: Boolean = false,
 )
 
 /** What [HoldToTalk.begin] did. */
@@ -59,7 +63,9 @@ class VoiceAddResult(val message: String, val undo: (suspend () -> Unit)? = null
  * The session behind holding the + button: listens while the finger is down and shows the words
  * ([state], drawn by the voice card), adds the task when it lifts ([release]) through the same path
  * as the other voice adds ([addTask], `TextTaskCreator`) with the defaults of the list it was held
- * in, and says what was added on the app snackbar, with Undo.
+ * in, and says what was added on the app snackbar, with Undo. This is quick capture, with no model;
+ * sliding up to the lock ([lock]) hands over to smart dictation instead (`docs/ai-assistant-v1.md`,
+ * section 4).
  *
  * Android's recognizer ends an utterance at a pause. While the finger is still down the next
  * utterance is heard too and joined to the words so far, so a pause does not cut the task short.
@@ -71,6 +77,12 @@ class HoldToTalk(
     private val addTask: suspend (text: String, format: DateDisplayFormat, defaults: TaskDefaults) -> VoiceAddResult,
     /** A task was added by voice (the + hint is then never needed). */
     private val onVoiceAdded: () -> Unit = {},
+    /** Whether the lock is offered: smart dictation is on and ready. */
+    private val canLock: () -> Boolean = { false },
+    /** Locked: smart dictation opens, listening, for the list the + was held in. */
+    private val onLock: (TaskDefaults) -> Unit = {},
+    /** The words said before the lock (empty when none), once the recognizer gave its last. */
+    private val onLockedWords: (String) -> Unit = {},
 ) {
     private val _state = MutableStateFlow<VoiceCapture?>(null)
     val state: StateFlow<VoiceCapture?> = _state.asStateFlow()
@@ -89,6 +101,9 @@ class HoldToTalk(
 
     val isActive: Boolean get() = _state.value != null
 
+    /** Whether a hold starting now offers the lock. */
+    fun lockOffered(): Boolean = canLock()
+
     fun begin(format: DateDisplayFormat, handsFree: Boolean = false, defaults: TaskDefaults = TaskDefaults()): VoiceBegin {
         if (isActive) return VoiceBegin.STARTED
         this.format = format
@@ -96,7 +111,7 @@ class HoldToTalk(
             SpeechAvailability.READY -> {
                 committed = ""
                 partial = ""
-                _state.value = VoiceCapture(handsFree = handsFree, defaults = defaults)
+                _state.value = VoiceCapture(handsFree = handsFree, defaults = defaults, canLock = canLock())
                 listen()
                 VoiceBegin.STARTED
             }
@@ -129,10 +144,28 @@ class HoldToTalk(
     /** The finger lifted (or Add was pressed): adds what was heard, unless the cancel line was crossed. */
     fun release() {
         val current = _state.value ?: return
+        if (current.locked) return
         if (current.cancelArmed) {
             cancel()
             return
         }
+        wrapUp(current)
+    }
+
+    /**
+     * Slid up to the lock (or Keep talking, hands-free): smart dictation opens and keeps listening;
+     * the words said so far become its first once the recognizer gives its last.
+     */
+    fun lock() {
+        val current = _state.value ?: return
+        if (!current.canLock || current.locked) return
+        val locked = current.copy(locked = true, cancelArmed = false)
+        _state.value = locked
+        onLock(current.defaults)
+        wrapUp(locked)
+    }
+
+    private fun wrapUp(current: VoiceCapture) {
         when (current.phase) {
             VoicePhase.LISTENING -> {
                 _state.value = current.copy(phase = VoicePhase.FINISHING, level = 0f)
@@ -151,10 +184,13 @@ class HoldToTalk(
     /** Lets go without adding anything. */
     fun cancel() {
         if (!isActive) return
+        val wasLocked = _state.value?.locked == true
         run++
         finishWait?.cancel()
         speech.cancel()
         _state.value = null
+        // Smart dictation is open already: it listens without the words said before.
+        if (wasLocked) onLockedWords("")
     }
 
     /** Hands-free: listens again after an utterance that was not understood. */
@@ -242,8 +278,13 @@ class HoldToTalk(
         run++
         finishWait?.cancel()
         val text = words().trim()
-        val defaults = _state.value?.defaults ?: TaskDefaults()
+        val current = _state.value
+        val defaults = current?.defaults ?: TaskDefaults()
         _state.value = null
+        if (current?.locked == true) {
+            onLockedWords(text)
+            return
+        }
         if (text.isBlank()) {
             messages.post(NOTHING_HEARD)
             return

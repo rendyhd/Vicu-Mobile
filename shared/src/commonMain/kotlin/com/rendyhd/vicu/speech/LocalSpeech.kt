@@ -1,21 +1,26 @@
 package com.rendyhd.vicu.speech
 
 import com.rendyhd.vicu.ai.AiContract
+import com.rendyhd.vicu.util.Logger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 import kotlin.math.sqrt
+import kotlin.time.TimeSource
 
 /** What the voice card shows while local speech listens (`docs/ai-assistant-v1.md`, section 3). */
 data class LocalSpeechState(
@@ -85,9 +90,25 @@ class SpeechEngineHost(
     fun native(): SpeechEngineNative = native
 }
 
+/** What an open microphone's recording reports, in order (section 3.7). */
+sealed interface LocalSpeechEvent {
+    /** The person started talking: `min_speech_ms` of speech after a pause. */
+    data object SpeechStarted : LocalSpeechEvent
+
+    /** A phrase was cut and waits to be transcribed. */
+    data object PhraseCut : LocalSpeechEvent
+
+    /** A phrase was transcribed: its text, or null when it had no words. */
+    data class Transcribed(val text: String?) : LocalSpeechEvent
+
+    /** Silence of `end_of_turn_ms` after speech. */
+    data object Paused : LocalSpeechEvent
+}
+
 /**
  * One recording with local speech: records, cuts phrases with the voice detector, transcribes each
- * finished phrase at once in the background, in order, and joins the texts (section 3.2).
+ * finished phrase at once in the background, in order, and joins the texts (section 3.2). With
+ * [endOfTurnMs] it also reports [events] for an open microphone (section 3.7).
  */
 class LocalSpeechSession(
     private val host: SpeechEngineHost,
@@ -99,9 +120,16 @@ class LocalSpeechSession(
     private val language: String,
     /** The vocabulary hint (section 3.4), or null. */
     private val prompt: String?,
+    /** The pause that ends a turn; null for a recording without turns. */
+    private val endOfTurnMs: Long? = null,
 ) {
     private val _state = MutableStateFlow(LocalSpeechState())
     val state: StateFlow<LocalSpeechState> = _state.asStateFlow()
+
+    private val _events = Channel<LocalSpeechEvent>(Channel.UNLIMITED)
+
+    /** With [endOfTurnMs]: talking, phrases and pauses as they happen; ends with the recording. */
+    val events: Flow<LocalSpeechEvent> = _events.receiveAsFlow()
 
     private val audio = Channel<FloatArray>(Channel.UNLIMITED)
     private val phrases = Channel<FloatArray>(Channel.UNLIMITED)
@@ -112,6 +140,9 @@ class LocalSpeechSession(
     private var samplesRecorded = 0L
     private val maxSamples = AiContract.limits.audioMaxSeconds * SAMPLE_RATE.toLong()
     private var cancelled = false
+
+    /** Set on the model's thread once it loaded; read by [cancel]. */
+    @Volatile
     private var modelHandle = 0L
 
     /** [finish] came before the recording started (the model was still loading): it never starts. */
@@ -121,15 +152,16 @@ class LocalSpeechSession(
     suspend fun start(): Boolean {
         val native = host.native()
         val vad = host.vad()
-        val model = host.model(modelPath, spec.engineCode)
-        modelHandle = model
-        if (vad == 0L || model == 0L) {
-            _state.update { it.copy(error = "The speech model could not be loaded.") }
+        if (vad == 0L) {
+            _state.update { it.copy(error = "The voice detector could not be loaded.") }
             done.complete("")
+            _events.close()
             return false
         }
         withContext(host.vadThread) { native.vadReset(vad) }
-        val cutter = PhraseCutter(VadSettings.fromContract())
+        val vadSettings = VadSettings.fromContract()
+        val cutter = PhraseCutter(vadSettings)
+        val turns = endOfTurnMs?.let { TurnWatch(vadSettings, it) }
         val window = SpeechEngineNative.VAD_WINDOW_SAMPLES
 
         detector = scope.launch(host.vadThread) {
@@ -137,21 +169,37 @@ class LocalSpeechSession(
             var pending = FloatArray(window * 4)
             var pendingCount = 0
             var probs = FloatArray(64)
+            // Diagnostics for the debug app: does the detector hear speech at all?
+            var windowsSeen = 0
+            var loudest = 0f
+            var feedFailed = false
             for (chunk in audio) {
                 if (pendingCount + chunk.size > pending.size) pending = pending.copyOf((pendingCount + chunk.size) * 2)
                 chunk.copyInto(pending, pendingCount)
                 pendingCount += chunk.size
                 if (probs.size < chunk.size / window + 2) probs = FloatArray(chunk.size / window + 2)
                 val n = native.vadFeed(vad, chunk, chunk.size, probs)
+                if (n < 0 && !feedFailed) {
+                    feedFailed = true
+                    Logger.w(TAG, "the voice detector refused the audio ($n)")
+                }
                 var used = 0
                 for (i in 0 until n.coerceAtLeast(0)) {
                     if (pendingCount - used < window) break
                     val samples = pending.copyOfRange(used, used + window)
                     used += window
+                    loudest = maxOf(loudest, probs[i])
+                    if (++windowsSeen % DIAGNOSTIC_WINDOWS == 0) {
+                        Logger.d(TAG, "${windowsSeen * window * 1_000L / SAMPLE_RATE} ms heard, speech chance up to $loudest")
+                        loudest = 0f
+                    }
                     cutter.push(samples, probs[i])?.let { phrase ->
+                        Logger.d(TAG, "phrase of ${phrase.size * 1_000L / SAMPLE_RATE} ms cut")
                         _state.update { s -> s.copy(pending = s.pending + 1) }
+                        if (turns != null) _events.trySend(LocalSpeechEvent.PhraseCut)
                         phrases.send(phrase)
                     }
+                    turns?.push(cutter, probs[i])?.let { _events.trySend(it) }
                 }
                 if (used > 0) {
                     pending.copyInto(pending, 0, used, pendingCount)
@@ -160,23 +208,42 @@ class LocalSpeechSession(
             }
             cutter.finish()?.let { phrase ->
                 _state.update { s -> s.copy(pending = s.pending + 1) }
+                if (turns != null) _events.trySend(LocalSpeechEvent.PhraseCut)
                 phrases.send(phrase)
             }
             phrases.close()
         }
 
+        // The model loads (seconds, the first time) while the person already talks: recording and the
+        // detector start at once, and the phrases wait for the model, so no words are lost.
         transcriber = scope.launch(host.modelThread) {
+            val loading = TimeSource.Monotonic.markNow()
+            val model = host.model(modelPath, spec.engineCode)
+            modelHandle = model
+            Logger.d(TAG, "${spec.id}: ready after ${loading.elapsedNow().inWholeMilliseconds} ms")
+            if (model == 0L) {
+                _state.update { it.copy(error = "The speech model could not be loaded.") }
+                scope.launch { stopRecording() }
+                for (phrase in phrases) Unit
+                done.complete("")
+                _events.close()
+                return@launch
+            }
             val languageArg = language.takeIf { it != "auto" && spec.takesPrompt }
             val promptArg = prompt.takeIf { spec.takesPrompt }
             for (phrase in phrases) {
                 if (cancelled) continue
+                val transcribing = TimeSource.Monotonic.markNow()
                 val text = native.transcribe(model, phrase, phrase.size, languageArg, promptArg, MAX_THREADS)
                     ?.trim()
                     ?.takeIf { t -> t.any { it.isLetterOrDigit() } }
+                Logger.d(TAG, "${spec.id}: ${phrase.size * 1_000L / SAMPLE_RATE} ms of speech took ${transcribing.elapsedNow().inWholeMilliseconds} ms")
                 if (text != null) texts += text
                 _state.update { s -> s.copy(text = texts.joinToString(" "), pending = (s.pending - 1).coerceAtLeast(0)) }
+                if (endOfTurnMs != null) _events.trySend(LocalSpeechEvent.Transcribed(text))
             }
             done.complete(texts.joinToString(" "))
+            _events.close()
         }
 
         if (stopRequested || cancelled) {
@@ -193,15 +260,18 @@ class LocalSpeechSession(
                 if (samplesRecorded >= maxSamples) scope.launch { stopRecording() }
             },
             onError = { message ->
+                Logger.w(TAG, "recording stopped: $message")
                 _state.update { it.copy(error = message) }
                 scope.launch { stopRecording() }
             },
         )
         if (!started) {
+            Logger.w(TAG, "the microphone could not start")
             audio.close()
             _state.update { it.copy(error = it.error ?: "The microphone could not be used.") }
             return false
         }
+        Logger.d(TAG, "${spec.id}: recording")
         _state.update { it.copy(recording = true) }
         return true
     }
@@ -229,6 +299,7 @@ class LocalSpeechSession(
         phrases.close()
         if (modelHandle != 0L) host.native().abort(modelHandle)
         if (!done.isCompleted) done.complete("")
+        _events.close()
     }
 
     private fun rms(samples: FloatArray): Float {
@@ -241,5 +312,9 @@ class LocalSpeechSession(
     companion object {
         const val SAMPLE_RATE = 16_000
         private const val MAX_THREADS = 4
+        private const val TAG = "LocalSpeech"
+
+        /** How often the debug app logs what the detector heard: about 3 s. */
+        private const val DIAGNOSTIC_WINDOWS = 96
     }
 }

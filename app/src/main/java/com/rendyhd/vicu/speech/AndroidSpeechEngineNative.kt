@@ -1,6 +1,9 @@
 package com.rendyhd.vicu.speech
 
+import android.os.Build
 import com.rendyhd.vicu.util.Logger
+import java.io.File
+import java.io.IOException
 
 /**
  * The JNI entry points of `libvicu_speech.so` (`native/speech/vicu_speech_jni.cpp`). The native
@@ -29,11 +32,17 @@ internal object VicuSpeechJni {
  * [SpeechEngineNative] over JNI. The library is built for arm64-v8a, armeabi-v7a and x86_64; on
  * any other processor (32-bit x86) it is missing, [isLoaded] is false and every call answers
  * "nothing" (0, -1 or null) instead of throwing. Loading happens on first use, not when Koin
- * builds this.
+ * builds this. The arm64 build uses ARMv8.2's dot-product and half-precision instructions
+ * (`native/speech/CMakeLists.txt`), so an older 64-bit processor gets no local speech instead of a
+ * crash.
  */
 class AndroidSpeechEngineNative : SpeechEngineNative {
 
     override val isLoaded: Boolean by lazy {
+        if (!processorFits()) {
+            Logger.w(TAG, "No local speech: the processor lacks the dot-product or half-precision instructions")
+            return@lazy false
+        }
         try {
             System.loadLibrary(LIBRARY)
             true
@@ -85,6 +94,19 @@ class AndroidSpeechEngineNative : SpeechEngineNative {
 
     override fun modelClose(model: Long) {
         if (isLoaded && model != 0L) VicuSpeechJni.modelClose(model)
+    }
+
+    /** Off arm64 the build needs nothing extra; on arm64 the kernel lists `asimddp` and `asimdhp`. */
+    private fun processorFits(): Boolean {
+        // Null in JVM tests, where Android's classes are stubs.
+        if (Build.SUPPORTED_ABIS?.firstOrNull() != "arm64-v8a") return true
+        val features = try {
+            File("/proc/cpuinfo").useLines { lines -> lines.firstOrNull { it.startsWith("Features") } }
+        } catch (e: IOException) {
+            null
+        } ?: return false
+        val flags = features.substringAfter(':').trim().split(' ').toSet()
+        return "asimddp" in flags && "asimdhp" in flags
     }
 
     private companion object {

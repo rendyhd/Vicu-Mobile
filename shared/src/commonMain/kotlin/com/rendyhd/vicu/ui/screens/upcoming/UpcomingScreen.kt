@@ -51,6 +51,7 @@ import com.rendyhd.vicu.ui.components.section.openCount
 import com.rendyhd.vicu.ui.components.shared.FabClearance
 import com.rendyhd.vicu.util.DateContext
 import com.rendyhd.vicu.util.DateDisplay
+import com.rendyhd.vicu.voice.TaskDefaults
 import org.koin.compose.viewmodel.koinViewModel
 import com.rendyhd.vicu.ui.components.selection.SelectionAction
 import com.rendyhd.vicu.ui.components.selection.SelectionPickers
@@ -120,7 +121,11 @@ fun UpcomingScreen(
         },
         floatingActionButton = {
             if (!selectionActive) {
-                ScreenFab(onClick = { onShowTaskEntry(null, null) }, expanded = !listState.canScrollBackward)
+                ScreenFab(
+                    onClick = { onShowTaskEntry(null, null) },
+                    expanded = !listState.canScrollBackward,
+                    taskDefaults = TaskDefaults(listName = "Upcoming"),
+                )
             }
         },
         floatingActionButtonPosition = if (LocalFabAlignStart.current) FabPosition.Start else FabPosition.End,

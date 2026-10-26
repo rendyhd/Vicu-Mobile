@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.ui.components.shared.FabClearance
+import com.rendyhd.vicu.voice.TaskDefaults
 import org.koin.compose.viewmodel.koinViewModel
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.ui.components.section.SectionHeader
@@ -105,7 +106,11 @@ fun AnytimeScreen(
         },
         floatingActionButton = {
             if (!selectionActive) {
-                ScreenFab(onClick = { onShowTaskEntry(null, null) }, expanded = !listState.canScrollBackward)
+                ScreenFab(
+                    onClick = { onShowTaskEntry(null, null) },
+                    expanded = !listState.canScrollBackward,
+                    taskDefaults = TaskDefaults(listName = "Anytime"),
+                )
             }
         },
         floatingActionButtonPosition = if (LocalFabAlignStart.current) FabPosition.Start else FabPosition.End,

@@ -26,6 +26,12 @@ set(WHISPER_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_CCACHE OFF CACHE BOOL "" FORCE)
+if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
+    # ARMv8.2 with the dot-product and half-precision instructions, which every 64-bit phone chip
+    # since 2018 has: whisper runs several times faster than on the ARMv8.0 baseline. The app loads
+    # the library only on a processor that has them (AndroidSpeechEngineNative).
+    set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
+endif()
 if(APPLE)
     # The Metal shaders are embedded as source and compiled on the device, so the build needs no
     # Metal toolchain.

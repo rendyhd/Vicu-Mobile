@@ -2,6 +2,8 @@ package com.rendyhd.vicu.speech
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -31,6 +33,12 @@ class AndroidSpeechOutput(private val context: Context) : SpeechOutput {
 
     override val isAvailable: Boolean
         get() = !failed && hasEngine
+
+    override val playsPrivately: Boolean
+        get() {
+            val audio = context.getSystemService(AudioManager::class.java) ?: return false
+            return audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in HEADPHONES }
+        }
 
     private val hasEngine: Boolean by lazy {
         context.packageManager.queryIntentServices(Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0).isNotEmpty()
@@ -140,6 +148,15 @@ class AndroidSpeechOutput(private val context: Context) : SpeechOutput {
     }
 
     internal companion object {
+        /** Outputs the phone's microphone cannot hear. */
+        private val HEADPHONES = setOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+        )
+
         private const val TAG = "SpeechOutput"
 
         /** [text] cut at spaces into pieces the engine accepts. */

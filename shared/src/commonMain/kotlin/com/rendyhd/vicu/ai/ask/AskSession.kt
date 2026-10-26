@@ -134,6 +134,20 @@ class AskSession(
         run(list, talk)
     }
 
+    /**
+     * Talking again cancelled the turn (`docs/ai-assistant-v1.md`, section 3.7): the conversation goes
+     * back to its first [size] messages. Its words come again with the next turn.
+     */
+    suspend fun withdraw(size: Int) {
+        if (conversation.messages.size <= size) return
+        update { c ->
+            val kept = c.messages.take(size)
+            c.copy(messages = kept, title = if (kept.none { it is ChatMessage.User }) "" else c.title)
+        }
+        _state.update { it.copy(error = null) }
+        store.save(conversation)
+    }
+
     /** Runs the model again after a failed request. */
     suspend fun retry(list: AskList, talk: Boolean) {
         if (_state.value.busy) return
@@ -308,7 +322,7 @@ class AskSession(
             if (full) {
                 put("time_zone", snapshot.zone.id)
                 put("week_starts", "monday")
-                put("list", list.name)
+                put("list", list.name.ifBlank { list.projectId?.let { snapshot.path(it) } ?: "Inbox" })
                 list.projectId?.let { put("list_project_id", it) }
                 list.customListId?.let { put("list_custom_list_id", it) }
                 put("overview", snapshot.overview())

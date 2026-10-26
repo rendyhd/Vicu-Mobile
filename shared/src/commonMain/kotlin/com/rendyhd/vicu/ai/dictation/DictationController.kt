@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class DictationPhase {
+    /** The microphone is on and nothing went to the model yet (smart dictation's lock, section 4). */
+    LISTENING,
+
     /** The model is reading the transcript. */
     THINKING,
 
@@ -71,6 +74,9 @@ class DictationController(
 
     val isOpen: Boolean get() = _state.value != null
 
+    /** A request runs: the model reads the transcript or applies an edit. */
+    val isBusy: Boolean get() = _state.value?.let { it.phase == DictationPhase.THINKING || it.editing } == true
+
     suspend fun isReady(): Boolean = service.isReady()
 
     /** At app start: a transcript kept from a failed dictation comes back with its two choices. */
@@ -88,11 +94,16 @@ class DictationController(
         }
     }
 
-    fun start(transcript: String, defaults: TaskDefaults, parentTaskId: Long? = null) {
+    /** Opens the sheet with the microphone on and nothing said yet, for the list [defaults] describes. */
+    fun listen(defaults: TaskDefaults) {
+        if (_state.value == null) _state.value = DictationUi(DictationPhase.LISTENING, "", defaults)
+    }
+
+    fun start(transcript: String, defaults: TaskDefaults, parentTaskId: Long? = null): Job? {
         val text = transcript.trim()
-        if (text.isEmpty()) return
+        if (text.isEmpty()) return null
         _state.value = DictationUi(DictationPhase.THINKING, text, defaults, parentTaskId)
-        run()
+        return run()
     }
 
     fun retry() {
@@ -101,9 +112,9 @@ class DictationController(
         run()
     }
 
-    private fun run() {
+    private fun run(): Job {
         job?.cancel()
-        job = scope.launch {
+        return scope.launch {
             val current = _state.value ?: return@launch
             try {
                 val context = service.context(current.defaults)
@@ -126,17 +137,17 @@ class DictationController(
                 kept.keep(KeptTranscript(current.transcript, current.defaults.listName, current.defaults.projectId, current.defaults.dueDate, current.parentTaskId))
                 _state.update { it?.copy(phase = DictationPhase.FAILED, error = (e as? LlmException)?.message ?: "The model did not answer.") }
             }
-        }
+        }.also { job = it }
     }
 
-    /** A voice instruction about the drafts on screen (section 4.4). */
-    fun edit(instruction: String) {
-        val current = _state.value ?: return
-        val context = current.context ?: return
-        if (current.phase != DictationPhase.REVIEW || instruction.isBlank()) return
+    /** What the person said next about the drafts on screen: changes, more tasks, or both (section 4.4). */
+    fun edit(instruction: String): Job? {
+        val current = _state.value ?: return null
+        val context = current.context ?: return null
+        if (current.phase != DictationPhase.REVIEW || instruction.isBlank()) return null
         _state.value = current.copy(editing = true)
         job?.cancel()
-        job = scope.launch {
+        return scope.launch {
             try {
                 val result = service.run(instruction.trim(), context, current.drafts)
                 val before = current.drafts.associateBy { it.ref }
@@ -156,6 +167,23 @@ class DictationController(
             } catch (e: Exception) {
                 _state.update { it?.copy(editing = false) }
                 messages.post((e as? LlmException)?.message ?: "Could not change the drafts.")
+            }
+        }.also { job = it }
+    }
+
+    /**
+     * Talking again cancelled the request still running (section 3.7): its words go out with the
+     * next turn, so the sheet goes back to listening, or to the drafts as they were.
+     */
+    fun cancelRequest() {
+        job?.cancel()
+        job = null
+        _state.update { s ->
+            when {
+                s == null -> null
+                s.phase == DictationPhase.THINKING -> s.copy(phase = DictationPhase.LISTENING, transcript = "")
+                s.editing -> s.copy(editing = false)
+                else -> s
             }
         }
     }

@@ -16,6 +16,9 @@ sealed interface FabGestureEvent {
     /** While holding: the finger crossed the cancel line below the button ([armed]) or came back. */
     data class CancelArmed(val armed: Boolean) : FabGestureEvent
 
+    /** While holding: the finger slid up to the lock. Smart dictation takes over; the rest of the gesture is swallowed. */
+    data object Lock : FabGestureEvent
+
     /** The finger lifted after a hold; [cancelled] when it was past the cancel line. */
     data class Release(val cancelled: Boolean) : FabGestureEvent
 
@@ -44,8 +47,9 @@ enum class FabGesturePhase {
 /**
  * The gestures of the + button, without Compose so they can be tested: a lift before [holdMillis]
  * without moving is the button's tap (quick add, as always); holding still for [holdMillis] starts
- * listening, and sliding down more than [cancelDistance] arms the cancel; moving more than
- * [touchSlop] before the hold drags the + when the screen has drop targets.
+ * listening, sliding down more than [cancelDistance] arms the cancel, and sliding up more than
+ * [lockDistance] locks it (when the lock is offered); moving more than [touchSlop] before the hold
+ * drags the + when the screen has drop targets.
  *
  * Positions are in one coordinate space of the caller's choosing (root coordinates in the app).
  * [consumes] says whether the pointer events belong to the gesture, so the button must not see them.
@@ -54,6 +58,7 @@ class FabGesture(
     val holdMillis: Long = HOLD_MILLIS,
     private val touchSlop: Float,
     private val cancelDistance: Float,
+    private val lockDistance: Float = cancelDistance,
 ) {
     var phase: FabGesturePhase = FabGesturePhase.IDLE
         private set
@@ -62,18 +67,20 @@ class FabGesture(
     private var downX = 0f
     private var downY = 0f
     private var canDrag = false
+    private var canLock = false
     private var cancelArmed = false
 
     /** Whether the button has to be kept from seeing the pointer (its click must not fire). */
     val consumes: Boolean
         get() = phase == FabGesturePhase.HOLDING || phase == FabGesturePhase.DRAGGING || phase == FabGesturePhase.ENDED
 
-    fun down(atMillis: Long, x: Float, y: Float, canDrag: Boolean) {
+    fun down(atMillis: Long, x: Float, y: Float, canDrag: Boolean, canLock: Boolean = false) {
         phase = FabGesturePhase.PRESSED
         downAt = atMillis
         downX = x
         downY = y
         this.canDrag = canDrag
+        this.canLock = canLock
         cancelArmed = false
     }
 
@@ -103,6 +110,10 @@ class FabGesture(
                 }
             }
             FabGesturePhase.HOLDING -> {
+                if (canLock && isPastLockLine(x, y)) {
+                    phase = FabGesturePhase.ENDED
+                    return FabGestureEvent.Lock
+                }
                 val armed = isPastCancelLine(x, y)
                 if (armed == cancelArmed) return null
                 cancelArmed = armed
@@ -144,6 +155,12 @@ class FabGesture(
     private fun isPastCancelLine(x: Float, y: Float): Boolean {
         val dy = y - downY
         return dy > cancelDistance && dy > abs(x - downX)
+    }
+
+    // Up past the line, and more up than sideways.
+    private fun isPastLockLine(x: Float, y: Float): Boolean {
+        val dy = downY - y
+        return dy > lockDistance && dy > abs(x - downX)
     }
 
     companion object {

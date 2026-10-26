@@ -52,6 +52,9 @@ class PhraseCutter(
     private var speechWindows = 0
     private var silenceRun = 0
 
+    /** In a phrase with at least `min_speech_ms` of speech so far: the person is talking (section 3.7). */
+    val hasSpeech: Boolean get() = inSpeech && speechWindows >= speechWindowsMin
+
     /** One window and its speech probability; returns a finished phrase, or null. */
     fun push(samples: FloatArray, probability: Float): FloatArray? {
         val speech = probability >= settings.threshold
@@ -119,5 +122,41 @@ class PhraseCutter(
             at += p.size
         }
         return out
+    }
+}
+
+/**
+ * Talking and pauses for an open microphone (`docs/ai-assistant-v1.md`, section 3.7), one detector
+ * window at a time, after [PhraseCutter] took it: talking starts once a phrase has `min_speech_ms` of
+ * speech, rests after `min_silence_ms` of silence (so speech after it starts again), and a pause of
+ * [endOfTurnMs] after speech ends the turn. Pure: no clock, no I/O.
+ */
+class TurnWatch(
+    private val settings: VadSettings,
+    endOfTurnMs: Long,
+    sampleRate: Int = 16_000,
+    window: Int = SpeechEngineNative.VAD_WINDOW_SAMPLES,
+) {
+    private val windowMs = window * 1_000 / sampleRate
+    private val pauseWindows = ((endOfTurnMs + windowMs - 1) / windowMs).toInt()
+    private val restWindows = (settings.minSilenceMs + windowMs - 1) / windowMs
+    private var talking = false
+    private var turnOpen = false
+    private var silent = 0
+
+    /** The window with [probability] that [cutter] just took: talking started, the turn paused, or nothing. */
+    fun push(cutter: PhraseCutter, probability: Float): LocalSpeechEvent? {
+        if (probability >= settings.threshold) silent = 0 else silent++
+        if (!talking && cutter.hasSpeech) {
+            talking = true
+            turnOpen = true
+            return LocalSpeechEvent.SpeechStarted
+        }
+        if (talking && silent >= restWindows) talking = false
+        if (turnOpen && silent >= pauseWindows) {
+            turnOpen = false
+            return LocalSpeechEvent.Paused
+        }
+        return null
     }
 }

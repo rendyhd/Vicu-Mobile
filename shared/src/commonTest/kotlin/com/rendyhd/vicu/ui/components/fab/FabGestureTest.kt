@@ -48,6 +48,36 @@ class FabGestureTest {
     }
 
     @Test
+    fun slidingUpPastTheLockLineLocks() {
+        val g = FabGesture(touchSlop = 8f, cancelDistance = 50f, lockDistance = 70f)
+        g.down(0, 100f, 100f, canDrag = false, canLock = true)
+        g.tick(400)
+        assertNull(g.move(500, 100f, 50f))
+        assertEquals(FabGestureEvent.Lock, g.move(600, 100f, 20f))
+        // Smart dictation took over: the rest of the gesture, the lift too, does nothing.
+        assertTrue(g.consumes)
+        assertNull(g.move(650, 100f, 200f))
+        assertNull(g.up(100f, 200f))
+    }
+
+    @Test
+    fun withoutTheLockSlidingUpOnlyHolds() {
+        val g = FabGesture(touchSlop = 8f, cancelDistance = 50f, lockDistance = 70f)
+        g.down(0, 100f, 100f, canDrag = false)
+        g.tick(400)
+        assertNull(g.move(500, 100f, 0f))
+        assertEquals(FabGestureEvent.Release(cancelled = false), g.up(100f, 0f))
+    }
+
+    @Test
+    fun aSidewaysSlideDoesNotLock() {
+        val g = FabGesture(touchSlop = 8f, cancelDistance = 50f, lockDistance = 70f)
+        g.down(0, 100f, 100f, canDrag = false, canLock = true)
+        g.tick(400)
+        assertNull(g.move(500, 200f, 20f))
+    }
+
+    @Test
     fun slidingDownPastTheLineArmsTheCancelAndBackUpDisarmsIt() {
         val g = gesture()
         g.down(0, 100f, 100f, canDrag = false)

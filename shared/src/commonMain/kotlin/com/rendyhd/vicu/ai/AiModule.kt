@@ -7,6 +7,7 @@ import com.rendyhd.vicu.ai.ask.ConversationStore
 import com.rendyhd.vicu.ai.ask.Proposals
 import com.rendyhd.vicu.ai.dictation.DictationContext
 import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.ai.dictation.DraftWriter
 import com.rendyhd.vicu.ai.dictation.KeptTranscriptStore
@@ -25,6 +26,8 @@ import com.rendyhd.vicu.speech.SpeechEngineHost
 import com.rendyhd.vicu.speech.SpeechModelManager
 import com.rendyhd.vicu.util.AppDispatchers
 import com.rendyhd.vicu.util.DayClock
+import com.rendyhd.vicu.ui.screens.ask.AskEntry
+import com.rendyhd.vicu.voice.SelectingSpeechInput
 import com.rendyhd.vicu.voice.TaskDefaults
 import kotlinx.coroutines.flow.first
 import org.koin.dsl.module
@@ -108,6 +111,16 @@ val aiModule = module {
             scope = get(),
         )
     }
+    single {
+        DictationMic(
+            controller = get(),
+            speech = get<SelectingSpeechInput>(),
+            settingsStore = get(),
+            messages = get(),
+            scope = get(),
+        )
+    }
+    single { AskEntry() }
     single<AskBackend> {
         RepositoryAskBackend(
             tasks = get(),

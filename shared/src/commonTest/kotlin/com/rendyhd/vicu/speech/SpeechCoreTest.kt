@@ -63,3 +63,41 @@ class SpeechCoreTest {
         assertNull(cutter.finish())
     }
 }
+
+/** Talking and pauses for the open microphone (section 3.7), from the detector's windows of 32 ms. */
+class TurnWatchTest {
+    private val settings = VadSettings(threshold = 0.5f, minSpeechMs = 250, minSilenceMs = 600, padMs = 200, maxPhraseSeconds = 28)
+    private val window = FloatArray(512)
+
+    /** Runs of voice (true) or quiet (false); the events the watch gave, in order. */
+    private fun watch(vararg runs: Pair<Boolean, Int>): List<LocalSpeechEvent> {
+        val cutter = PhraseCutter(settings)
+        val turns = TurnWatch(settings, endOfTurnMs = 1_000)
+        val out = mutableListOf<LocalSpeechEvent>()
+        for ((speech, n) in runs) repeat(n) {
+            val p = if (speech) 0.9f else 0.1f
+            cutter.push(window, p)
+            turns.push(cutter, p)?.let(out::add)
+        }
+        return out
+    }
+
+    @Test
+    fun talkingStartsAfterMinSpeechAndAPauseEndsTheTurn() {
+        assertEquals(listOf(LocalSpeechEvent.SpeechStarted, LocalSpeechEvent.Paused), watch(true to 20, false to 40))
+    }
+
+    @Test
+    fun aPauseShorterThanTheEndOfTurnKeepsTheTurn() {
+        // 0.8 s of quiet between words: talking rests and starts again, but the turn does not end.
+        assertEquals(
+            listOf(LocalSpeechEvent.SpeechStarted, LocalSpeechEvent.SpeechStarted, LocalSpeechEvent.Paused),
+            watch(true to 20, false to 25, true to 20, false to 40),
+        )
+    }
+
+    @Test
+    fun aShortNoiseIsNotTalking() {
+        assertEquals(emptyList(), watch(true to 3, false to 60))
+    }
+}

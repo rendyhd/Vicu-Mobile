@@ -139,7 +139,8 @@ never sent anywhere unless the user chose a provider's transcription instead.
 - 16 kHz, mono, 16-bit PCM, from one recorder the app owns (on Android, no second recorder or
   system recogniser at the same time).
 - Kept in memory only and discarded once its phrase is transcribed. A recording ends at Done, on
-  release of the held button, or after 600 s.
+  release of the held button, when the microphone is turned off, or after 600 s; with an open
+  microphone (3.7) the 600 s count per turn.
 
 ### 3.2 Phrases
 
@@ -197,12 +198,41 @@ repository and the commit it is pinned to, the languages and the licence.
 - Which model a device suggests depends on its memory and speed; the thresholds are set after the
   Phase 0 measurements. `default_for` in the fixture gives the starting suggestion: `computer`,
   `phone`, or `phone_low_memory`.
+- Whisper always encodes 30 s of audio, however short the phrase; Parakeet encodes only what was
+  said. On a phone's processor that decides it (Pixel 10 Pro, 4 threads, ARMv8.2 build): Whisper
+  large-v3-turbo took 21.7 s for 1.25 s of speech, Parakeet q4 0.22 s for 1.5 s. Phones therefore
+  suggest Parakeet, computers Whisper large-v3-turbo.
 
 ### 3.6 Without a model
 
 No speech model downloaded: the platform recogniser is used as today (Android `SpeechRecognizer`,
 Apple `SFSpeechRecognizer` or `SpeechTranscriber`, Windows `System.Speech`); Linux has none. With
 a provider's transcription chosen instead, the recording is sent whole to that provider at Done.
+
+### 3.7 Open microphone
+
+Smart dictation once locked (section 4) and Talk (section 6) keep the microphone on instead of
+listening only while a button is held. The microphone button turns it on and off.
+
+- **Turns.** What the person says comes in turns. With local speech a turn ends at a pause of
+  `speech.turn.end_of_turn_ms` after speech, once the phrases before the pause are transcribed.
+  With the platform recogniser (3.6) a turn ends when the recogniser ends its utterance, or when
+  its words have not changed for `end_of_turn_ms`. A turn's words are sent at once.
+- **Interrupting.** When the person talks again (local speech: `speech.vad.min_speech_ms` of
+  speech; platform recogniser: the first words) while the request sent for the previous turn has
+  not finished, that request is cancelled and nothing of it is kept; its words and the new ones go
+  out together at the end of the new turn. An answer that has finished stays. While a card waits
+  for the person (5.4), talking is the answer to it (6.1), not an interruption.
+- **Answers read aloud.** The microphone pauses while the device reads an answer, because it would
+  hear the device's own voice, and listens again when the voice ends. Pressing the microphone
+  button stops the voice and listens at once. An app may keep listening while the voice plays
+  through headphones, where the microphone cannot hear it, and stop the voice when the person
+  talks.
+- **Off.** The microphone turns off after `speech.turn.idle_s` without speech, when the person
+  turns it off, and when the app goes to the background (phones). A turn whose speech gave no
+  words sends nothing, unless it carries the words of an interrupted request.
+
+The values in the fixture are starting values.
 
 ---
 
@@ -211,6 +241,17 @@ a provider's transcription chosen instead, the recording is sent whole to that p
 The user rambles; the model turns the transcript into draft tasks; Vicu checks them and shows
 cards; Add creates them. The same request serves text from outside (Make tasks from this) and a
 task's notes (Break into steps, where the answer's tasks become subtasks of that task).
+
+Voice has two ways in, and both stay available:
+
+- **Quick capture**: hold + and let go (desktop: also the voice shortcut held, or Say a task). The
+  words go to the quick-add parser as one task and are added at once, with Undo, as before the
+  assistant. No model is involved, whether or not smart dictation is on.
+- **Smart dictation**: hold + and slide up to the lock (desktop: slide up from a held +, or tap the
+  voice shortcut to latch it instead of holding it). The microphone stays on (3.7) until Done. The
+  first turn is a dictation request (4.1); each later turn is an edit (4.4) with the drafts so
+  far, so cards appear and change while the person talks. The lock is offered only when smart
+  dictation is on and ready.
 
 ### 4.1 Request
 
@@ -336,15 +377,15 @@ A checked draft has `ref`, `title`, `notes`, `due` (`YYYY-MM-DDTHH:mm:ss` or `nu
 
 ### 4.4 Editing by voice
 
-With the cards on screen, holding the microphone again records an instruction ("make the first
-one Friday", "drop the dry cleaning"):
+With the cards on screen, each turn of the open microphone (3.7) is an edit: an instruction ("make
+the first one Friday", "drop the dry cleaning"), more tasks ("and call mum tomorrow"), or both:
 
 - System: the `dictation` prompt, a blank line, then the `dictationEdit` prompt. User message: the
   context block, then `<drafts>` with the current drafts in the model's own answer shape (after
   the checks, with any edits the user made by hand, labels as names, the due date back as `when`
   with `said` `null`, `time` `null` for a date-only due date, `unsure` empty), written as
   `{"tasks": [...]}` with each task's keys in the schema's order, then `<transcript>` with the
-  instruction. Each block's tag is on a line of its own, and the blocks are joined with line
+  turn's words. Each block's tag is on a line of its own, and the blocks are joined with line
   breaks.
 - The answer is the full list again. Drafts keep their `ref`; the model gives a new draft a new
   `ref`. The checks run again; fields whose value changed are highlighted on the card, a `ref` no
@@ -361,8 +402,8 @@ one Friday", "drop the dry cleaning"):
 ### 4.6 Failures
 
 - The transcript exists on the device whether or not the model answers.
-- No provider set up: the transcript goes to the quick-add parser as one task, as dictation does
-  today.
+- No provider set up, or smart dictation off: the lock is not offered, and voice is quick capture
+  (section 4).
 - A failed request (no connection, an error answer, a timeout, a second invalid answer): the
   transcript is kept on the card with **Retry** and **Add as one task** (through the quick-add
   parser). A kept transcript survives the app closing until it is added or discarded.
@@ -485,8 +526,10 @@ links are fetched), and every change shows its actual values on a card before it
 
 ## 6. Talk
 
-Talk is Ask by voice: push to talk, local speech (section 3), the Ask conversation with the `talk`
-prompt added, and the answer spoken by the device voice (or the provider's, if chosen).
+Talk is Ask by voice: an open microphone (3.7) turned on with Ask's microphone button, local speech
+(section 3), the Ask conversation with the `talk` prompt added, and the answer spoken by the device
+voice (or the provider's, if chosen). Each turn is sent as the next message, and the person can
+keep talking without pressing anything in between.
 
 ### 6.1 Spoken confirmation
 
@@ -539,3 +582,5 @@ agreement; a local server (Ollama or Open WebUI at a local address) skips it.
 - Prompts are stored as lists of lines; apps join them with `\n` and send the text exactly.
 - A schema or tool change that a model could notice is a prompt change too: the `version` of the
   prompts that use it goes up.
+- `dictationEdit` 2 lets a later turn add tasks as well as change them; `ask` 2 and `talk` 2 ask
+  for shorter answers (the answer first, at most three bullets in Ask, one sentence in Talk).

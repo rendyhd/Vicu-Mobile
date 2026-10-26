@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -46,36 +46,43 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ai.dictation.DictationMic
+import com.rendyhd.vicu.ai.dictation.DictationMicUi
 import com.rendyhd.vicu.ai.dictation.DictationPhase
 import com.rendyhd.vicu.ai.dictation.DictationUi
 import com.rendyhd.vicu.ui.components.assistant.DraftCard
 import com.rendyhd.vicu.ui.components.assistant.droppedText
 import com.rendyhd.vicu.ui.components.shared.LocalDateFormat
-import com.rendyhd.vicu.voice.HoldToTalk
 import org.koin.compose.koinInject
 
 /**
- * Smart dictation's draft cards over the screens (`docs/ai-assistant-v1.md`, sections 4.4 to 4.6):
- * the model at work, the drafts to check and change (by hand or by holding the microphone again),
- * Add with one Undo, and Retry or Add as one task when the model failed.
+ * Smart dictation's draft cards over the screens (`docs/ai-assistant-v1.md`, sections 3.7 and 4.4 to
+ * 4.6): the microphone that stays on while the cards appear and change, the model at work, the drafts
+ * to check and change (by hand or by saying what to change), Add with one Undo, and Retry or Add as
+ * one task when the model failed.
  */
 @Composable
 fun DictationSheet(
     controller: DictationController = koinInject(),
-    holdToTalk: HoldToTalk = koinInject(),
+    mic: DictationMic = koinInject(),
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
     val ui = state
+    // The microphone never stays on behind another app.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { mic.off() }
     AnimatedVisibility(visible = ui != null, enter = fadeIn(), exit = fadeOut()) {
         if (ui == null) return@AnimatedVisibility
         NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = true) {
@@ -92,10 +99,11 @@ fun DictationSheet(
                 tonalElevation = 2.dp,
                 modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().fillMaxHeight(0.92f).statusBarsPadding(),
             ) {
+                val micUi by mic.state.collectAsStateWithLifecycle()
                 Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
                     Header(ui, onClose = controller::discard)
-                    Box(Modifier.weight(1f)) { Body(ui, controller) }
-                    Footer(ui, controller, holdToTalk)
+                    Box(Modifier.weight(1f)) { Body(ui, micUi, controller) }
+                    Footer(ui, micUi, controller, mic)
                 }
             }
         }
@@ -110,6 +118,7 @@ private fun Header(ui: DictationUi, onClose: () -> Unit) {
             Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Text(
                 when (ui.phase) {
+                    DictationPhase.LISTENING -> "Say your tasks"
                     DictationPhase.THINKING -> "Making tasks"
                     DictationPhase.REVIEW -> if (ui.drafts.size == 1) "1 task to check" else "${ui.drafts.size} tasks to check"
                     DictationPhase.FAILED -> "Not turned into tasks"
@@ -122,7 +131,7 @@ private fun Header(ui: DictationUi, onClose: () -> Unit) {
                 Icon(Icons.Outlined.Close, contentDescription = "Discard")
             }
         }
-        Text(
+        if (ui.transcript.isNotBlank()) Text(
             "“" + ui.transcript + "”",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -135,8 +144,25 @@ private fun Header(ui: DictationUi, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Body(ui: DictationUi, controller: DictationController) {
+private fun Body(ui: DictationUi, micUi: DictationMicUi, controller: DictationController) {
     when (ui.phase) {
+        DictationPhase.LISTENING -> Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Outlined.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+            Text(
+                if (micUi.on || micUi.starting) {
+                    "Keep talking. Pause, and your tasks appear here as cards."
+                } else {
+                    "Turn on the microphone and say your tasks."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
         DictationPhase.THINKING -> Column(
             Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -189,7 +215,7 @@ private fun Body(ui: DictationUi, controller: DictationController) {
             }
             item(key = "legend") {
                 Text(
-                    "A dashed outline marks what Vicu guessed. Tap a chip to change it, or hold the microphone and say what to change.",
+                    "A dashed outline marks what Vicu guessed. Tap a chip to change it, or say what to change or what to add.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
@@ -200,39 +226,25 @@ private fun Body(ui: DictationUi, controller: DictationController) {
 }
 
 @Composable
-private fun Footer(ui: DictationUi, controller: DictationController, holdToTalk: HoldToTalk) {
+private fun Footer(ui: DictationUi, micUi: DictationMicUi, controller: DictationController, mic: DictationMic) {
     val format = LocalDateFormat.current
-    val voice by holdToTalk.state.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        voice?.let { capture ->
+        if (micUi.on || micUi.starting) {
             Text(
-                if (capture.text.isBlank()) "Listening. Say what to change." else capture.text,
+                micUi.words.ifBlank { "Listening…" },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MicToggle(micUi, onToggle = mic::toggle)
             when (ui.phase) {
+                DictationPhase.LISTENING -> {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = controller::discard) { Text("Discard") }
+                }
                 DictationPhase.REVIEW -> {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = if (voice != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(48.dp)
-                            .semantics { contentDescription = "Hold and say what to change" }
-                            .pointerInput(ui.editing) {
-                                if (ui.editing) return@pointerInput
-                                detectTapGestures(
-                                    onPress = {
-                                        holdToTalk.begin(format, handsFree = false, defaults = ui.defaults)
-                                        tryAwaitRelease()
-                                        holdToTalk.release()
-                                    },
-                                )
-                            },
-                    ) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Mic, contentDescription = null) }
-                    }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = controller::discard, enabled = !ui.adding) { Text("Discard") }
                     Button(onClick = controller::add, enabled = ui.drafts.isNotEmpty() && !ui.adding && !ui.editing) {
@@ -250,6 +262,25 @@ private fun Footer(ui: DictationUi, controller: DictationController, holdToTalk:
                     TextButton(onClick = controller::discard) { Text("Cancel") }
                 }
             }
+        }
+    }
+}
+
+/** The microphone that stays on (section 3.7): a tap turns it on or off. */
+@Composable
+private fun MicToggle(micUi: DictationMicUi, onToggle: () -> Unit) {
+    val on = micUi.on || micUi.starting
+    Surface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(50),
+        color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(48.dp).semantics {
+            contentDescription = if (on) "Microphone on. Tap to stop listening" else "Microphone off. Tap to keep talking"
+        },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(if (on) Icons.Outlined.Mic else Icons.Outlined.MicOff, contentDescription = null)
         }
     }
 }

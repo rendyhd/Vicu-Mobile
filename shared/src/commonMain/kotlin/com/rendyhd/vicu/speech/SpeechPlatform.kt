@@ -69,6 +69,12 @@ interface AudioRecorder {
 interface SpeechOutput {
     val isAvailable: Boolean
 
+    /**
+     * The voice plays through headphones, where the microphone cannot hear it: Talk keeps listening
+     * while it speaks (section 3.7).
+     */
+    val playsPrivately: Boolean get() = false
+
     /** Speaks [text] in [languageTag] (BCP 47, null for the device language); [onDone] when finished or stopped. */
     fun speak(text: String, languageTag: String?, onDone: () -> Unit)
 

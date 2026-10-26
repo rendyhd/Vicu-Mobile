@@ -14,6 +14,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import com.rendyhd.vicu.ui.components.shared.LocalOpenAsk
 import com.rendyhd.vicu.ui.screens.anytime.AnytimeScreen
 import com.rendyhd.vicu.ui.screens.customlist.CustomListScreen
 import com.rendyhd.vicu.ui.screens.inbox.InboxScreen
@@ -23,12 +24,14 @@ import com.rendyhd.vicu.ui.screens.review.ReviewScreen
 import com.rendyhd.vicu.ui.screens.routines.RoutinesScreen
 import com.rendyhd.vicu.ui.screens.search.SearchScreen
 import com.rendyhd.vicu.ui.screens.settings.SettingsScreen
+import com.rendyhd.vicu.ui.screens.ask.AskEntry
 import com.rendyhd.vicu.ui.screens.ask.AskScreen
 import com.rendyhd.vicu.ui.screens.setup.SetupScreen
 import com.rendyhd.vicu.ui.screens.tag.TagScreen
 import com.rendyhd.vicu.ui.screens.today.TodayScreen
 import com.rendyhd.vicu.ui.screens.upcoming.UpcomingScreen
 import com.rendyhd.vicu.permission.NotificationPermissionCoordinator
+import com.rendyhd.vicu.voice.TaskDefaults
 import org.koin.compose.koinInject
 
 @Composable
@@ -189,8 +192,14 @@ fun AppNavHost(
             )
         }
         screen<SettingsRoute>(reveal) {
+            val askEntry: AskEntry = koinInject()
+            val openAsk = LocalOpenAsk.current
             SettingsScreen(
                 onOpenDrawer = onOpenDrawer,
+                onOpenAsk = { talk ->
+                    askEntry.startTalking = talk
+                    openAsk?.invoke(TaskDefaults(listName = "Inbox"))
+                },
             )
         }
         screen<AskRoute>(reveal) {

@@ -37,11 +37,13 @@ adds the task through `TextTaskCreator` and says what was added on the app snack
 (which deletes the task). The task goes to the list the + was held in, as that list's quick add
 would put it (`TaskDefaults`, handed over by the screen's `ScreenFab`): a project screen's project,
 the Inbox, a custom list's "add to" project, today's date on Today; Upcoming, Anytime and a tag add
-to the Inbox, undated. A project or date in the words wins. The list's project and date show as
+to the Inbox, undated (their names still go to the assistant as the list you are in). A project or date in the words wins. The list's project and date show as
 pills before anything is said. Routines' + adds a routine, so holding it does not listen.
 
 Sliding the finger down by more than 56 dp arms the cancel ("Let go to cancel"); letting go there
-adds nothing. A pause while still holding does not end the task:
+adds nothing. With smart dictation ready, sliding up by more than 72 dp locks it (a lock above an
+arrow on the card shows where): smart dictation takes over and keeps listening (see "With the
+assistant"); the card goes, and the words said so far become its first. A pause while still holding does not end the task:
 Android's recognizer ends an utterance at a pause, and the next one is joined to it. After the
 finger lifts the app waits up to 1.5 s for the recognizer's last words, then adds what it has.
 
@@ -56,7 +58,8 @@ After the fifth task added through the + button's quick add, a hint above the bu
 to say a task", once (`FabHint`, `FabHintStore`); not at all once a task was added by voice.
 
 A screen reader keeps the tap and gets "Say a task" as a custom action: the card listens without a
-hold and has Done (or Add) and Cancel; back closes it. Dragging only saves taps, so it has no
+hold and has Done (or Add) and Cancel, and Keep talking when smart dictation is ready (the lock);
+back closes it. Dragging only saves taps, so it has no
 action. With reduced motion (Android animations off, iOS Reduce Motion) the card and hint only
 fade, and the microphone's ring brightens with the voice instead of growing.
 
@@ -100,14 +103,30 @@ A place phrase works here too: "call mom when I get home" sets the location remi
 
 ## With the assistant
 
-With smart dictation on (Settings, Assistant; `docs/ai-assistant-v1.md`), letting go of + sends
-the words to the user's own model instead of adding one task: it turns a ramble into several
-draft tasks (`DictationSheet`), checked against the same parser and fields as quick add, to
-change by hand or by holding the microphone again ("make the first one Friday") before Add. When
-the model cannot be reached the words wait on the card with Retry and Add as one task, which is
-the path above. With a speech model chosen there (Whisper or Parakeet through whisper.cpp), the
-words are recognised on the phone (`SelectingSpeechInput`, `LocalSpeechSession`) instead of by
-the system recognizer, and the card waits for the last phrase after the finger lifts.
+Holding + and letting go is always quick capture, the path above, with no model: fast, one task.
+With smart dictation on (Settings, Assistant; `docs/ai-assistant-v1.md`, sections 3.7 and 4),
+sliding up to the lock opens the draft sheet (`DictationSheet`) with the microphone on
+(`DictationMic`): each pause sends what was said to the user's own model, the first time as a
+dictation and after that as an edit of the drafts, so the cards appear and change while the
+person keeps talking ("and call mum tomorrow", "make the first one Friday"). Talking again while
+the model works cancels that request; its words go out with the next ones. The microphone button
+on the sheet turns it off and on; Add adds the drafts, checked against the same parser and fields
+as quick add. When the model cannot be reached the words wait on the card with Retry and Add as
+one task, which is the path above. Settings, Assistant has Try it, which opens the same sheet.
+
+With a speech model, recording starts at once while the model loads (seconds the first time; the
+phrases wait for it), and after the finger lifts the card shows "Turning your words into text…" with
+Cancel while the last phrases are transcribed. The debug app logs how long the model took to load
+and each phrase took (`LocalSpeech`), to judge a model on a phone.
+
+The open microphone (`OpenMic`, from `SelectingSpeechInput.openMic`) ends a turn at a pause of
+`speech.turn.end_of_turn_ms` (1 s) and turns itself off after `idle_s` (60 s) without speech, or
+when the app goes to the background. With a speech model chosen (Whisper or Parakeet through
+whisper.cpp) the words are recognised on the phone and the voice detector finds the pauses
+(`LocalSpeechSession` with its events, `TurnWatch`, `LocalTurns`); otherwise the system
+recognizer listens an utterance at a time, and words that stop changing for 1 s end it
+(`PlatformOpenMic`). `TurnSender` decides what goes out and when talking cancels a request.
+Tests: `OpenMicTest`, `TurnWatchTest`.
 
 ## For later
 

@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.voice
 
+import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.AiSettings
 import com.rendyhd.vicu.ai.AiSettingsStore
 import com.rendyhd.vicu.speech.AudioRecorder
@@ -8,6 +9,7 @@ import com.rendyhd.vicu.speech.MicrophoneAccess
 import com.rendyhd.vicu.speech.SpeechEngineHost
 import com.rendyhd.vicu.speech.SpeechModelManager
 import com.rendyhd.vicu.speech.SpeechModelSpec
+import com.rendyhd.vicu.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +63,7 @@ class SelectingSpeechInput(
         stopped = false
         val spec = localModel()
         usingLocal = spec != null
+        Logger.d(TAG, "listening with ${spec?.id ?: "the platform recognizer"} (chosen: ${settings.value.speechModelId})")
         if (spec == null) {
             platform.start(listener)
             return
@@ -115,6 +118,19 @@ class SelectingSpeechInput(
         watcher?.cancel()
     }
 
+    /**
+     * A microphone that stays on and reports turns (section 3.7): local speech with the voice
+     * detector when a model is chosen, else the platform recognizer an utterance at a time. Check
+     * [availability] first.
+     */
+    fun openMic(listener: TurnListener, turns: TurnSettings = TurnSettings.fromContract()): OpenMic {
+        val spec = localModel() ?: return PlatformOpenMic(platform, scope, turns, listener).also { it.start() }
+        val language = settings.value.speechLanguage
+        return LocalOpenMic(scope, turns, listener, AiContract.limits.audioMaxSeconds) {
+            LocalSpeechSession(host, recorder, scope, models.pathOf(spec), spec, language, hint(), turns.endOfTurnMs)
+        }.also { it.start() }
+    }
+
     override fun openSystemSpeech(): Boolean = platform.openSystemSpeech()
 
     override fun openSettings() = platform.openSettings()
@@ -130,5 +146,6 @@ class SelectingSpeechInput(
     private companion object {
         /** Transcribing the last phrases after the finger lifts can take a while on a phone. */
         const val LOCAL_FINAL_WAIT_MS = 180_000L
+        const val TAG = "SelectingSpeech"
     }
 }

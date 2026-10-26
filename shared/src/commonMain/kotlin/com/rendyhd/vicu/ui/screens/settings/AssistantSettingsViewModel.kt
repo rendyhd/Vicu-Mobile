@@ -94,11 +94,13 @@ class AssistantSettingsViewModel(
                 if (it.providerId == id) {
                     it
                 } else {
+                    // One model to start with: the quicker suggestion, for Ask too (Ask's own is a choice).
+                    val model = preset.suggestedDictation ?: preset.suggestedAsk ?: ""
                     it.copy(
                         providerId = id,
                         address = preset.address ?: "",
-                        dictationModel = preset.suggestedDictation ?: "",
-                        askModel = preset.suggestedAsk ?: "",
+                        dictationModel = model,
+                        askModel = model,
                         dictationOn = false,
                         askOn = false,
                         talkOn = false,
@@ -121,15 +123,41 @@ class AssistantSettingsViewModel(
             keys.setKey(id, key.trim().ifEmpty { null })
             local.update { it.copy(test = null, message = if (key.isBlank()) "Key removed" else "Key saved on this device") }
             refreshKey()
+            testNewModels()
         }
     }
 
     fun setDictationModel(model: String) {
-        viewModelScope.launch { store.update { it.copy(dictationModel = model.trim()) } }
+        viewModelScope.launch {
+            store.update { it.copy(dictationModel = model.trim()) }
+            testNewModels()
+        }
+    }
+
+    /** The one model: dictation's, and Ask's too unless Ask has its own ([askToo] false). */
+    fun setModel(model: String, askToo: Boolean) {
+        viewModelScope.launch {
+            store.update { it.copy(dictationModel = model.trim(), askModel = if (askToo) model.trim() else it.askModel) }
+            testNewModels()
+        }
     }
 
     fun setAskModel(model: String) {
-        viewModelScope.launch { store.update { it.copy(askModel = model.trim()) } }
+        viewModelScope.launch {
+            store.update { it.copy(askModel = model.trim()) }
+            testNewModels()
+        }
+    }
+
+    /**
+     * A model chosen or a key saved: models not tested yet are tested at once, so the features work
+     * (and Ask shows next to Search) without pressing Test connection.
+     */
+    private suspend fun testNewModels() {
+        val s = store.current()
+        val preset = s.providerId?.let { AiContract.provider(it) } ?: return
+        if (!s.isSetUp || (preset.keyRequired && !local.value.hasKey)) return
+        if (listOf(s.dictationModel, s.askModel).any { it.isNotBlank() && s.capabilities(it) == null }) test()
     }
 
     fun loadModels() {
@@ -198,13 +226,24 @@ class AssistantSettingsViewModel(
     }
 
     private suspend fun apply(feature: AssistantFeature, on: Boolean) {
+        val before = store.current()
+        val model = if (feature == AssistantFeature.DICTATION) before.dictationModel else before.askModel
+        // Not tested yet: test it now rather than asking the user to.
+        if (on && model.isNotBlank() && before.capabilities(model) == null) {
+            test()
+            testJob?.join()
+        }
         val s = store.current()
+        // The test's own words say best why it failed (no key, no connection, a refused request).
+        val why = local.value.test?.problems?.firstOrNull()
         val problem = when {
             !on -> null
-            feature == AssistantFeature.DICTATION && s.capabilities(s.dictationModel)?.structured == null ->
-                "Test connection first: the dictation model must give a structured answer."
-            feature != AssistantFeature.DICTATION && s.capabilities(s.askModel)?.tools != true ->
-                "Test connection first: the Ask model must call tools."
+            model.isBlank() -> "Choose a model first."
+            s.capabilities(model) == null -> why ?: "The model could not be tested. Check the key and the connection."
+            feature == AssistantFeature.DICTATION && s.capabilities(model)?.structured == null ->
+                why ?: "This model did not give a structured answer in the test, which dictation needs. Choose another model."
+            feature != AssistantFeature.DICTATION && s.capabilities(model)?.tools != true ->
+                why ?: "This model did not call a tool in the test, which Ask needs. Choose another model."
             else -> null
         }
         if (problem != null) {

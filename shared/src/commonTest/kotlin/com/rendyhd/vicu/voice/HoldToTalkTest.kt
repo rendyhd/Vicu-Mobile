@@ -61,8 +61,10 @@ class HoldToTalkTest {
     private val addedDefaults = mutableListOf<TaskDefaults>()
     private var undone = 0
     private var voiceUsed = 0
+    private val lockedFor = mutableListOf<TaskDefaults>()
+    private val lockedWords = mutableListOf<String>()
 
-    private fun TestScope.session(addFails: Boolean = false) = HoldToTalk(
+    private fun TestScope.session(addFails: Boolean = false, canLock: Boolean = false) = HoldToTalk(
         speech = speech,
         messages = messages,
         scope = this,
@@ -72,6 +74,9 @@ class HoldToTalkTest {
             if (addFails) VoiceAddResult("Sign in to Vicu first.") else VoiceAddResult("Added “$text”") { undone++ }
         },
         onVoiceAdded = { voiceUsed++ },
+        canLock = { canLock },
+        onLock = { lockedFor += it },
+        onLockedWords = { lockedWords += it },
     )
 
     private suspend fun nextMessage(): AppMessage? = withTimeoutOrNull(1) { messages.messages.first() }
@@ -102,6 +107,46 @@ class HoldToTalkTest {
         advanceUntilIdle()
         assertEquals(1, undone)
         assertEquals(1, voiceUsed)
+    }
+
+    @Test
+    fun theLockHandsTheWordsToSmartDictationAndAddsNothing() = runTest {
+        val voice = session(canLock = true)
+        val work = TaskDefaults(projectId = 2, listName = "Work")
+        voice.begin(format, defaults = work)
+        assertTrue(voice.lockOffered())
+        assertEquals(true, voice.state.value?.canLock)
+        speech.listener!!.onPartial("buy milk")
+        voice.lock()
+        // Smart dictation opens at once; the card is gone while the last words come.
+        assertEquals(listOf(work), lockedFor)
+        assertEquals(true, voice.state.value?.locked)
+        assertEquals(1, speech.stops)
+        speech.final("buy milk and eggs")
+        advanceUntilIdle()
+        assertNull(voice.state.value)
+        assertEquals(listOf("buy milk and eggs"), lockedWords)
+        assertEquals(emptyList(), added)
+        assertNull(nextMessage())
+    }
+
+    @Test
+    fun withoutSmartDictationThereIsNoLock() = runTest {
+        val voice = session(canLock = false)
+        voice.begin(format)
+        voice.lock()
+        assertEquals(emptyList(), lockedFor)
+        assertEquals(false, voice.state.value?.locked)
+    }
+
+    @Test
+    fun cancellingWhileLockedStillLetsDictationListen() = runTest {
+        val voice = session(canLock = true)
+        voice.begin(format)
+        voice.lock()
+        voice.cancel()
+        assertEquals(listOf(""), lockedWords)
+        assertNull(voice.state.value)
     }
 
     @Test

@@ -56,9 +56,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.AiSettings
+import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.speech.ModelFileState
 import com.rendyhd.vicu.speech.SpeechModelSpec
 import com.rendyhd.vicu.util.formatByteSize
+import org.koin.compose.koinInject
 
 /** The languages offered for local speech (Whisper's codes); `auto` detects per phrase. */
 internal val SPEECH_LANGUAGES: List<Pair<String, String>> = listOf(
@@ -71,17 +73,24 @@ internal val SPEECH_LANGUAGES: List<Pair<String, String>> = listOf(
 )
 
 /**
- * Settings, Assistant: the model provider the user brings, the features, local speech and what is
- * sent (`docs/ai-assistant-v1.md`). Everything is off until a provider is set up and tested.
+ * Settings, Assistant: Thinking (the model provider the user brings and its model), the features with
+ * where to find them, Hearing (local speech) and what is sent (`docs/ai-assistant-v1.md`). Everything
+ * is off until a provider is set up and tested.
  */
 @Composable
 internal fun AssistantTab(
     state: AssistantUiState,
     viewModel: AssistantSettingsViewModel,
     listState: LazyListState,
+    onOpenAsk: (talk: Boolean) -> Unit = {},
+    smartDictation: DictationMic = koinInject(),
 ) {
     val settings = state.settings
     val preset = settings.providerId?.let { AiContract.provider(it) }
+    // One model by default; Ask gets its own only when asked for (or when it has one already).
+    var ownAskModel by rememberSaveable { mutableStateOf(false) }
+    val askDiffers = settings.askModel.isNotBlank() && settings.askModel != settings.dictationModel
+    val separateAsk = ownAskModel || askDiffers
     var providerPicker by rememberSaveable { mutableStateOf(false) }
     var languagePicker by rememberSaveable { mutableStateOf(false) }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
@@ -98,8 +107,16 @@ internal fun AssistantTab(
             )
         }
 
-        // --- Provider ---
-        item(key = "provider_header") { SectionHeader(Icons.Outlined.AutoAwesome, "Model provider") }
+        // --- Thinking: the provider and its model ---
+        item(key = "provider_header") { SectionHeader(Icons.Outlined.AutoAwesome, "Thinking") }
+        item(key = "thinking_intro") {
+            Text(
+                "The model that turns what you say into tasks and answers your questions. It runs at your provider, with your key.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         item(key = "provider") {
             SettingsValueRow("Provider", preset?.name ?: "None", onClick = { providerPicker = true })
         }
@@ -136,13 +153,26 @@ internal fun AssistantTab(
                 )
             }
 
-            // --- Models ---
-            item(key = "models_header") { SubsectionHeading("Models") }
-            item(key = "model_dictation") {
-                ModelField("Dictation model", settings.dictationModel, state.models, viewModel::setDictationModel)
+            // --- Model ---
+            item(key = "models_header") { SubsectionHeading("Model") }
+            item(key = "model_main") {
+                ModelField("Model", settings.dictationModel, state.models) { viewModel.setModel(it, askToo = !separateAsk) }
             }
-            item(key = "model_ask") {
-                ModelField("Ask model", settings.askModel, state.models, viewModel::setAskModel)
+            item(key = "model_separate") {
+                SwitchRow(
+                    label = "Use a different model for Ask",
+                    description = "For example a fast one for dictation and a larger one for questions.",
+                    checked = separateAsk,
+                    onCheckedChange = { on ->
+                        ownAskModel = on
+                        if (!on) viewModel.setAskModel(settings.dictationModel)
+                    },
+                )
+            }
+            if (separateAsk) {
+                item(key = "model_ask") {
+                    ModelField("Ask model", settings.askModel, state.models, viewModel::setAskModel)
+                }
             }
             item(key = "model_actions") {
                 Row(
@@ -165,28 +195,33 @@ internal fun AssistantTab(
             item(key = "dictation") {
                 SwitchRow(
                     label = "Smart dictation",
-                    description = "Hold + and talk freely: the model turns what you said into separate tasks with dates, " +
-                        "projects and labels, for you to check before adding.",
+                    description = "Hold +, slide up to the lock and keep talking: your tasks appear as cards while you talk, " +
+                        "with dates, projects and labels, for you to check before adding. Holding + and letting go still " +
+                        "adds one task at once. Also Break into steps in a task's menu, and Make tasks when you share text to Vicu.",
                     checked = settings.dictationOn,
                     onCheckedChange = { viewModel.setFeature(AssistantFeature.DICTATION, it) },
                 )
+                TryIt(enabled = settings.dictationReady, onClick = smartDictation::tryIt)
             }
             item(key = "ask") {
                 SwitchRow(
                     label = "Ask",
-                    description = "Chat with your tasks from the menu. The model looks things up and proposes changes; " +
-                        "nothing changes until you apply it.",
+                    description = "Tap the sparkle next to Search on any list, or Ask in the menu, and ask about your tasks. " +
+                        "Changes come as cards; nothing changes until you apply one.",
                     checked = settings.askOn,
                     onCheckedChange = { viewModel.setFeature(AssistantFeature.ASK, it) },
                 )
+                TryIt(enabled = settings.askReady, onClick = { onOpenAsk(false) })
             }
             item(key = "talk") {
                 SwitchRow(
                     label = "Talk",
-                    description = "Ask by voice: hold the microphone in Ask, and hear the answer.",
+                    description = "Ask by voice: tap the microphone in Ask and just talk. A pause sends it, the answer is " +
+                        "read aloud, and it keeps listening; talk again to interrupt.",
                     checked = settings.talkOn,
                     onCheckedChange = { viewModel.setFeature(AssistantFeature.TALK, it) },
                 )
+                TryIt(enabled = settings.talkReady, onClick = { onOpenAsk(true) })
             }
             if (settings.talkOn) {
                 item(key = "speak") {
@@ -200,13 +235,14 @@ internal fun AssistantTab(
             }
         }
 
-        // --- Speech ---
-        item(key = "speech_header") { SectionHeader(Icons.Outlined.GraphicEq, "Speech recognition") }
+        // --- Hearing: speech to text on the device ---
+        item(key = "speech_header") { SectionHeader(Icons.Outlined.GraphicEq, "Hearing") }
         item(key = "speech_intro") {
             Text(
                 if (state.localSpeechAvailable) {
-                    "With a speech model on this phone, what you say is turned into text here, and audio never leaves " +
-                        "the device. Without one, the system's speech recognition is used."
+                    "Turns your voice into text on this phone, before anything goes to the model; audio never leaves the " +
+                        "device. Download a speech model for better accuracy with your project and label names; without one, " +
+                        "the system's speech recognition is used."
                 } else {
                     "Local speech is not available on this device; the system's speech recognition is used."
                 },
@@ -559,3 +595,10 @@ internal fun AssistantMessages(state: AssistantUiState, viewModel: AssistantSett
 
 @Suppress("unused")
 private fun Modifier.clickableRow(onClick: () -> Unit) = clickable(onClick = onClick)
+
+/** Opens a feature to try it, once it is set up and switched on. */
+@Composable
+private fun TryIt(enabled: Boolean, onClick: () -> Unit) {
+    if (!enabled) return
+    TextButton(onClick = onClick, modifier = Modifier.padding(start = 8.dp)) { Text("Try it") }
+}

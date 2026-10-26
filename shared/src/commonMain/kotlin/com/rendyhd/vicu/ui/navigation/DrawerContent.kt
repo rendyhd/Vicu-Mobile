@@ -296,6 +296,24 @@ fun DrawerContent(
                     }
                 }
 
+                // Ask, with the smart lists: with many projects it got lost at the bottom.
+                if (showAsk) {
+                    item(key = "ask", contentType = "smart") {
+                        NavigationDrawerItem(
+                            label = { Text("Ask") },
+                            icon = {
+                                Icon(
+                                    Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            selected = currentRoute == "AskRoute",
+                            onClick = { onNavigate(AskRoute) },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                        )
+                    }
+                }
                 // Projects section
                 item(key = "divider_projects", contentType = "divider") {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -503,23 +521,6 @@ fun DrawerContent(
                 // Settings
                 item(key = "divider_settings", contentType = "divider") {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-                if (showAsk) {
-                    item(key = "ask", contentType = "smart") {
-                        NavigationDrawerItem(
-                            label = { Text("Ask") },
-                            icon = {
-                                Icon(
-                                    Icons.Outlined.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            selected = currentRoute == "AskRoute",
-                            onClick = { onNavigate(AskRoute) },
-                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                        )
-                    }
                 }
                 item(key = "settings", contentType = "smart") {
                     NavigationDrawerItem(

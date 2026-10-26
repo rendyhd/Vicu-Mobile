@@ -2,7 +2,6 @@ package com.rendyhd.vicu.ui.screens.ask
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +25,8 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,7 +34,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -45,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,11 +52,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.ask.AskSession
@@ -91,6 +93,10 @@ fun AskScreen(
     val session = state.session
     val ready = state.settings.askReady
     var historyOpen by remember { mutableStateOf(false) }
+    // The microphone never stays on behind another app or screen.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.micOff() }
+    DisposableEffect(viewModel) { onDispose { viewModel.micOff() } }
+    LaunchedEffect(viewModel) { viewModel.startTalkingIfAsked() }
 
     Scaffold(
         topBar = {
@@ -98,11 +104,6 @@ fun AskScreen(
                 title = { Text(if (state.talkMode) "Talk" else "Ask") },
                 onOpenDrawer = onOpenDrawer,
                 extraActions = {
-                    if (state.settings.talkReady) {
-                        IconToggleButton(checked = state.talkMode, onCheckedChange = viewModel::setTalkMode) {
-                            Icon(Icons.Outlined.RecordVoiceOver, contentDescription = if (state.talkMode) "Talk on: answers are spoken" else "Talk off")
-                        }
-                    }
                     Box {
                         IconButton(onClick = { historyOpen = true }, enabled = state.history.isNotEmpty()) {
                             Icon(Icons.Outlined.History, contentDescription = "Earlier conversations")
@@ -156,7 +157,7 @@ private fun NotSetUp(onOpenSettings: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun Conversation(state: AskUiState, viewModel: AskViewModel, onTaskClick: (Long) -> Unit, modifier: Modifier) {
+internal fun Conversation(state: AskUiState, viewModel: AskViewModel, onTaskClick: (Long) -> Unit, modifier: Modifier) {
     val session = state.session ?: return
     val conversation = session.conversation
     val listState = rememberLazyListState()
@@ -176,7 +177,7 @@ private fun Conversation(state: AskUiState, viewModel: AskViewModel, onTaskClick
         if (conversation.messages.isEmpty()) {
             item(key = "hello") {
                 Text(
-                    if (state.talkMode) "Hold the microphone and ask, for example: “What's on today?”"
+                    if (state.talkMode) "Just talk, for example: “What's on today?”"
                     else "Ask about your tasks, for example “What is overdue?” or “Move everything for the trip to Friday”.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -381,39 +382,40 @@ private fun ProposalCard(pending: PendingProposal, onApply: () -> Unit, onDeclin
 }
 
 @Composable
-private fun InputBar(state: AskUiState, viewModel: AskViewModel) {
+internal fun InputBar(state: AskUiState, viewModel: AskViewModel) {
     var text by rememberSaveable { mutableStateOf("") }
     val busy = state.session?.busy == true && state.session.pending == null
+    val mic = state.talk
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        if (state.talk.listening) {
+        if (mic.on) {
             Text(
-                if (state.talk.finishing) "Turning it into text…" else state.talk.text.ifBlank { "Listening…" },
+                when {
+                    mic.speaking -> "Speaking. Tap the microphone to talk."
+                    mic.words.isNotBlank() -> mic.words
+                    else -> "Listening. Just talk; a pause sends it."
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 6.dp),
+                modifier = Modifier.padding(bottom = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (state.settings.talkReady) {
-                val holding = state.talk.listening
                 Surface(
+                    onClick = viewModel::toggleMic,
                     shape = CircleShape,
-                    color = if (holding) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.size(48.dp)
-                        .semantics { contentDescription = "Hold to talk" }
-                        .pointerInput(Unit) {
-                            detectTapGestures(onPress = {
-                                viewModel.startTalking()
-                                if (tryAwaitRelease()) viewModel.stopTalking() else viewModel.cancelTalking()
-                            })
-                        },
+                    color = if (mic.on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = if (mic.on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(48.dp).semantics {
+                        contentDescription = when {
+                            mic.speaking -> "Stop the answer and talk"
+                            mic.on -> "Microphone on. Tap to stop listening"
+                            else -> "Talk: turn the microphone on"
+                        }
+                    },
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.Mic,
-                            contentDescription = null,
-                            tint = if (holding) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
+                        Icon(if (mic.on) Icons.Outlined.Mic else Icons.Outlined.MicNone, contentDescription = null)
                     }
                 }
                 Spacer(Modifier.size(8.dp))

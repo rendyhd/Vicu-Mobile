@@ -25,6 +25,9 @@ import kotlinx.coroutines.CancellationException
 /** How far below the + the finger slides before letting go cancels. */
 private val CANCEL_DISTANCE = 56.dp
 
+/** How far above the + the finger slides to lock: smart dictation keeps listening. */
+private val LOCK_DISTANCE = 72.dp
+
 /** Read by a screen reader as the + button's extra action: hold has no equivalent for it. */
 internal const val SAY_A_TASK = "Say a task"
 
@@ -63,19 +66,21 @@ internal fun Modifier.fabGestures(
         }
         .pointerInput(controller) {
             val cancelDistance = CANCEL_DISTANCE.toPx()
+            val lockDistance = LOCK_DISTANCE.toPx()
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 fun root(position: Offset): Offset {
                     val layout = coordinates[0]
                     return if (layout != null && layout.isAttached) layout.localToRoot(position) else position
                 }
-                val gesture = FabGesture(touchSlop = viewConfiguration.touchSlop, cancelDistance = cancelDistance)
+                val gesture = FabGesture(touchSlop = viewConfiguration.touchSlop, cancelDistance = cancelDistance, lockDistance = lockDistance)
                 val start = root(down.position)
                 gesture.down(
                     down.uptimeMillis,
                     start.x,
                     start.y,
                     canDrag = controller.dropTargets.hasTargets(currentScreen),
+                    canLock = controller.holdToTalk.lockOffered(),
                 )
                 fun handle(event: FabGestureEvent?) {
                     when (event) {
@@ -88,6 +93,10 @@ internal fun Modifier.fabGestures(
                             }
                         }
                         is FabGestureEvent.CancelArmed -> controller.holdToTalk.setCancelArmed(event.armed)
+                        FabGestureEvent.Lock -> {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            controller.holdToTalk.lock()
+                        }
                         is FabGestureEvent.Release ->
                             if (event.cancelled) controller.holdToTalk.cancel() else controller.holdToTalk.release()
                         is FabGestureEvent.StartDrag -> controller.startDrag(currentScreen, Offset(event.x, event.y))

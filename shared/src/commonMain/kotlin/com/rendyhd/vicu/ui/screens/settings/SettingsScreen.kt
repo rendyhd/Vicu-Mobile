@@ -37,6 +37,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun SettingsScreen(
     onOpenDrawer: () -> Unit = {},
+    /** Opens Ask (Try it), with the microphone on for Talk. */
+    onOpenAsk: (talk: Boolean) -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
     assistantViewModel: AssistantSettingsViewModel = koinViewModel(),
 ) {
@@ -135,6 +137,7 @@ fun SettingsScreen(
                     state = assistantState,
                     viewModel = assistantViewModel,
                     listState = assistantListState,
+                    onOpenAsk = onOpenAsk,
                 )
             }
         }

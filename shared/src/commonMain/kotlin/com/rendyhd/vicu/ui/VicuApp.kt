@@ -85,6 +85,7 @@ import com.rendyhd.vicu.ui.components.shared.LocalFabAlignStart
 import com.rendyhd.vicu.ui.components.shared.LocalClockDay
 import com.rendyhd.vicu.ui.components.shared.LocalDateFormat
 import com.rendyhd.vicu.ui.components.shared.LocalIs24Hour
+import com.rendyhd.vicu.ui.components.shared.LocalOpenAsk
 import com.rendyhd.vicu.ui.components.shared.LocalToday
 import com.rendyhd.vicu.ui.components.shared.rememberIs24HourFormat
 import com.rendyhd.vicu.ui.components.shared.FailedActionsBanner
@@ -98,6 +99,7 @@ import com.rendyhd.vicu.ui.components.task.TaskEntrySheet
 import com.rendyhd.vicu.ui.components.task.TaskRowActions
 import com.rendyhd.vicu.ui.components.task.LocalSubtaskDisplayMode
 import com.rendyhd.vicu.ui.navigation.AnytimeRoute
+import com.rendyhd.vicu.ui.navigation.AskRoute
 import com.rendyhd.vicu.ui.navigation.AppNavHost
 import com.rendyhd.vicu.ui.navigation.CustomListRoute
 import com.rendyhd.vicu.ui.navigation.DrawerContent
@@ -132,12 +134,16 @@ import com.rendyhd.vicu.ui.screens.taskdetail.EditorOverlay
 import com.rendyhd.vicu.ui.screens.taskdetail.TaskDetailScreen
 import com.rendyhd.vicu.ui.screens.taskdetail.TaskDetailViewModel
 import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.ui.screens.ask.AskEntry
+import com.rendyhd.vicu.ui.screens.ask.AskSheet
+import com.rendyhd.vicu.ui.screens.ask.AskViewModel
 import com.rendyhd.vicu.voice.HoldToTalk
 import com.rendyhd.vicu.voice.TaskDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import com.rendyhd.vicu.ai.AiSettings
 import com.rendyhd.vicu.ai.AiSettingsStore
+import com.rendyhd.vicu.ai.ask.AskList
 import com.rendyhd.vicu.ai.dictation.DictationController
 import com.rendyhd.vicu.ui.screens.dictation.DictationSheet
 import com.rendyhd.vicu.util.Constants
@@ -560,6 +566,24 @@ fun VicuApp(
     }
     val subtaskDisplayMode by drawerViewModel.subtaskDisplayMode.collectAsStateWithLifecycle()
 
+    // Ask, a sheet over the list it is opened from (next to Search in the lists' top bars, the
+    // drawer, Settings' Try it).
+    val askEntry: AskEntry = koinInject()
+    val askViewModel: AskViewModel = koinViewModel()
+    var askOpen by rememberSaveable { mutableStateOf(false) }
+    val openAsk: ((TaskDefaults?) -> Unit)? = remember(aiSettings.askReady, askViewModel) {
+        if (!aiSettings.askReady) {
+            null
+        } else {
+            { defaults ->
+                askEntry.list = AskList(defaults?.listName.orEmpty(), defaults?.projectId)
+                askViewModel.onOpened()
+                askOpen = true
+                askViewModel.startTalkingIfAsked()
+            }
+        }
+    }
+
     // What every surface of the app is composed under, the sheets and dialogs as much as the
     // screens: the current day and zone, the user's clock and the date phrasing, the row actions.
     val appLocals = arrayOf<ProvidedValue<*>>(
@@ -572,6 +596,7 @@ fun VicuApp(
         LocalTaskRowActions provides taskRowActions,
         LocalCollab provides collabUi,
         LocalProjectCategories provides drawerUiState.categories,
+        LocalOpenAsk provides openAsk,
     )
 
     // Build dynamic bottom bar items from config
@@ -608,6 +633,11 @@ fun VicuApp(
                     currentRoute = currentRoute,
                     onNavigate = { route ->
                         scope.launch { drawerState.close() }
+                        if (route is AskRoute) {
+                            // Ask opens over the screen, about its list.
+                            openAsk?.invoke(fabHost.specOf(navController.currentBackStackEntry?.id)?.taskDefaults)
+                            return@DrawerContent
+                        }
                         // Choosing the screen that is already open only closes the drawer: for a
                         // project, tag or list it used to re-create the entry (scroll and view model).
                         if (routeKey(route) != currentRoute) navController.navigateTopLevel(route)
@@ -762,6 +792,14 @@ fun VicuApp(
                 sharedContent = pendingSharedContent,
             )
         }
+
+        // Ask over the screens; the editor of a task it shows opens above it.
+        AskSheet(
+            open = askOpen && aiSettings.askReady,
+            onClose = { askOpen = false },
+            onTaskClick = onTaskClick,
+            viewModel = askViewModel,
+        )
 
         // Task Detail (full-screen edit). A task made offline keeps its editor (and the temporary id
         // it was opened with, so the editor is not rebuilt) when its create goes through.

@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ui.screens.ask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.AiProviders
 import com.rendyhd.vicu.ai.AiSettings
 import com.rendyhd.vicu.ai.AiSettingsStore
@@ -24,16 +25,21 @@ import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.TimeSource
 import com.rendyhd.vicu.util.deviceLocaleTag
 import com.rendyhd.vicu.util.randomUuid
+import com.rendyhd.vicu.voice.HoldToTalk
+import com.rendyhd.vicu.voice.OpenMic
 import com.rendyhd.vicu.voice.SelectingSpeechInput
 import com.rendyhd.vicu.voice.SpeechAvailability
 import com.rendyhd.vicu.voice.SpeechError
-import com.rendyhd.vicu.voice.SpeechListener
+import com.rendyhd.vicu.voice.TurnListener
+import com.rendyhd.vicu.voice.TurnSender
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -41,8 +47,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Talk's microphone: what it heard so far, while the button is held. */
-data class TalkCapture(val listening: Boolean = false, val text: String = "", val level: Float = 0f, val finishing: Boolean = false)
+/**
+ * Talk's microphone (`docs/ai-assistant-v1.md`, sections 3.7 and 6): on until turned off, the words of
+ * the turn so far, and whether an answer is being read aloud (the microphone pauses meanwhile).
+ */
+data class TalkMic(val on: Boolean = false, val words: String = "", val level: Float = 0f, val speaking: Boolean = false)
+
+/** Where Ask was opened from (the top bar's Ask button), for the context block (section 5.1). */
+class AskEntry {
+    var list: AskList = AskList("Inbox")
+
+    /** Opened to talk (Try it in Settings): the microphone turns on once. */
+    var startTalking: Boolean = false
+}
 
 data class AskUiState(
     val session: AskState? = null,
@@ -50,14 +67,17 @@ data class AskUiState(
     val history: List<Conversation> = emptyList(),
     /** Tasks that `[task:id]` marks of this conversation show. */
     val tasks: Map<Long, Task> = emptyMap(),
-    val talk: TalkCapture = TalkCapture(),
-    val talkMode: Boolean = false,
-)
+    val talk: TalkMic = TalkMic(),
+) {
+    /** The microphone is on: messages are spoken and answers read aloud. */
+    val talkMode: Boolean get() = talk.on
+}
 
 /**
  * Ask and Talk (`docs/ai-assistant-v1.md`, sections 5 and 6): the conversation, its history,
- * proposal cards with Apply and Decline (Undo on the app snackbar), and push-to-talk with spoken
- * answers and spoken confirmation.
+ * proposal cards with Apply and Decline (Undo on the app snackbar), and the open microphone (3.7):
+ * each turn is the next message, talking again cancels a turn still running, answers are read aloud
+ * while the microphone pauses, and an open card is answered by voice.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AskViewModel(
@@ -72,12 +92,21 @@ class AskViewModel(
     private val voice: SpeechOutput,
     private val dayClock: DayClock,
     private val time: TimeSource,
+    private val entry: AskEntry,
 ) : ViewModel() {
     private val session = MutableStateFlow<AskSession?>(null)
-    private val talk = MutableStateFlow(TalkCapture())
-    private val talkMode = MutableStateFlow(false)
-    private var list = AskList("Inbox")
+    private val talk = MutableStateFlow(TalkMic())
+    private val list: AskList get() = entry.list
     private var turn: Job? = null
+
+    private var mic: OpenMic? = null
+    private val sender = TurnSender()
+
+    /** The conversation's length before the spoken turn still running: talking again goes back to it. */
+    private var rollback: Int? = null
+
+    /** A cancelled turn being taken out of the conversation; the next message waits for it. */
+    private var withdrawing: Job? = null
 
     private val sessionState = session.flatMapLatest { it?.state ?: flowOf(null) }
 
@@ -90,22 +119,46 @@ class AskViewModel(
         settingsStore.settings,
         store.conversations,
         knownTasks,
-        combine(talk, talkMode) { t, m -> t to m },
-    ) { state, settings, history, known, (capture, mode) ->
-        AskUiState(state, settings, history, known, capture, mode)
+        talk,
+    ) { state, settings, history, known, mic ->
+        AskUiState(state, settings, history, known, mic)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AskUiState())
 
     init {
         viewModelScope.launch {
             val last = store.all().firstOrNull()
-            open(last ?: Conversation(id = randomUuid()))
+            open(last?.takeUnless(::isStale) ?: Conversation(id = randomUuid()))
+        }
+        // A card came: the turn has its answer (talking is now the answer to the card, 6.1), and with
+        // the microphone on, the card's question is read aloud.
+        viewModelScope.launch {
+            sessionState.map { it?.pending?.proposal?.callId }.distinctUntilChanged().collect { id ->
+                if (id == null) return@collect
+                sender.finished()
+                rollback = null
+                if (talk.value.on) speakCardQuestion()
+            }
         }
     }
 
     /** Where the user came from, for the context block (section 5.1). */
     fun setList(name: String, projectId: Long?, customListId: String?) {
-        list = AskList(name, projectId, customListId)
+        entry.list = AskList(name, projectId, customListId)
     }
+
+    /** The name of the list Ask was opened from, for its header; empty when it has none. */
+    fun listTitle(): String = entry.list.name
+
+    /** Ask opened again: a conversation left alone for a while makes way for a new one (it stays in the history). */
+    fun onOpened() {
+        val s = session.value ?: return
+        if (s.state.value.busy || s.conversation.messages.isEmpty()) return
+        if (isStale(s.conversation)) newChat()
+    }
+
+    /** Nothing said in it for as long as the context block is good for (section 5.1). */
+    private fun isStale(conversation: Conversation): Boolean =
+        time.now().toEpochMilliseconds() - conversation.updatedAt > AiContract.limits.contextRefreshMinutes * 60_000L
 
     fun open(conversation: Conversation) {
         turn?.cancel()
@@ -115,7 +168,8 @@ class AskViewModel(
             if (last is ChatMessage.Assistant && last.toolCalls.isNotEmpty()) m.dropLast(1) else m
         }
         session.value = AskSession(providers, settingsStore, backend, proposals, store, conversation.copy(messages = messages), time, ::randomUuid)
-        talkMode.value = conversation.talk
+        sender.reset()
+        rollback = null
     }
 
     fun newChat() {
@@ -129,35 +183,50 @@ class AskViewModel(
         }
     }
 
-    fun setTalkMode(on: Boolean) {
-        talkMode.value = on
-        if (!on) voice.stop()
-    }
-
     fun send(text: String, spoken: Boolean = false) {
         val s = session.value ?: return
         val pending = s.state.value.pending
-        if ((pending != null || s.state.value.lingering != null) && spoken) {
+        val cardOpen = pending != null || s.state.value.lingering != null
+        if (cardOpen && spoken) {
             // Section 6.1: an exact yes or no answers the card.
             val language = uiState.value.settings.speechLanguage.takeIf { it != "auto" } ?: deviceLocaleTag()
             when (SpokenConfirmation.answer(text, language)) {
-                SpokenConfirmation.Answer.YES -> return apply()
-                SpokenConfirmation.Answer.NO -> return decline()
+                SpokenConfirmation.Answer.YES -> {
+                    sender.finished()
+                    return apply()
+                }
+                SpokenConfirmation.Answer.NO -> {
+                    sender.finished()
+                    return decline()
+                }
                 SpokenConfirmation.Answer.OTHER -> Unit
             }
         }
-        if (s.state.value.busy && pending == null) return
+        if (s.state.value.busy && pending == null && withdrawing == null) {
+            if (spoken) sender.finished()
+            return
+        }
+        // A spoken turn can be taken back when the person talks again, unless it answered past a card.
+        val takeBack = spoken && !cardOpen
+        val before = withdrawing
+        rollback = if (takeBack && before == null) s.conversation.messages.size else null
         turn = viewModelScope.launch {
-            s.send(text, list, talk = talkMode.value || spoken)
-            if (talkMode.value) speakLastAnswer(s)
+            before?.join()
+            if (takeBack) rollback = s.conversation.messages.size
+            s.send(text, list, talk = spoken)
+            if (spoken) {
+                sender.finished()
+                rollback = null
+                speakLastAnswer(s)
+            }
         }
     }
 
     fun retry() {
         val s = session.value ?: return
         turn = viewModelScope.launch {
-            s.retry(list, talkMode.value)
-            if (talkMode.value) speakLastAnswer(s)
+            s.retry(list, talk.value.on)
+            if (talk.value.on) speakLastAnswer(s)
         }
     }
 
@@ -201,24 +270,68 @@ class AskViewModel(
     }
 
     private suspend fun speakLastAnswer(s: AskSession) {
-        val settings = settingsStore.current()
-        if (!settings.speakAnswers || !voice.isAvailable) return
         val last = s.conversation.messages.lastOrNull() as? ChatMessage.Assistant ?: return
-        val text = AskSession.TASK_MARK.replace(last.text, "").trim()
-        if (text.isEmpty()) return
-        val language = settings.speechLanguage.takeIf { it != "auto" }
-        voice.speak(text, language) {}
+        speak(AskSession.TASK_MARK.replace(last.text, "").trim())
     }
 
-    // --- Talk's microphone ------------------------------------------------------------------
+    /** The question that came with an open card (Talk ends with one, section 6). */
+    private suspend fun speakCardQuestion() {
+        val s = session.value ?: return
+        val asking = s.conversation.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
+        speak(asking?.let { AskSession.TASK_MARK.replace(it.text, "").trim() }.orEmpty())
+    }
 
-    /** Press: starts listening (asking for the microphone the first time). */
-    fun startTalking() {
-        voice.stop()
+    /**
+     * Reads [text] aloud with the microphone on. The microphone pauses meanwhile, since it would hear
+     * the device; through headphones it keeps listening, and talking stops the voice (section 3.7).
+     */
+    private suspend fun speak(text: String) {
+        val settings = settingsStore.current()
+        val m = mic
+        if (text.isEmpty() || m == null || !settings.speakAnswers || !voice.isAvailable) return
+        val pause = !voice.playsPrivately
+        if (pause) m.pause()
+        talk.update { it.copy(speaking = true, words = "", level = 0f) }
+        val language = settings.speechLanguage.takeIf { it != "auto" }
+        voice.speak(text, language) {
+            viewModelScope.launch {
+                talk.update { it.copy(speaking = false) }
+                if (mic === m) m.resume()
+            }
+        }
+    }
+
+    // --- Talk's microphone (sections 3.7 and 6) ----------------------------------------------
+
+    /**
+     * The microphone button: on or off; while an answer is read aloud, it stops the voice and listens
+     * at once.
+     */
+    fun toggleMic() {
+        when {
+            talk.value.speaking -> {
+                voice.stop()
+                talk.update { it.copy(speaking = false) }
+                mic?.resume()
+            }
+            mic != null -> micOff()
+            else -> micOn()
+        }
+    }
+
+    /** Ask opened to talk: the microphone turns on. */
+    fun startTalkingIfAsked() {
+        if (!entry.startTalking) return
+        entry.startTalking = false
+        micOn()
+    }
+
+    fun micOn() {
+        if (mic != null) return
         when (speech.availability()) {
             SpeechAvailability.READY -> Unit
             SpeechAvailability.NEEDS_PERMISSION -> {
-                speech.requestPermission { granted -> if (granted) messages.post("Microphone allowed. Hold the microphone and talk.") }
+                speech.requestPermission { granted -> if (granted) micOn() }
                 return
             }
             SpeechAvailability.DENIED -> {
@@ -230,37 +343,68 @@ class AskViewModel(
                 return
             }
         }
-        talk.value = TalkCapture(listening = true)
-        speech.start(
-            object : SpeechListener {
-                override fun onPartial(text: String) = talk.update { it.copy(text = text) }
-                override fun onLevel(level: Float) = talk.update { it.copy(level = level) }
-                override fun onFinal(text: String) = heard(talk.value.text.let { if (it.isNotBlank() && !text.startsWith(it)) "$it $text" else text })
-                override fun onError(error: SpeechError) = heard(talk.value.text)
-            },
-        )
+        sender.reset()
+        talk.value = TalkMic(on = true)
+        mic = speech.openMic(listener)
     }
 
-    /** Release: the words go to the model (or answer the open card). */
-    fun stopTalking() {
-        if (!talk.value.listening) return
-        talk.update { it.copy(finishing = true) }
-        speech.stop()
+    fun micOff() {
+        mic?.stop()
+        mic = null
+        if (talk.value.speaking) voice.stop()
+        sender.reset()
+        talk.value = TalkMic()
     }
 
-    fun cancelTalking() {
-        speech.cancel()
-        talk.value = TalkCapture()
+    private val listener = object : TurnListener {
+        override fun onWords(text: String) = talk.update { it.copy(words = HoldToTalk.joinWords(sender.waiting, text)) }
+
+        override fun onLevel(level: Float) = talk.update { it.copy(level = level) }
+
+        override fun onSpeechStart() {
+            // Through headphones the voice may still be reading: talking stops it.
+            if (talk.value.speaking) {
+                voice.stop()
+                talk.update { it.copy(speaking = false) }
+            }
+            val s = session.value
+            val state = s?.state?.value
+            if (s != null && state != null && state.busy && state.pending == null && rollback != null && sender.interrupt()) {
+                withdraw(s)
+            }
+            talk.update { it.copy(words = sender.waiting) }
+        }
+
+        override fun onTurn(text: String) {
+            talk.update { it.copy(words = "") }
+            sender.turn(text)?.let { send(it, spoken = true) }
+        }
+
+        override fun onOff(error: SpeechError?) {
+            mic = null
+            talk.value = TalkMic()
+            if (error != null) messages.post("The microphone stopped. Tap it to talk again.")
+        }
     }
 
-    private fun heard(text: String) {
-        talk.value = TalkCapture()
-        if (text.isNotBlank()) send(text, spoken = true)
+    /** Talking again cancelled the running turn: the conversation goes back to before it (section 3.7). */
+    private fun withdraw(s: AskSession) {
+        val to = rollback ?: return
+        rollback = null
+        val running = turn
+        turn = null
+        val job = viewModelScope.launch {
+            running?.cancelAndJoin()
+            s.withdraw(to)
+        }
+        withdrawing = job
+        job.invokeOnCompletion { viewModelScope.launch { if (withdrawing === job) withdrawing = null } }
     }
 
     override fun onCleared() {
         voice.stop()
-        speech.cancel()
+        mic?.stop()
+        mic = null
     }
 
     private fun Set<Long>?.orEmpty(): Set<Long> = this ?: emptySet()
