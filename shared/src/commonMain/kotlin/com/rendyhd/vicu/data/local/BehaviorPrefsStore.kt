@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -22,6 +23,12 @@ enum class SubtaskDisplayMode { INSIDE_TASK, EXPANDABLE }
 /** Controls whether child projects expose their tasks as sections or navigate as project rows. */
 enum class SubprojectDisplayMode { SECTIONS, PROJECT_ROWS }
 
+/**
+ * A view the drawer lists above the projects, in the drawer's order. The user can hide each one
+ * from the drawer (Settings, General, Drawer); a hidden view keeps working.
+ */
+enum class DrawerView { TODAY, UPCOMING, ANYTIME, LOGBOOK, ROUTINES, REVIEW, ASK }
+
 data class BehaviorPrefs(
     val completionSoundEnabled: Boolean = false,
     val completionSoundUri: String? = null,
@@ -36,6 +43,8 @@ data class BehaviorPrefs(
     val showProjectProgress: Boolean = true,
     /** How many open tasks each project has, next to it in the drawer. */
     val showProjectTaskCount: Boolean = false,
+    /** The views the user took out of the drawer. */
+    val hiddenDrawerViews: Set<DrawerView> = emptySet(),
 )
 
 class BehaviorPrefsStore(
@@ -53,6 +62,7 @@ class BehaviorPrefsStore(
         private val KEY_SUBPROJECT_DISPLAY_MODE = stringPreferencesKey("subproject_display_mode")
         private val KEY_SHOW_PROJECT_PROGRESS = booleanPreferencesKey("show_project_progress")
         private val KEY_SHOW_PROJECT_TASK_COUNT = booleanPreferencesKey("show_project_task_count")
+        private val KEY_HIDDEN_DRAWER_VIEWS = stringSetPreferencesKey("hidden_drawer_views")
     }
 
     fun getPrefs(): Flow<BehaviorPrefs> =
@@ -75,6 +85,9 @@ class BehaviorPrefsStore(
                     ?: SubprojectDisplayMode.SECTIONS,
                 showProjectProgress = prefs[KEY_SHOW_PROJECT_PROGRESS] ?: true,
                 showProjectTaskCount = prefs[KEY_SHOW_PROJECT_TASK_COUNT] ?: false,
+                // A name this version does not know (written by a newer one) is left out.
+                hiddenDrawerViews = prefs[KEY_HIDDEN_DRAWER_VIEWS].orEmpty()
+                    .mapNotNullTo(HashSet()) { name -> DrawerView.entries.firstOrNull { it.name == name } },
             )
         }
 
@@ -123,5 +136,14 @@ class BehaviorPrefsStore(
 
     suspend fun setShowProjectTaskCount(enabled: Boolean) {
         dataStore.edit { it[KEY_SHOW_PROJECT_TASK_COUNT] = enabled }
+    }
+
+    /** Shows [view] in the drawer again, or takes it out. Names this version does not know are kept. */
+    suspend fun setDrawerViewHidden(view: DrawerView, hidden: Boolean) {
+        dataStore.edit {
+            val current = it[KEY_HIDDEN_DRAWER_VIEWS].orEmpty()
+            val next = if (hidden) current + view.name else current - view.name
+            if (next.isEmpty()) it.remove(KEY_HIDDEN_DRAWER_VIEWS) else it[KEY_HIDDEN_DRAWER_VIEWS] = next
+        }
     }
 }

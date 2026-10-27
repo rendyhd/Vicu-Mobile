@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -25,11 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.rendyhd.vicu.domain.model.BottomBarSlot
+import com.rendyhd.vicu.data.local.DrawerView
+import com.rendyhd.vicu.ui.components.shared.SmartListIdentity
+import com.rendyhd.vicu.ui.navigation.drawerViewChoices
+import com.rendyhd.vicu.ui.theme.LocalVicuColors
 import com.rendyhd.vicu.util.parser.SyntaxMode
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,6 +103,103 @@ internal fun LazyListScope.bottomBarSection(
 
     item(key = "bottombar_divider") {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+/**
+ * Which views the drawer lists above the projects: one switch for each it can list now (Today,
+ * Upcoming and Anytime only while the bottom bar does not hold them, Routines, Review and Ask only
+ * while they are on). A hidden view keeps working; the drawer just leaves it out.
+ */
+internal fun LazyListScope.drawerSection(
+    state: SettingsUiState,
+    askReady: Boolean,
+    viewModel: SettingsViewModel,
+) {
+    item(key = "drawer_header") {
+        Text(
+            text = "Drawer",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+        )
+    }
+
+    item(key = "drawer_desc") {
+        Text(
+            text = "Choose the views listed above your projects. Today, Upcoming and Anytime are in the drawer only when they are not in the bottom bar.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+    }
+
+    val choices = drawerViewChoices(
+        slots = state.bottomBarSlots,
+        routinesEnabled = state.routineVisibility.enabled,
+        reviewEnabled = state.reviewPrefs.enabled,
+        askReady = askReady,
+    )
+    choices.forEach { view ->
+        item(key = "drawer_view_${view.name}") {
+            DrawerViewRow(
+                view = view,
+                shown = view !in state.behaviorPrefs.hiddenDrawerViews,
+                onShownChange = { viewModel.setDrawerViewShown(view, it) },
+            )
+        }
+    }
+
+    item(key = "drawer_divider") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+/** A view of the drawer with its icon, as the drawer draws it, and a switch that lists it there. */
+@Composable
+private fun DrawerViewRow(
+    view: DrawerView,
+    shown: Boolean,
+    onShownChange: (Boolean) -> Unit,
+) {
+    val identity = when (view) {
+        DrawerView.TODAY -> SmartListIdentity.TODAY
+        DrawerView.UPCOMING -> SmartListIdentity.UPCOMING
+        DrawerView.ANYTIME -> SmartListIdentity.ANYTIME
+        DrawerView.LOGBOOK -> SmartListIdentity.LOGBOOK
+        DrawerView.ROUTINES -> SmartListIdentity.ROUTINES
+        DrawerView.REVIEW -> SmartListIdentity.REVIEW
+        DrawerView.ASK -> null
+    }
+    val label = when (view) {
+        DrawerView.TODAY -> "Today"
+        DrawerView.UPCOMING -> "Upcoming"
+        DrawerView.ANYTIME -> "Anytime"
+        DrawerView.LOGBOOK -> "Logbook"
+        DrawerView.ROUTINES -> "Routines"
+        DrawerView.REVIEW -> "Review"
+        DrawerView.ASK -> "Ask"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = shown, role = Role.Switch, onValueChange = onShownChange)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Decorative: the label names the view.
+        Icon(
+            imageVector = identity?.icon ?: Icons.Outlined.AutoAwesome,
+            contentDescription = null,
+            tint = identity?.color(LocalVicuColors.current.identity) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        // The row is the switch, so a screen reader finds one control.
+        Switch(checked = shown, onCheckedChange = null)
     }
 }
 

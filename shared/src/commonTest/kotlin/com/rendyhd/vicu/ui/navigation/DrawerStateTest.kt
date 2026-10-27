@@ -1,7 +1,9 @@
 package com.rendyhd.vicu.ui.navigation
 
+import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.data.local.ReviewPrefs
 import com.rendyhd.vicu.domain.model.BottomBarSlot
+import com.rendyhd.vicu.domain.model.BottomBarSlotType
 import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.CustomListFilter
 import com.rendyhd.vicu.domain.model.Label
@@ -190,5 +192,71 @@ class DrawerStateTest {
         assertFalse(state.projectsExpanded)
         assertTrue(state.listsExpanded)
         assertFalse(state.tagsExpanded)
+    }
+
+    // --- the views above the projects ---
+
+    @Test
+    fun `with the default bar the drawer lists the logbook - routines and review`() {
+        val state = build(sources())
+
+        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.ROUTINES, DrawerView.REVIEW), state.views(askReady = false))
+        assertEquals(
+            listOf(DrawerView.LOGBOOK, DrawerView.ROUTINES, DrawerView.REVIEW, DrawerView.ASK),
+            state.views(askReady = true),
+        )
+    }
+
+    @Test
+    fun `a smart list the bar does not hold comes first and in its own order`() {
+        val slots = listOf(
+            BottomBarSlot(BottomBarSlotType.TODAY),
+            BottomBarSlot(BottomBarSlotType.PROJECT, referenceId = "4"),
+            BottomBarSlot(BottomBarSlotType.CUSTOM_LIST, referenceId = "l"),
+        )
+
+        assertEquals(
+            listOf(DrawerView.UPCOMING, DrawerView.ANYTIME, DrawerView.LOGBOOK, DrawerView.ROUTINES, DrawerView.REVIEW),
+            drawerViewChoices(slots, routinesEnabled = true, reviewEnabled = true, askReady = false),
+        )
+    }
+
+    @Test
+    fun `routines and review that are turned off are no choice at all`() {
+        assertEquals(
+            listOf(DrawerView.LOGBOOK, DrawerView.ASK),
+            drawerViewChoices(BottomBarSlot.DEFAULT_SLOTS, routinesEnabled = false, reviewEnabled = false, askReady = true),
+        )
+    }
+
+    @Test
+    fun `the hidden views are left out of the drawer`() {
+        val slots = listOf(
+            BottomBarSlot(BottomBarSlotType.TODAY),
+            BottomBarSlot(BottomBarSlotType.UPCOMING),
+            BottomBarSlot(BottomBarSlotType.PROJECT, referenceId = "4"),
+        )
+        val state = buildDrawerState(
+            sources(), slots, ReviewPrefs(), emptyList(), today,
+            hiddenViews = setOf(DrawerView.ANYTIME, DrawerView.LOGBOOK, DrawerView.ASK),
+        )
+
+        assertEquals(setOf(DrawerView.ANYTIME, DrawerView.LOGBOOK, DrawerView.ASK), state.hiddenViews)
+        assertEquals(listOf(DrawerView.ROUTINES, DrawerView.REVIEW), state.views(askReady = true))
+    }
+
+    @Test
+    fun `a hidden smart list stays out once the bar gives it up`() {
+        // Hidden, then put in the bar and taken out again: the choice to hide it still stands.
+        val state = build(sources()).copy(
+            bottomBarSlots = listOf(
+                BottomBarSlot(BottomBarSlotType.TODAY),
+                BottomBarSlot(BottomBarSlotType.UPCOMING),
+                BottomBarSlot(BottomBarSlotType.PROJECT, referenceId = "4"),
+            ),
+            hiddenViews = setOf(DrawerView.ANYTIME),
+        )
+
+        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.ROUTINES, DrawerView.REVIEW), state.views(askReady = false))
     }
 }

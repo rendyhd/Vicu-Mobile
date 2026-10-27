@@ -6,6 +6,7 @@ import com.rendyhd.vicu.auth.FakeNetworkMonitor
 import com.rendyhd.vicu.auth.InMemoryTokenStorage
 import com.rendyhd.vicu.auth.RecordingAuthHooks
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
+import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.data.local.BottomBarPrefsStore
 import com.rendyhd.vicu.data.local.LabelOrderPrefsStore
 import com.rendyhd.vicu.data.local.ReviewPrefsStore
@@ -124,6 +125,25 @@ class DrawerViewModelProgressTest {
         initial = mapOf(1L to ProjectTally(open = 2, doneOnPhone = 0), 2L to ProjectTally(open = 1, doneOnPhone = 1)),
         doneByProject = mutableMapOf(1L to 3L, 2L to 4L),
     )
+
+    @Test
+    fun `a view hidden in Settings leaves the drawer and comes back when shown`() = runTest {
+        val prefs = BehaviorPrefsStore(InMemoryPreferencesDataStore())
+        val rig = rig(source(), prefs)
+        backgroundScope.launch { rig.viewModel.uiState.collect { } }
+        runCurrent()
+        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.ROUTINES, DrawerView.REVIEW), rig.viewModel.uiState.value.views(askReady = false))
+
+        prefs.setDrawerViewHidden(DrawerView.LOGBOOK, hidden = true)
+        prefs.setDrawerViewHidden(DrawerView.ROUTINES, hidden = true)
+        runCurrent()
+        assertEquals(listOf(DrawerView.REVIEW), rig.viewModel.uiState.value.views(askReady = false))
+
+        prefs.setDrawerViewHidden(DrawerView.LOGBOOK, hidden = false)
+        runCurrent()
+        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.REVIEW), rig.viewModel.uiState.value.views(askReady = false))
+        rig.close()
+    }
 
     @Test
     fun `nothing is asked while the drawer is closed`() = runTest {

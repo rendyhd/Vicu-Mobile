@@ -59,7 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.rendyhd.vicu.domain.model.BottomBarSlotType
+import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.ui.components.category.CategoryHeader
@@ -201,76 +201,51 @@ fun DrawerContent(
                 state = listState,
                 modifier = Modifier.weight(1f),
             ) {
-                // Displaced smart lists (removed from bottom bar)
-                val displaced = state.displacedSmartLists
-                if (displaced.isNotEmpty()) {
-                    item(key = "smart_spacer", contentType = "spacer") {
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    if (BottomBarSlotType.TODAY in displaced) {
-                        item(key = "smart_today", contentType = "smart") {
-                            SmartListItem(
-                                label = "Today",
-                                icon = SmartListIdentity.TODAY.icon,
-                                iconTint = SmartListIdentity.TODAY.color(identity),
-                                selected = currentRoute == "TodayRoute",
-                                onClick = { onNavigate(TodayRoute) },
-                            )
-                        }
-                    }
-                    if (BottomBarSlotType.UPCOMING in displaced) {
-                        item(key = "smart_upcoming", contentType = "smart") {
-                            SmartListItem(
-                                label = "Upcoming",
-                                icon = SmartListIdentity.UPCOMING.icon,
-                                iconTint = SmartListIdentity.UPCOMING.color(identity),
-                                selected = currentRoute == "UpcomingRoute",
-                                onClick = { onNavigate(UpcomingRoute) },
-                            )
-                        }
-                    }
-                    if (BottomBarSlotType.ANYTIME in displaced) {
-                        item(key = "smart_anytime", contentType = "smart") {
-                            SmartListItem(
-                                label = "Anytime",
-                                icon = SmartListIdentity.ANYTIME.icon,
-                                iconTint = SmartListIdentity.ANYTIME.color(identity),
-                                selected = currentRoute == "AnytimeRoute",
-                                onClick = { onNavigate(AnytimeRoute) },
-                            )
-                        }
-                    }
+                // The smart lists and Ask: Today, Upcoming and Anytime when the bottom bar does not
+                // hold them, then what is turned on, less what the user hid from the drawer.
+                val views = state.views(askReady = showAsk)
+                item(key = "smart_spacer", contentType = "spacer") {
+                    Spacer(Modifier.height(12.dp))
                 }
-
-                // Logbook
-                item(key = "smart_logbook", contentType = "smart") {
-                    if (displaced.isEmpty()) Spacer(Modifier.height(12.dp))
-                    SmartListItem(
-                        label = "Logbook",
-                        icon = SmartListIdentity.LOGBOOK.icon,
-                        iconTint = SmartListIdentity.LOGBOOK.color(identity),
-                        selected = currentRoute == "LogbookRoute",
-                        onClick = { onNavigate(LogbookRoute) },
-                    )
-                }
-
-                // Routines; hidden when they are turned off in Settings
-                if (state.routinesEnabled) {
-                    item(key = "smart_routines", contentType = "smart") {
-                        SmartListItem(
+                items(views, key = { "smart_${it.name.lowercase()}" }, contentType = { "smart" }) { view ->
+                    when (view) {
+                        DrawerView.TODAY -> SmartListItem(
+                            label = "Today",
+                            icon = SmartListIdentity.TODAY.icon,
+                            iconTint = SmartListIdentity.TODAY.color(identity),
+                            selected = currentRoute == "TodayRoute",
+                            onClick = { onNavigate(TodayRoute) },
+                        )
+                        DrawerView.UPCOMING -> SmartListItem(
+                            label = "Upcoming",
+                            icon = SmartListIdentity.UPCOMING.icon,
+                            iconTint = SmartListIdentity.UPCOMING.color(identity),
+                            selected = currentRoute == "UpcomingRoute",
+                            onClick = { onNavigate(UpcomingRoute) },
+                        )
+                        DrawerView.ANYTIME -> SmartListItem(
+                            label = "Anytime",
+                            icon = SmartListIdentity.ANYTIME.icon,
+                            iconTint = SmartListIdentity.ANYTIME.color(identity),
+                            selected = currentRoute == "AnytimeRoute",
+                            onClick = { onNavigate(AnytimeRoute) },
+                        )
+                        DrawerView.LOGBOOK -> SmartListItem(
+                            label = "Logbook",
+                            icon = SmartListIdentity.LOGBOOK.icon,
+                            iconTint = SmartListIdentity.LOGBOOK.color(identity),
+                            selected = currentRoute == "LogbookRoute",
+                            onClick = { onNavigate(LogbookRoute) },
+                        )
+                        DrawerView.ROUTINES -> SmartListItem(
                             label = "Routines",
                             icon = SmartListIdentity.ROUTINES.icon,
                             iconTint = SmartListIdentity.ROUTINES.color(identity),
                             selected = currentRoute == "RoutinesRoute",
                             onClick = { onNavigate(RoutinesRoute) },
                         )
-                    }
-                }
-
-                // Review (with overdue badge); hidden when the feature is disabled
-                if (state.reviewEnabled) {
-                    item(key = "smart_review", contentType = "smart") {
-                        NavigationDrawerItem(
+                        // With the overdue badge.
+                        DrawerView.REVIEW -> NavigationDrawerItem(
                             label = { Text("Review") },
                             icon = {
                                 Icon(
@@ -293,13 +268,8 @@ fun DrawerContent(
                             onClick = { onNavigate(ReviewRoute) },
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                         )
-                    }
-                }
-
-                // Ask, with the smart lists: with many projects it got lost at the bottom.
-                if (showAsk) {
-                    item(key = "ask", contentType = "smart") {
-                        NavigationDrawerItem(
+                        // With the smart lists: with many projects it got lost at the bottom.
+                        DrawerView.ASK -> NavigationDrawerItem(
                             label = { Text("Ask") },
                             icon = {
                                 Icon(
@@ -314,9 +284,12 @@ fun DrawerContent(
                         )
                     }
                 }
-                // Projects section
-                item(key = "divider_projects", contentType = "divider") {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Projects section; with every view hidden it starts the drawer, below the spacer.
+                if (views.isNotEmpty()) {
+                    item(key = "divider_projects", contentType = "divider") {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
                 }
                 item(key = "header_projects", contentType = "header") {
                     SectionHeader(

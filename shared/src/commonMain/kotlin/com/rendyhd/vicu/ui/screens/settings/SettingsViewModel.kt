@@ -13,6 +13,7 @@ import com.rendyhd.vicu.domain.model.TaskOrder
 import com.rendyhd.vicu.domain.model.TaskOrderSettings
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.data.local.BottomBarPrefsStore
+import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.data.local.LogbookPrefs
 import com.rendyhd.vicu.data.local.LogbookPrefsStore
 import com.rendyhd.vicu.data.local.NlpPrefsStore
@@ -786,6 +787,11 @@ class SettingsViewModel(
 
     fun setShowProjectTaskCount(enabled: Boolean) {
         viewModelScope.launch { behaviorPrefsStore.setShowProjectTaskCount(enabled) }
+    }
+
+    /** Lists [view] in the drawer, or takes it out of it. */
+    fun setDrawerViewShown(view: DrawerView, shown: Boolean) {
+        viewModelScope.launch { behaviorPrefsStore.setDrawerViewHidden(view, hidden = !shown) }
     }
 
     fun setLogbookRetentionEnabled(enabled: Boolean) {

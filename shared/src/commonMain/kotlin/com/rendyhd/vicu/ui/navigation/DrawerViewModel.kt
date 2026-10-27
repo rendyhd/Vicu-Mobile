@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.local.BottomBarPrefsStore
+import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.data.local.LabelOrderPrefsStore
 import com.rendyhd.vicu.data.local.ReviewPrefs
 import com.rendyhd.vicu.data.local.ReviewPrefsStore
@@ -93,16 +94,35 @@ data class DrawerUiState(
     val reviewEnabled: Boolean = true,
     val reviewOverdueCount: Int = 0,
     val routinesEnabled: Boolean = true,
+    /** The views the user took out of the drawer (Settings, General, Drawer). */
+    val hiddenViews: Set<DrawerView> = emptySet(),
 ) {
-    val displacedSmartLists: Set<BottomBarSlotType>
-        get() {
-            val inBar = bottomBarSlots.map { it.type }.toSet()
-            return setOf(
-                BottomBarSlotType.TODAY,
-                BottomBarSlotType.UPCOMING,
-                BottomBarSlotType.ANYTIME,
-            ) - inBar
-        }
+    /** What the drawer lists above the projects, in order: the [drawerViewChoices] the user did not hide. */
+    fun views(askReady: Boolean): List<DrawerView> =
+        drawerViewChoices(bottomBarSlots, routinesEnabled, reviewEnabled, askReady) - hiddenViews
+}
+
+/**
+ * The views the drawer can list above the projects, in its order: Today, Upcoming and Anytime
+ * while the bottom bar does not hold them, the Logbook, Routines and Review while they are turned
+ * on, and Ask once it is set up. These are the ones Settings offers to hide.
+ */
+internal fun drawerViewChoices(
+    slots: List<BottomBarSlot>,
+    routinesEnabled: Boolean,
+    reviewEnabled: Boolean,
+    askReady: Boolean,
+): List<DrawerView> {
+    val inBar = slots.mapTo(HashSet()) { it.type }
+    return buildList {
+        if (BottomBarSlotType.TODAY !in inBar) add(DrawerView.TODAY)
+        if (BottomBarSlotType.UPCOMING !in inBar) add(DrawerView.UPCOMING)
+        if (BottomBarSlotType.ANYTIME !in inBar) add(DrawerView.ANYTIME)
+        add(DrawerView.LOGBOOK)
+        if (routinesEnabled) add(DrawerView.ROUTINES)
+        if (reviewEnabled) add(DrawerView.REVIEW)
+        if (askReady) add(DrawerView.ASK)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -162,15 +182,19 @@ class DrawerViewModel(
      */
     private val stored: StateFlow<DrawerUiState> = combine(
         sources,
-        bottomBarPrefsStore.config,
+        combine(
+            bottomBarPrefsStore.config,
+            behaviorPrefsStore.getPrefs().map { it.hiddenDrawerViews }.distinctUntilChanged(),
+        ) { bottomBar, hiddenViews -> bottomBar to hiddenViews },
         combine(reviewPrefsStore.getPrefs(), routinePrefsStore.enabled) { review, routines -> review to routines },
         labelOrderPrefsStore.getOrder(),
         // A review that falls due at midnight must show up in the badge without a restart.
         dayClock.today,
-    ) { sources, bottomBar, (reviewPrefs, routinesEnabled), labelOrder, today ->
+    ) { sources, (bottomBar, hiddenViews), (reviewPrefs, routinesEnabled), labelOrder, today ->
         buildDrawerState(
             sources, bottomBar.slots, reviewPrefs, labelOrder, today, routinesEnabled,
             bottomBarSmartListColors = bottomBar.smartListColors,
+            hiddenViews = hiddenViews,
         )
     }.flowOn(dispatchers.default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DrawerUiState())
@@ -550,6 +574,7 @@ internal fun buildDrawerState(
     today: LocalDate,
     routinesEnabled: Boolean = true,
     bottomBarSmartListColors: Boolean = true,
+    hiddenViews: Set<DrawerView> = emptySet(),
 ): DrawerUiState {
     val inboxId = sources.inboxProjectId
     val projects = sources.projects
@@ -596,6 +621,7 @@ internal fun buildDrawerState(
         reviewEnabled = reviewPrefs.enabled,
         reviewOverdueCount = reviewOverdue,
         routinesEnabled = routinesEnabled,
+        hiddenViews = hiddenViews,
     )
 }
 
