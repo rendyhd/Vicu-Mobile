@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,6 +61,7 @@ fun InboxScreen(
     onOpenDrawer: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onShowTaskEntry: (Long?, String?) -> Unit = { _, _ -> },
+    onSortInbox: () -> Unit = {},
     viewModel: InboxViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -117,6 +119,14 @@ fun InboxScreen(
                     onOpenDrawer = onOpenDrawer,
                     scroll = topBarScroll,
                     onNavigateToSearch = onNavigateToSearch,
+                    extraActions = {
+                        // The guided session over the Inbox (docs/cross-app-semantics-v1.md, section 14.3).
+                        if (state.tasks.isNotEmpty() && state.notice == null) {
+                            IconButton(onClick = onSortInbox) {
+                                Icon(Icons.AutoMirrored.Outlined.FactCheck, contentDescription = "Sort the Inbox, one task at a time")
+                            }
+                        }
+                    },
                     trailingActions = {
                         if (state.inboxProjectId != null && state.notice == null) {
                             IconButton(onClick = { showSortDialog = true }) {

@@ -17,10 +17,14 @@ import com.rendyhd.vicu.ai.ask.Proposal
 import com.rendyhd.vicu.ai.ask.Proposals
 import com.rendyhd.vicu.ai.provider.ChatMessage
 import com.rendyhd.vicu.ai.talk.SpokenConfirmation
+import com.rendyhd.vicu.data.repository.WeeklyReviewPreferences
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.TaskRepository
 import com.rendyhd.vicu.speech.SpeechOutput
+import com.rendyhd.vicu.ui.screens.guided.GuidedWorldSource
+import com.rendyhd.vicu.util.AgendaItem
 import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.util.Guided
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.TimeSource
 import com.rendyhd.vicu.util.deviceLocaleTag
@@ -61,6 +65,9 @@ class AskEntry {
     var startTalking: Boolean = false
 }
 
+/** The agenda of an empty conversation (semantics 14.8) and the Inbox, for the starters' kind (5.7). */
+data class AskGuide(val agenda: List<AgendaItem> = emptyList(), val inboxId: Long? = null)
+
 data class AskUiState(
     val session: AskState? = null,
     val settings: AiSettings = AiSettings(),
@@ -93,6 +100,8 @@ class AskViewModel(
     private val dayClock: DayClock,
     private val time: TimeSource,
     private val entry: AskEntry,
+    guidedWorld: GuidedWorldSource,
+    weeklyReview: WeeklyReviewPreferences,
 ) : ViewModel() {
     private val session = MutableStateFlow<AskSession?>(null)
     private val talk = MutableStateFlow(TalkMic())
@@ -123,6 +132,14 @@ class AskViewModel(
     ) { state, settings, history, known, mic ->
         AskUiState(state, settings, history, known, mic)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AskUiState())
+
+    /** What an empty conversation starts with (section 5.7): built on the device, nothing is sent for it. */
+    val guide: StateFlow<AskGuide> = combine(guidedWorld.world, weeklyReview.last) { world, last ->
+        AskGuide(Guided.agenda(world, last), world.inboxId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AskGuide())
+
+    /** The starters for the list Ask was opened from (section 5.7). */
+    fun starters(inboxId: Long?): List<String> = AiContract.starters(startersKind(entry.list, inboxId))
 
     init {
         viewModelScope.launch {
@@ -409,4 +426,16 @@ class AskViewModel(
 
     private fun Set<Long>?.orEmpty(): Set<Long> = this ?: emptySet()
 
+    companion object {
+        /** The kind of list the starters are chosen by: `today`, `upcoming`, `inbox`, `project` or `other`. */
+        fun startersKind(list: AskList, inboxId: Long?): String = when {
+            list.customListId != null -> "other"
+            list.projectId != null && list.projectId == inboxId -> "inbox"
+            list.projectId != null -> "project"
+            list.name == "Today" -> "today"
+            list.name == "Upcoming" -> "upcoming"
+            list.name == "Inbox" -> "inbox"
+            else -> "other"
+        }
+    }
 }

@@ -17,6 +17,15 @@ import kotlinx.serialization.Serializable
 @Serializable object SettingsRoute
 @Serializable object AskRoute
 
+/** A guided session over one queue (docs/cross-app-semantics-v1.md, section 14.2): `inbox`, `overdue` or `waiting`. */
+@Serializable data class GuidedSortRoute(val kind: String)
+
+/** The project review session (section 14.4). */
+@Serializable object GuidedReviewRoute
+
+/** The weekly review (section 14.7). */
+@Serializable object WeeklyReviewRoute
+
 /**
  * Returns a project route only when it would open a different project.
  *

@@ -25,6 +25,9 @@ import com.rendyhd.vicu.ui.navigation.NavigationTicker
 import com.rendyhd.vicu.ui.screens.shared.CompletionToast
 import com.rendyhd.vicu.ui.screens.shared.CompletionToastCenter
 import com.rendyhd.vicu.ui.screens.shared.ProjectActions
+import com.rendyhd.vicu.ui.screens.guided.GuidedProgress
+import com.rendyhd.vicu.ui.screens.guided.GuidedWorldSource
+import com.rendyhd.vicu.ui.screens.guided.GuidedWriter
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.postIfRefused
 import com.rendyhd.vicu.util.BuildInfo
@@ -219,6 +222,7 @@ val repositoryModule = module {
     single { TaskOrderPreferences(synced = get<SyncedPreferences>()) }
     single { RoutinePersonalPreferences(synced = get<SyncedPreferences>()) }
     single { ProjectCategoryPreferences(synced = get<SyncedPreferences>()) }
+    single { WeeklyReviewPreferences(synced = get<SyncedPreferences>()) }
     single<CollaborationRepository> {
         CollaborationRepositoryImpl(
             collaborationDao = get(),
@@ -405,6 +409,20 @@ val commonModule = module {
     }
     single { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     single<CompletionToast> { CompletionToastCenter(messages = get(), taskRepository = get(), time = get(), scope = get()) }
+    // Guided organizing (docs/cross-app-semantics-v1.md, section 14).
+    single {
+        GuidedWorldSource(
+            tasks = get(),
+            projects = get(),
+            auth = get(),
+            reviewPrefs = get(),
+            taskOrder = get(),
+            collabState = get<CollaborationRepository>().state,
+            dayClock = get(),
+        )
+    }
+    single { GuidedWriter(tasks = get(), proposals = get(), dayClock = get()) }
+    single { GuidedProgress() }
     single {
         ProjectActions(
             projectRepository = get(),

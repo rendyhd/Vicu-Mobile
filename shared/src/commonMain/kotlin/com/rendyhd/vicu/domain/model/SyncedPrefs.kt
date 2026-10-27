@@ -45,6 +45,9 @@ data class SyncedPrefsLocalState(
 object SyncedPrefKeys {
     const val INBOX_PROJECT_ID = "inbox_project_id"
     const val TASK_ORDER = "task_order"
+
+    /** The local date the last weekly review was finished, `"YYYY-MM-DD"` (section 14.7). */
+    const val WEEKLY_REVIEW_LAST = "weekly_review.last"
     private const val TASK_ORDER_PROJECT_PREFIX = "task_order.project."
 
     fun taskOrderOf(projectId: Long): String = "$TASK_ORDER_PROJECT_PREFIX$projectId"

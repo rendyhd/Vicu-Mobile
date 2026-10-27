@@ -1,6 +1,9 @@
 package com.rendyhd.vicu.di
 
 import com.rendyhd.vicu.ui.screens.ask.AskViewModel
+import com.rendyhd.vicu.ui.screens.guided.GuidedReviewViewModel
+import com.rendyhd.vicu.ui.screens.guided.GuidedSortViewModel
+import com.rendyhd.vicu.ui.screens.guided.WeeklyReviewViewModel
 import com.rendyhd.vicu.ui.screens.settings.AssistantSettingsViewModel
 import com.rendyhd.vicu.ui.SyncStateViewModel
 import com.rendyhd.vicu.ui.components.collab.CollabViewModel
@@ -81,4 +84,7 @@ val viewModelModule = module {
     viewModelOf(::PlacesViewModel)
     viewModelOf(::AssistantSettingsViewModel)
     viewModelOf(::AskViewModel)
+    viewModelOf(::GuidedSortViewModel)
+    viewModelOf(::GuidedReviewViewModel)
+    viewModelOf(::WeeklyReviewViewModel)
 }

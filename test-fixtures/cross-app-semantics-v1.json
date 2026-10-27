@@ -1822,5 +1822,96 @@
       { "name": "add category above inside a category: it goes right after that category", "entries": { "category.work": { "name": "Work", "order": 65536 }, "category.home": { "name": "Home", "order": 131072 }, "category.project.3": "work", "category.project.6": "work", "category.project.8": "work", "category.project.5": "home", "category.project.13": "home", "category.project.9": "home" }, "action": { "type": "split", "project": 6, "id": "clients", "name": "Clients" }, "expectWrites": { "category.clients": { "name": "Clients", "order": 98304 }, "category.project.6": "clients", "category.project.8": "clients" } },
       { "name": "add category above the last project of the last category: it goes last", "entries": { "category.work": { "name": "Work", "order": 65536 }, "category.project.3": "work", "category.project.6": "work", "category.project.8": "work" }, "action": { "type": "split", "project": 8, "id": "later", "name": "Later" }, "expectWrites": { "category.later": { "name": "Later", "order": 131072 }, "category.project.8": "later" } }
     ]
+  },
+  "guided": {
+    "about": "Vectors for docs/cross-app-semantics-v1.md section 14. Task times are local wall-clock times. Absent task fields: done false, due and due_time and done_at null, repeats false, position 0, hidden false. Absent project fields: parent 0, archived false, permission 2, review \"never\".",
+    "limits": { "waiting_days": 60, "waiting_max": 30, "review_untouched_days": 30, "look_ahead_days": 14, "weekly_due_days": 7, "inbox_age_days": 7 },
+    "world": {
+      "today": "2026-10-27",
+      "inboxProjectId": 1,
+      "reviewSettings": { "enabled": true, "defaultCadence": 14, "excludeInbox": true },
+      "projects": [
+        { "id": 1, "title": "Inbox" },
+        { "id": 2, "title": "Home", "review": { "last": "2026-10-20" } },
+        { "id": 3, "title": "Health" },
+        { "id": 4, "title": "Old stuff", "archived": true },
+        { "id": 5, "title": "Club notices", "permission": 0 },
+        { "id": 6, "title": "Garden", "parent": 2, "review": { "last": "2026-10-01" } },
+        { "id": 7, "title": "Taxes", "review": { "last": "2026-10-10", "cadence": 7 } },
+        { "id": 8, "title": "Hobbies", "review": "excluded" }
+      ],
+      "tasks": [
+        { "id": 101, "title": "dentist", "project": 1, "created": "2026-10-01T09:00:00", "updated": "2026-10-01T09:00:00", "position": 100 },
+        { "id": 102, "title": "milk", "project": 1, "created": "2026-10-26T18:00:00", "updated": "2026-10-26T18:00:00", "position": 200 },
+        { "id": 103, "title": "call mum", "project": 1, "due": "2026-10-25", "created": "2026-10-20T12:00:00", "updated": "2026-10-20T12:00:00", "position": 300 },
+        { "id": 104, "title": "old idea", "project": 1, "done": true, "done_at": "2026-10-22T10:00:00", "created": "2026-09-01T10:00:00", "updated": "2026-10-22T10:00:00" },
+        { "id": 105, "title": "Vicu preferences", "project": 1, "hidden": true, "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00" },
+        { "id": 106, "title": "Vicu routine", "project": 1, "hidden": true, "done": true, "done_at": "2026-10-25T10:00:00", "created": "2026-01-01T10:00:00", "updated": "2026-10-25T10:00:00" },
+        { "id": 201, "title": "Fix the fence", "project": 2, "created": "2026-06-01T10:00:00", "updated": "2026-07-15T10:00:00", "position": 100 },
+        { "id": 202, "title": "Paint the shed", "project": 2, "due": "2026-11-10", "created": "2026-05-01T10:00:00", "updated": "2026-05-01T10:00:00", "position": 200 },
+        { "id": 203, "title": "Water the plants", "project": 2, "due": "2026-10-26", "due_time": "08:00", "repeats": true, "created": "2026-03-01T10:00:00", "updated": "2026-10-25T08:30:00", "position": 300 },
+        { "id": 204, "title": "Clean the gutters", "project": 2, "created": "2026-08-01T10:00:00", "updated": "2026-08-28T10:00:00", "position": 400 },
+        { "id": 205, "title": "Order firewood", "project": 2, "created": "2026-08-01T10:00:00", "updated": "2026-08-29T10:00:00", "position": 500 },
+        { "id": 206, "title": "Mow the lawn", "project": 2, "done": true, "done_at": "2026-10-21T20:00:00", "created": "2026-10-01T10:00:00", "updated": "2026-10-21T20:00:00" },
+        { "id": 207, "title": "Rake the leaves", "project": 2, "done": true, "done_at": "2026-10-20T20:00:00", "created": "2026-10-01T10:00:00", "updated": "2026-10-20T20:00:00" },
+        { "id": 208, "title": "Dinner with Sam", "project": 2, "due": "2026-10-28", "due_time": "19:00", "created": "2026-10-20T10:00:00", "updated": "2026-10-20T10:00:00", "position": 600 },
+        { "id": 209, "title": "Service the boiler", "project": 2, "due": "2026-11-11", "created": "2026-10-20T10:00:00", "updated": "2026-10-20T10:00:00", "position": 700 },
+        { "id": 301, "title": "Book a check-up", "project": 3, "due": "2026-10-13", "created": "2026-09-01T10:00:00", "updated": "2026-09-01T10:00:00", "position": 100 },
+        { "id": 302, "title": "Buy vitamins", "project": 3, "created": "2026-09-20T10:00:00", "updated": "2026-09-20T10:00:00", "position": 200 },
+        { "id": 303, "title": "Run 5k", "project": 3, "done": true, "done_at": "2026-10-24T08:00:00", "created": "2026-10-01T10:00:00", "updated": "2026-10-24T08:00:00" },
+        { "id": 304, "title": "Vicu routine archive", "project": 3, "hidden": true, "done": true, "done_at": "2026-10-26T10:00:00", "created": "2026-01-01T10:00:00", "updated": "2026-10-26T10:00:00" },
+        { "id": 401, "title": "Archived thing", "project": 4, "due": "2026-09-01", "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00" },
+        { "id": 402, "title": "Archived and done", "project": 4, "done": true, "done_at": "2026-10-25T10:00:00", "created": "2026-01-01T10:00:00", "updated": "2026-10-25T10:00:00" },
+        { "id": 403, "title": "Archived and undated", "project": 4, "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00" },
+        { "id": 501, "title": "Read the newsletter", "project": 5, "due": "2026-10-20", "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00" },
+        { "id": 502, "title": "Club rules", "project": 5, "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00" },
+        { "id": 601, "title": "Plant bulbs", "project": 6, "created": "2026-07-01T10:00:00", "updated": "2026-07-01T10:00:00", "position": 100 },
+        { "id": 602, "title": "Prune the roses", "project": 6, "done": true, "done_at": "2026-08-15T10:00:00", "created": "2026-07-01T10:00:00", "updated": "2026-08-15T10:00:00" },
+        { "id": 701, "title": "File the return", "project": 7, "done": true, "done_at": "2026-04-30T10:00:00", "created": "2026-01-01T10:00:00", "updated": "2026-04-30T10:00:00" },
+        { "id": 702, "title": "Check the smoke alarm", "project": 7, "repeats": true, "created": "2026-01-01T10:00:00", "updated": "2026-01-01T10:00:00", "position": 100 }
+      ]
+    },
+    "queues": {
+      "inbox": [103, 101, 102],
+      "overdue": [301, 103, 203],
+      "waiting": [601, 201, 204],
+      "review": [3, 6, 7]
+    },
+    "health": [
+      { "project": 2, "open": 7, "untouched": 4, "overdue": 1, "scheduled": true, "last_done_days": 6, "untouched_ids": [202, 201, 204, 205], "first_open": 203, "line": "7 open · 4 untouched for 30+ days · 1 overdue · last done 6 days ago" },
+      { "project": 3, "open": 2, "untouched": 2, "overdue": 1, "scheduled": false, "last_done_days": 3, "untouched_ids": [301, 302], "first_open": 301, "line": "2 open · 2 untouched for 30+ days · 1 overdue · nothing scheduled · last done 3 days ago" },
+      { "project": 6, "open": 1, "untouched": 1, "overdue": 0, "scheduled": false, "last_done_days": 73, "untouched_ids": [601], "first_open": 601, "line": "1 open · 1 untouched for 30+ days · nothing scheduled · last done 2 months ago" },
+      { "project": 7, "open": 1, "untouched": 1, "overdue": 0, "scheduled": false, "last_done_days": 180, "untouched_ids": [702], "first_open": 702, "line": "1 open · 1 untouched for 30+ days · nothing scheduled · last done 6 months ago" },
+      { "project": 8, "open": 0, "untouched": 0, "overdue": 0, "scheduled": false, "last_done_days": null, "untouched_ids": [], "first_open": null, "line": "No open tasks" }
+    ],
+    "weekly": [
+      { "id": "inbox", "count": 3 },
+      { "id": "mind", "count": null },
+      { "id": "done", "count": 3, "ids": [303, 104, 206] },
+      { "id": "overdue", "count": 3 },
+      { "id": "upcoming", "count": 2, "ids": [208, 202] },
+      { "id": "review", "count": 3 },
+      { "id": "waiting", "count": 3 }
+    ],
+    "agenda": [
+      { "name": "weekly review due for 9 days", "weeklyReviewLast": "2026-10-18", "expect": [{ "id": "inbox", "count": 3, "detail": "2 waiting over a week" }, { "id": "overdue", "count": 3, "detail": null }, { "id": "review", "count": 3, "detail": null }, { "id": "weekly", "count": null, "detail": "Last done 9 days ago" }] },
+      { "name": "weekly review done 5 days ago is not offered", "weeklyReviewLast": "2026-10-22", "expect": [{ "id": "inbox", "count": 3, "detail": "2 waiting over a week" }, { "id": "overdue", "count": 3, "detail": null }, { "id": "review", "count": 3, "detail": null }] },
+      { "name": "weekly review done exactly 7 days ago is due", "weeklyReviewLast": "2026-10-20", "expect": [{ "id": "inbox", "count": 3, "detail": "2 waiting over a week" }, { "id": "overdue", "count": 3, "detail": null }, { "id": "review", "count": 3, "detail": null }, { "id": "weekly", "count": null, "detail": "Last done 7 days ago" }] },
+      { "name": "never done", "weeklyReviewLast": null, "expect": [{ "id": "inbox", "count": 3, "detail": "2 waiting over a week" }, { "id": "overdue", "count": 3, "detail": null }, { "id": "review", "count": 3, "detail": null }, { "id": "weekly", "count": null, "detail": "Not done yet" }] },
+      { "name": "an unreadable value counts as never done", "weeklyReviewLast": "last week", "expect": [{ "id": "inbox", "count": 3, "detail": "2 waiting over a week" }, { "id": "overdue", "count": 3, "detail": null }, { "id": "review", "count": 3, "detail": null }, { "id": "weekly", "count": null, "detail": "Not done yet" }] }
+    ],
+    "ago": [
+      { "days": 0, "expect": "today" },
+      { "days": 1, "expect": "yesterday" },
+      { "days": 2, "expect": "2 days ago" },
+      { "days": 13, "expect": "13 days ago" },
+      { "days": 14, "expect": "2 weeks ago" },
+      { "days": 59, "expect": "8 weeks ago" },
+      { "days": 60, "expect": "2 months ago" },
+      { "days": 364, "expect": "12 months ago" },
+      { "days": 729, "expect": "24 months ago" },
+      { "days": 730, "expect": "2 years ago" },
+      { "days": 1100, "expect": "3 years ago" }
+    ]
   }
 }

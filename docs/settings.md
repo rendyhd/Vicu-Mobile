@@ -56,6 +56,18 @@ Contract section 13; design-system section 5 for the header.
   (`DrawerSectionsExpanded`, like collapsed projects). The desktop keeps it in `config.json`
   (`sidebar_collapsed_categories`, account-specific).
 
+## Changes with guided organizing
+
+Contract section 14; `docs/ai-assistant-v1.md` section 9 for the suggestions.
+
+- **The last weekly review** is a synced preference of the account: `weekly_review.last`, the
+  local date it was finished (`"YYYY-MM-DD"`), written by Finish in the weekly review through
+  `WeeklyReviewPreferences`. Ask's agenda offers the weekly review while it is 7 days old or more,
+  on every device.
+- Guided sessions keep nothing of their own: the queue, the choices and Undo all last while the
+  screen is open. The suggestions use Ask's provider, model and agreement; there is no setting of
+  their own.
+
 ## Summary
 
 | Where | What | Reaches the desktop and other devices | Survives sign-out | In a backup |

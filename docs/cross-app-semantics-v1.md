@@ -8,7 +8,7 @@ Test vectors live in `test-fixtures/` in both repos and must stay byte-identical
 
 | Fixture | Covers |
 |---|---|
-| `cross-app-semantics-v1.json` | due-date rules, smart lists, weeks, custom-list windows, review math, completion hold, date display, collaboration, hidden tasks, synced preferences, task order, project categories |
+| `cross-app-semantics-v1.json` | due-date rules, smart lists, weeks, custom-list windows, review math, completion hold, date display, collaboration, hidden tasks, synced preferences, task order, project categories, guided organizing |
 | `nlp-corpus-v1.json` | quick-add parsing |
 | `routine-archive-v1.json` | routine merge, pruning and archive rules |
 | `design-tokens-v1.json` | colour roles, type, radii and motion (see `design-system-v1.md`) |
@@ -982,6 +982,7 @@ A key is added here, in both repos, in the release that starts writing it.
 | `routine_hidden.<routineId>` | `true`: that shared routine is hidden on this account; or `null`. Any other value acts as the default and is kept; section 6.9 | shown |
 | `category.<categoryId>` | a project category, `{"name", "order"}`, or `null` (deleted); section 13 | none |
 | `category.project.<projectId>` | the id of the category a top-level project is in, or `null`; section 13 | no category |
+| `weekly_review.last` | the local date the last weekly review was finished, `"YYYY-MM-DD"`; section 14.7 | never done |
 
 ### 11.4 The Inbox
 
@@ -1193,3 +1194,147 @@ and every entry the app writes (`expectWrites`; a key that is not listed is not 
 actions are `new` (`id`, `name`), `move` (`category`, `to`: its index in the new display order),
 `rename` (`category`, `name`), `delete` (`category`), `assign` (`project`, `category`: a move from
 a menu) and `split` (`project`, `id`, `name`: Add category above).
+
+---
+
+## 14. Guided organizing
+
+Guided sessions take the person through their tasks one decision at a time. The app chooses what
+needs a decision, shows one card (or one project) at a time with how far along they are, and the
+person decides. Nothing here needs the assistant. With Ask set up, a model suggests a decision for
+each card (`ai-assistant-v1.md`, section 9), and the person still decides. The numbers are in the
+`guided.limits` block of the fixture.
+
+### 14.1 Facts about a task
+
+For a task and today's local date:
+
+- `age_days` = today minus the local date of `created`.
+- `untouched_days` = today minus the local date of `updated`.
+
+A missing or unreadable timestamp gives null, and a rule that needs it does not match.
+
+### 14.2 Queues
+
+A session takes its queue when it starts: the task ids, in order. The card shows the task as it is
+when the card comes; a task done or deleted by then is passed over. Hidden tasks (section 10.1)
+and tasks the person cannot change (permission 0, or in an archived project; section 9.1) are never
+in a queue.
+
+| Queue | Tasks | Order |
+|---|---|---|
+| `inbox` | open tasks of the Inbox project | the Inbox's task order (section 12) |
+| `overdue` | open overdue tasks (section 2) | due date, the oldest first; ties by id |
+| `waiting` | open tasks outside the Inbox, without a due date, not repeating, with `untouched_days` of at least `waiting_days` | `untouched_days`, the highest first; ties by id; at most `waiting_max` |
+
+### 14.3 Cards
+
+A card shows the task's title, project, due date and labels, and how long ago it was added
+("Added 3 weeks ago", 14.6). Its choices:
+
+- **When**: the When panel's quick choices (Today, Tomorrow, This weekend, Next week), a date
+  picked in the When panel, and No date when it has one.
+- **Project**: any project the person can change that is not archived.
+- **Title**: edited on the card.
+- **Complete**, **Delete** (asked first when the person asks to confirm deletes) and **Skip**.
+
+The choices made on a card are written together when the person goes on (**Next**), through the
+usual paths: a merge patch with the changed fields, the project move, queued when offline. Next on
+a card without changes is Skip. **Back** shows the previous card again, with its values as they
+are now. Complete and Delete write at once and go on. The session ends with what it changed
+("Sorted 12: 5 scheduled, 4 moved, 2 completed, 1 deleted") and **Undo all**, which puts back
+every change except deletes.
+
+### 14.4 Project review session
+
+- The queue holds the projects due for review (section 4) that are not archived and that the person
+  can change, without the Inbox when reviews leave it out. Order: never reviewed first, then
+  `daysUntil` (lowest first), then path lowercased, then id.
+- Each project gets one page, about its own tasks (a subproject is reviewed as a project of its
+  own):
+  1. Its path, when it was last reviewed, and the health line (14.5).
+  2. **Still working on it?** Keep, or Archive (not offered for the Inbox). Archive goes on to the
+     next project without marking this one reviewed.
+  3. **Untouched**: its open tasks with `untouched_days` of at least `review_untouched_days`, the
+     highest first, ties by id. Each can be kept, given a date or No date, completed or deleted,
+     with the card's choices.
+  4. **Next step**: the first open task in the project's task order, or the one the model suggests,
+     with the When quick choices. The person can name a new task instead; it is created in the
+     project.
+  5. **Mark reviewed** records the review (section 4) and goes on; **Skip** goes on without it.
+
+### 14.5 Health
+
+A project's health line is built from its own open tasks, hidden tasks left out:
+
+- `open`: the number of open tasks.
+- `untouched`: open tasks with `untouched_days` of at least `review_untouched_days`.
+- `overdue`: open overdue tasks (section 2).
+- `scheduled`: true when an open task has a due date today or later.
+- `last_done_days`: today minus the local date of the latest `done_at` among the project's done
+  tasks the app has; null when it has none.
+
+The line joins these parts with ` · `, in this order, leaving out a part whose condition fails:
+
+| Part | When |
+|---|---|
+| `No open tasks` / `{open} open` | always: the first when `open` is 0 |
+| `{untouched} untouched for {review_untouched_days}+ days` | `untouched` above 0 |
+| `{overdue} overdue` | `overdue` above 0 |
+| `nothing scheduled` | `open` above 0 and `scheduled` false |
+| `last done {ago}` | `last_done_days` not null (14.6) |
+
+### 14.6 How long ago
+
+`ago(days)`: 0 `today`, 1 `yesterday`, 2 to 13 `{days} days ago`, 14 to 59 `{days / 7} weeks ago`,
+60 to 729 `{days / 30} months ago`, from 730 `{days / 365} years ago` (whole numbers, rounded down).
+A card says `Added {ago}`.
+
+### 14.7 Weekly review
+
+A checklist of steps in this order:
+
+| Step | Title | What it shows | Count |
+|---|---|---|---|
+| `inbox` | Sort the Inbox | the `inbox` session | the `inbox` queue |
+| `mind` | Anything on your mind? | brain dump when dictation is ready, otherwise quick add | none |
+| `done` | Look back | tasks completed in the last 7 days (`done_at` local date today − 6 or later), the newest first | those tasks |
+| `overdue` | Overdue | the `overdue` session | the `overdue` queue |
+| `upcoming` | Look ahead | open tasks due from tomorrow to today + `look_ahead_days`, by due date then id | those tasks |
+| `review` | Review projects | the project review session (14.4); left out while reviews are off | the review queue |
+| `waiting` | Waiting a long time | the `waiting` session | the `waiting` queue |
+
+- `done` and `upcoming` show tasks of projects that are not archived, hidden tasks left out; they
+  are only looked at, and their rows open the task.
+- **Next** opens the first step not done. Any step can be opened. A step is done when its session
+  ends or the person marks it done; a step whose count is 0 is done from the start. `mind` is
+  never done from the start.
+- **Finish** is offered at any time. It writes `weekly_review.last` (section 11.3) with today and
+  shows what the review changed.
+- The weekly review is **due** when `weekly_review.last` is missing, unreadable, or at least
+  `weekly_due_days` days before today.
+
+### 14.8 Ask's agenda
+
+When Ask opens on a conversation without messages, it lists these, in this order, each only when
+its count is above 0 (the weekly review only while it is due):
+
+| Item | Title | Count | Detail |
+|---|---|---|---|
+| `inbox` | Sort the Inbox | the `inbox` queue | `{n} waiting over a week` when `n`, the tasks of the queue with `age_days` of at least `inbox_age_days`, is above 0 |
+| `overdue` | Sort out overdue | the `overdue` queue | none |
+| `review` | Review projects | the review queue (14.4); none while reviews are off | none |
+| `weekly` | Weekly review | none | `Last done {ago}`, or `Not done yet` |
+
+Each item opens its session. The starters of `ai-assistant-v1.md` section 5.7 follow.
+
+### 14.9 Vectors
+
+`guided.world` holds one account's projects (`id`, `title`, `parent`, `archived`, `permission`,
+`review`: `"never"`, `"excluded"` or `{"last", "cadence"}`) and tasks (`id`, `title`, `project`,
+`done`, `due` and `due_time` (a local date and an optional `HH:MM`), `created`, `updated`,
+`done_at` (local times), `repeats`, `position`, `hidden` (its description holds a marker)), with
+`today`, `inboxProjectId` and the review settings. `guided.queues` gives each queue's ids,
+`guided.health` each project's facts and line, `guided.weekly` each step's count (and the `done`
+and `upcoming` ids), `guided.agenda` the items for a `weekly_review.last`, and `guided.ago` the
+phrases.

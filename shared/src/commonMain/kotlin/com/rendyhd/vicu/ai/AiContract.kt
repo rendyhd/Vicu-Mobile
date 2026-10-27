@@ -43,6 +43,13 @@ object AiContract {
     /** The brain dump's answer: the dictation answer with new projects (section 4.8.2). */
     val brainDumpAnswerSchema: JsonObject get() = root.obj("brainDump").obj("answerSchema")
 
+    /** The answer schema of a guided session's suggestions (section 9.2). */
+    val organizeAnswerSchema: JsonObject get() = root.obj("organize").obj("answerSchema")
+
+    /** Ask's starters by list kind (section 5.7): `today`, `upcoming`, `inbox`, `project`, `other`. */
+    fun starters(kind: String): List<String> =
+        (root.obj("ask").obj("starters")[kind] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
+
     /** The draft fields in the order `guessed` lists them. */
     val dictationFields: List<String> by lazy { root.obj("dictation").getValue("fields").jsonArray.map { it.jsonPrimitive.content } }
 
@@ -121,6 +128,11 @@ class AiLimits(private val o: JsonObject) {
     val brainDumpProjectsMax get() = n("brain_dump_projects_max")
     val brainDumpTasksMax get() = n("brain_dump_tasks_max")
     val brainDumpMaxTokens get() = n("brain_dump_max_tokens")
+    val organizeBatchMax get() = n("organize_batch_max")
+    val organizePrefetch get() = n("organize_prefetch")
+    val organizeNotesMaxChars get() = n("organize_notes_max_chars")
+    val organizeReasonMaxChars get() = n("organize_reason_max_chars")
+    val organizeMaxTokens get() = n("organize_max_tokens")
 }
 
 /** A provider preset (section 2.1). */

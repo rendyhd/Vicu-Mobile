@@ -25,11 +25,13 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -65,6 +67,8 @@ fun ReviewScreen(
     onOpenDrawer: () -> Unit,
     onNavigateToSearch: () -> Unit = {},
     onTaskClick: (Long) -> Unit = {},
+    onStartReview: () -> Unit = {},
+    onWeeklyReview: () -> Unit = {},
     viewModel: ReviewViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -109,6 +113,14 @@ fun ReviewScreen(
                 progress = { if (reviewable == 0) 1f else reviewedCount.toFloat() / total.toFloat() },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            // The guided ways through (docs/cross-app-semantics-v1.md, sections 14.4 and 14.7).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                FilledTonalButton(onClick = onStartReview, enabled = remaining > 0) { Text("Start review") }
+                OutlinedButton(onClick = onWeeklyReview) { Text("Weekly review") }
+            }
             PrimaryTabRow(selectedTabIndex = if (state.tab == ReviewTab.DUE) 0 else 1) {
                 Tab(
                     selected = state.tab == ReviewTab.DUE,
