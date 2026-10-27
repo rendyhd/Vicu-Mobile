@@ -87,9 +87,11 @@ fun AskScreen(
     onOpenDrawer: () -> Unit,
     onTaskClick: (Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onStartGuided: (String) -> Unit = {},
     viewModel: AskViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val guide by viewModel.guide.collectAsStateWithLifecycle()
     val session = state.session
     val ready = state.settings.askReady
     var historyOpen by remember { mutableStateOf(false) }
@@ -129,6 +131,16 @@ fun AskScreen(
             if (!ready) {
                 NotSetUp(onOpenSettings, Modifier.weight(1f))
                 return@Column
+            }
+            if (session?.conversation?.messages?.isEmpty() == true) {
+                AskAgenda(
+                    items = guide.agenda,
+                    starters = viewModel.starters(guide.inboxId),
+                    enabled = !session.busy,
+                    onItem = onStartGuided,
+                    onStarter = { text -> viewModel.send(text) },
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
             Conversation(state, viewModel, onTaskClick, Modifier.weight(1f))
             InputBar(state, viewModel)

@@ -108,7 +108,11 @@ import com.rendyhd.vicu.ui.navigation.InboxRoute
 import com.rendyhd.vicu.ui.navigation.LogbookRoute
 import com.rendyhd.vicu.ui.navigation.NavigationTicker
 import com.rendyhd.vicu.ui.navigation.ProjectRoute
+import com.rendyhd.vicu.ui.navigation.GuidedReviewRoute
+import com.rendyhd.vicu.ui.navigation.GuidedSortRoute
 import com.rendyhd.vicu.ui.navigation.ReviewRoute
+import com.rendyhd.vicu.ui.navigation.WeeklyReviewRoute
+import com.rendyhd.vicu.ui.navigation.openGuided
 import com.rendyhd.vicu.ui.navigation.RoutinesRoute
 import com.rendyhd.vicu.ui.navigation.SearchRoute
 import com.rendyhd.vicu.ui.navigation.SettingsRoute
@@ -519,14 +523,19 @@ fun VicuApp(
     // Resolve current route name for drawer/bottom bar active highlighting
     val currentRoute = currentRouteKey(navBackStackEntry)
 
+    // A guided session or the weekly review is one thing at a time: no drawer, no bottom bar.
+    val inGuided = currentDestination?.let { dest ->
+        dest.hasRoute(GuidedSortRoute::class) || dest.hasRoute(GuidedReviewRoute::class) || dest.hasRoute(WeeklyReviewRoute::class)
+    } ?: false
+
     // Disable drawer on Setup, Search screens
-    val enableDrawerGestures = authState == AuthState.Authenticated && currentDestination?.let { dest ->
+    val enableDrawerGestures = authState == AuthState.Authenticated && !inGuided && currentDestination?.let { dest ->
         !dest.hasRoute(SetupRoute::class) &&
             !dest.hasRoute(SearchRoute::class)
     } ?: false
 
-    // Show bottom bar on authenticated screens (not Setup or Search)
-    val showBottomBar = authState == AuthState.Authenticated && currentDestination?.let { dest ->
+    // Show bottom bar on authenticated screens (not Setup, Search or a guided session)
+    val showBottomBar = authState == AuthState.Authenticated && !inGuided && currentDestination?.let { dest ->
         !dest.hasRoute(SetupRoute::class) && !dest.hasRoute(SearchRoute::class)
     } ?: false
 
@@ -799,6 +808,8 @@ fun VicuApp(
             onClose = { askOpen = false },
             onTaskClick = onTaskClick,
             viewModel = askViewModel,
+            // An agenda item opens its guided session over the screen Ask was opened from.
+            onStartGuided = { id -> navController.openGuided(id) },
         )
 
         // Task Detail (full-screen edit). A task made offline keeps its editor (and the temporary id

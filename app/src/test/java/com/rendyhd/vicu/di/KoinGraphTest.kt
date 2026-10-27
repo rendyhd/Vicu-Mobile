@@ -16,6 +16,7 @@ import com.rendyhd.vicu.data.local.dao.ProjectDao
 import com.rendyhd.vicu.data.local.dao.RoutineArchiveDao
 import com.rendyhd.vicu.data.local.dao.TaskDao
 import com.rendyhd.vicu.ui.screens.customlist.CustomListViewModel
+import com.rendyhd.vicu.ui.screens.guided.GuidedSortViewModel
 import com.rendyhd.vicu.ui.screens.project.ProjectViewModel
 import com.rendyhd.vicu.ui.screens.tag.TagViewModel
 import com.rendyhd.vicu.util.NetworkMonitor
@@ -90,6 +91,7 @@ class KoinGraphTest {
                 withParameter<CustomListViewModel> { SavedStateHandle(mapOf("listId" to "list-1")) }
                 withParameter<ProjectViewModel> { SavedStateHandle(mapOf("projectId" to 1L)) }
                 withParameter<TagViewModel> { SavedStateHandle(mapOf("labelId" to 1L)) }
+                withParameter<GuidedSortViewModel> { SavedStateHandle(mapOf("kind" to "inbox")) }
             },
         )
     }

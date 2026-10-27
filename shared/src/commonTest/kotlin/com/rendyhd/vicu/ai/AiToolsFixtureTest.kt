@@ -7,6 +7,10 @@ import com.rendyhd.vicu.ai.dictation.ContextPlace
 import com.rendyhd.vicu.ai.dictation.ContextProject
 import com.rendyhd.vicu.ai.dictation.DictationChecks
 import com.rendyhd.vicu.ai.dictation.DictationContext
+import com.rendyhd.vicu.ai.organize.OrganizeChecks
+import com.rendyhd.vicu.ai.organize.OrganizeResult
+import com.rendyhd.vicu.ai.organize.OrganizeSession
+import com.rendyhd.vicu.ai.organize.OrganizeTask
 import com.rendyhd.vicu.ai.talk.SpokenConfirmation
 import com.rendyhd.vicu.speech.HintProject
 import com.rendyhd.vicu.speech.VocabularyHint
@@ -118,6 +122,83 @@ class AiToolsFixtureTest {
     }
 
     @Test
+    fun organizeCheckVectors() {
+        val ctx = fixture.getValue("dictation").jsonObject.getValue("context").jsonObject
+        for (vector in fixture.getValue("organize").jsonObject.getValue("checks").jsonArray.map { it.jsonObject }) {
+            val name = vector.getValue("name").jsonPrimitive.content
+            val context = contextOf(vector, ctx)
+            val answer = vector.getValue("answer").jsonObject
+            assertNull(JsonSchema.firstProblem(answer, AiContract.organizeAnswerSchema), name)
+            val session = OrganizeSession.entries.first { it.id == vector.getValue("session").jsonPrimitive.content }
+            val tasks = vector.getValue("tasks").jsonArray.map {
+                val o = it.jsonObject
+                OrganizeTask(
+                    id = o.getValue("id").jsonPrimitive.long,
+                    title = o.getValue("title").jsonPrimitive.content,
+                    projectId = o.getValue("project_id").jsonPrimitive.long,
+                    hasDue = o["due"] !is JsonNull,
+                )
+            }
+            val actual = organizeJson(OrganizeChecks.check(answer, session, tasks, context))
+            assertEquals(vector.getValue("expect").jsonObject, actual, name)
+        }
+    }
+
+    private fun organizeJson(result: OrganizeResult): JsonObject = buildJsonObject {
+        put(
+            "suggestions",
+            buildJsonArray {
+                for (s in result.suggestions) {
+                    add(
+                        buildJsonObject {
+                            put("task_id", s.taskId)
+                            put("title", s.title?.let { JsonPrimitive(it) } ?: JsonNull)
+                            put("project_id", s.projectId?.let { JsonPrimitive(it) } ?: JsonNull)
+                            put("due", s.due?.let { JsonPrimitive(wall(it)) } ?: JsonNull)
+                            put("due_has_time", s.dueHasTime)
+                            put("clear_due", s.clearDue)
+                            put("close", s.close?.let { JsonPrimitive(it) } ?: JsonNull)
+                            put("reason", s.reason)
+                        },
+                    )
+                }
+            },
+        )
+        put(
+            "next_step",
+            result.nextStep?.let { n ->
+                buildJsonObject {
+                    put("task_id", n.taskId?.let { JsonPrimitive(it) } ?: JsonNull)
+                    put("title", n.title?.let { JsonPrimitive(it) } ?: JsonNull)
+                    put("due", n.due?.let { JsonPrimitive(wall(it)) } ?: JsonNull)
+                    put("due_has_time", n.dueHasTime)
+                }
+            } ?: JsonNull,
+        )
+        put(
+            "dropped",
+            buildJsonArray {
+                for (d in result.dropped) {
+                    add(
+                        buildJsonObject {
+                            put("task_id", d.taskId?.let { JsonPrimitive(it) } ?: JsonNull)
+                            put("field", d.field)
+                            put("value", d.value)
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    @Test
+    fun startersCoverEveryListKind() {
+        for (kind in listOf("today", "upcoming", "inbox", "project", "other")) {
+            assertTrue(AiContract.starters(kind).isNotEmpty(), kind)
+        }
+    }
+
+    @Test
     fun spokenConfirmationVectors() {
         for (vector in fixture.getValue("talk").jsonObject.getValue("confirmVectors").jsonArray.map { it.jsonObject }) {
             val text = vector.getValue("text").jsonPrimitive.content
@@ -133,6 +214,7 @@ class AiToolsFixtureTest {
         val schemas = mutableMapOf(
             "dictation.answerSchema" to AiContract.dictationAnswerSchema,
             "brainDump.answerSchema" to AiContract.brainDumpAnswerSchema,
+            "organize.answerSchema" to AiContract.organizeAnswerSchema,
         )
         for (tool in AiContract.askTools) schemas["tool ${tool.name}"] = tool.parameters
         val probe = fixture.getValue("probe").jsonObject

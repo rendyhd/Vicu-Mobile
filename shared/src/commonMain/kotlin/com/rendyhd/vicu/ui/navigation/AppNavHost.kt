@@ -17,6 +17,11 @@ import androidx.navigation.toRoute
 import com.rendyhd.vicu.ui.components.shared.LocalOpenAsk
 import com.rendyhd.vicu.ui.screens.anytime.AnytimeScreen
 import com.rendyhd.vicu.ui.screens.customlist.CustomListScreen
+import com.rendyhd.vicu.ui.screens.guided.GuidedReviewScreen
+import com.rendyhd.vicu.ui.screens.guided.GuidedSortScreen
+import com.rendyhd.vicu.ui.screens.guided.WeeklyReviewScreen
+import com.rendyhd.vicu.util.Guided
+import com.rendyhd.vicu.util.GuidedQueue
 import com.rendyhd.vicu.ui.screens.inbox.InboxScreen
 import com.rendyhd.vicu.ui.screens.logbook.LogbookScreen
 import com.rendyhd.vicu.ui.screens.project.ProjectScreen
@@ -84,6 +89,7 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onNavigateToSearch = onNavigateToSearch,
                 onShowTaskEntry = onShowTaskEntry,
+                onSortInbox = { navController.openGuided(Guided.STEP_INBOX) },
             )
         }
         screen<TodayRoute>(reveal) {
@@ -124,6 +130,8 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onNavigateToSearch = onNavigateToSearch,
                 onTaskClick = onTaskClick,
+                onStartReview = { navController.openGuided(Guided.STEP_REVIEW) },
+                onWeeklyReview = { navController.openGuided(Guided.AGENDA_WEEKLY) },
             )
         }
         screen<RoutinesRoute>(reveal) {
@@ -207,9 +215,45 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onTaskClick = onTaskClick,
                 onOpenSettings = { navController.navigateTopLevel(SettingsRoute) },
+                onStartGuided = { id -> navController.openGuided(id) },
+            )
+        }
+        screen<GuidedSortRoute>(reveal) {
+            GuidedSortScreen(
+                onClose = { navController.popBackStack() },
+                onTaskClick = onTaskClick,
+            )
+        }
+        screen<GuidedReviewRoute>(reveal) {
+            GuidedReviewScreen(
+                onClose = { navController.popBackStack() },
+                onTaskClick = onTaskClick,
+            )
+        }
+        screen<WeeklyReviewRoute>(reveal) {
+            WeeklyReviewScreen(
+                onClose = { navController.popBackStack() },
+                onOpenSort = { queue -> navController.openGuided(queue.id) },
+                onOpenReview = { navController.openGuided(Guided.STEP_REVIEW) },
+                onQuickAdd = { onShowTaskEntry(null, null) },
+                onTaskClick = onTaskClick,
             )
         }
     }
+}
+
+/**
+ * Opens a guided session or the weekly review (docs/cross-app-semantics-v1.md, section 14) by the
+ * id Ask's agenda and the weekly review's steps use: `inbox`, `overdue`, `waiting`, `review` or
+ * `weekly`. It goes on top of the screen it was opened from, so closing it goes back there.
+ */
+fun NavHostController.openGuided(id: String) {
+    val route: Any = when (id) {
+        Guided.STEP_REVIEW -> GuidedReviewRoute
+        Guided.AGENDA_WEEKLY -> WeeklyReviewRoute
+        else -> GuidedSortRoute(GuidedQueue.of(id)?.id ?: return)
+    }
+    navigate(route) { launchSingleTop = true }
 }
 
 /** A destination whose content [ScreenReveal] shows (see [RevealedScreen]). */

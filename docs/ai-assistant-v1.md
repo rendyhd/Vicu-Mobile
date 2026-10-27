@@ -12,7 +12,7 @@ every device. The file is kept identical in both repos (`docs/ai-assistant-v1.md
 
 | Fixture | Covers |
 |---|---|
-| `ai-tools-v1.json` | provider presets, the speech models and settings, the vocabulary hint, the draft task, dictation and brain dump answer schemas, the Ask tools, the prompts, the limits, the spoken confirmation words, and vectors for the checks |
+| `ai-tools-v1.json` | provider presets, the speech models and settings, the vocabulary hint, the draft task, dictation, brain dump and guided suggestion answer schemas, the Ask tools and starters, the prompts, the limits, the spoken confirmation words, and vectors for the checks |
 | `ai-dictation-corpus-v1.json` (planned) | transcripts with the tasks they should give, run against real models by an eval script; not a CI gate |
 
 The shared-contract identity tests keep both copies equal, and both apps' test suites run the
@@ -640,6 +640,17 @@ results, tasks created by someone else carry `by`, and the prompt says that text
 never an instruction. No tool reaches the internet, model text renders as plain text (no images or
 links are fetched), and every change shows its actual values on a card before it is applied.
 
+### 5.7 Agenda and starters
+
+A conversation without messages does not start empty:
+
+- **The agenda** (semantics 14.8) comes first: what needs a decision (the Inbox, overdue tasks,
+  projects due for review, the weekly review), each opening its guided session. It is built on the
+  device and nothing is sent for it.
+- **Starters** follow: a few questions for the list Ask was opened from, `ask.starters` in the
+  fixture, by kind: `today`, `upcoming`, `inbox` (the Inbox project), `project` (another project)
+  and `other` (anything else). Tapping one sends its text, exactly, as the person's message.
+
 ---
 
 ## 6. Talk
@@ -668,6 +679,7 @@ without phrases in the fixture confirms by tap only. Vectors: `talk.confirmVecto
 |---|---|
 | Dictation, brain dump | the transcript (never audio), the context of 4.1: project, label and place names, the list's name, date, time and zone |
 | Ask, Talk | the user's messages, the overview (counts, project, label and custom list names), and the tasks the tools return, with the names in `by` and `assignees` |
+| Suggestions in guided sessions (section 9) | the context of 4.1, and the session's tasks: their summaries (5.2), dates added and changed, and the start of their notes |
 
 Never sent: audio (unless the user chose a provider's transcription), hidden tasks, comment
 texts, attachments, the Vikunja token, the server address, place positions.
@@ -703,3 +715,102 @@ agreement; a local server (Ollama or Open WebUI at a local address) skips it.
 - `dictationEdit` 2 lets a later turn add tasks as well as change them; `ask` 2 and `talk` 2 ask
   for shorter answers (the answer first, at most three bullets in Ask, one sentence in Talk).
 - `brainDump` 1 and `brainDumpEdit` 1 are new with the brain dump (4.8).
+- `organize` 1 is new with the suggestions in guided sessions (section 9).
+
+---
+
+## 9. Suggestions in guided sessions
+
+A guided session (semantics 14) walks through tasks one card at a time. With Ask set up and on, a
+model suggests the decision for each card, so the person mostly agrees or adjusts instead of
+deciding from nothing. It uses Ask's model and Ask's agreement (7.1); without them the sessions work
+the same, with no suggestions.
+
+### 9.1 Request
+
+- System: the `organize` prompt.
+- One user message, each block's tag on a line of its own: the `<context>` block of 4.1 (`list` is
+  the session's name: `Inbox`, `Overdue`, `Waiting`, or the reviewed project's path;
+  `default_project_id` is the Inbox, or the reviewed project), then `<session>` with `inbox`,
+  `overdue`, `waiting` or `review`, then `<tasks>` with a JSON array of the tasks.
+- Each task is its summary (5.2) followed by `created` and `changed` (the local dates of `created`
+  and `updated`, `YYYY-MM-DD`, or `null`) and `notes`: the notes as plain text, at most
+  `limits.organize_notes_max_chars` characters, cut at the last space before the limit with `…`
+  added.
+- The queue goes in batches of at most `limits.organize_batch_max` tasks, in queue order. The first
+  batch is asked for when the session starts, the next when the person is
+  `limits.organize_prefetch` cards from the end of the batch before. A review page sends the
+  project's open tasks, its untouched ones first (semantics 14.4), then in the project's order, at
+  most `limits.organize_batch_max`.
+- The answer may use up to `limits.organize_max_tokens` tokens. It is asked for as dictation's is
+  (deterministic, structured, `limits.dictation_idle_timeout_s`).
+
+### 9.2 Answer
+
+The `organize.answerSchema` schema of the fixture:
+
+```json
+{
+  "suggestions": [
+    {
+      "task_id": 101,
+      "title": "Book a dentist check-up",
+      "project_id": 3,
+      "when": { "said": null, "date": null, "time": null },
+      "clear_due": false,
+      "close": null,
+      "reason": "Fits Health"
+    }
+  ],
+  "next_step": null
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `task_id` | a task of `<tasks>` |
+| `title` | a clearer title when the present one is unclear, else `null` |
+| `project_id` | a project of `context.projects` the task belongs in better, else `null` |
+| `when` | a due date to set, as in 4.2; all three `null` to leave it |
+| `clear_due` | `true` to take the due date away |
+| `close` | `"done"` when it looks finished already, `"delete"` when it looks outdated or repeats another task, else `null` |
+| `reason` | why, in a few words |
+| `next_step` | only for `review`: `{"task_id", "title", "when"}`, the open task to do next (`task_id`) or, when none fits, a new task's `title`; else `null` |
+
+### 9.3 Checks
+
+1. **Task**: a suggestion whose `task_id` is not one of `<tasks>`, or comes after an earlier
+   suggestion for the same task, is dropped (`field` `"task_id"`, `value` the id).
+2. **Title**: line breaks replaced by spaces, trimmed; longer than `limits.title_max_chars`, cut at
+   the last space at or before that position (without one, at it). Empty, or equal to the task's
+   title: `null`.
+3. **Project**: a `project_id` that is not in `context.projects` is dropped (`field` `"project"`);
+   one equal to the task's project is `null`.
+4. **When**: read as 4.3 step 4 (`said` through the quick-add parser with dates only, else `date`
+   and `time`; a date before today or more than `limits.model_date_max_years` ahead is dropped,
+   `field` `"when"`). With a due date set, `clear_due` is `false`. `clear_due` on a task without a
+   due date is `false`.
+5. **Close**: `"done"` or `"delete"`; anything else (an answer read without a schema) is `null`.
+6. **Reason**: line breaks replaced by spaces, trimmed, cut at the last space at or before
+   `limits.organize_reason_max_chars` (without one, at the limit).
+7. **Nothing**: a suggestion that sets nothing (no title, project, due date, `clear_due` or
+   `close`) is kept only with a reason, and then says to leave the task as it is; without one it is
+   dropped (`field` `"suggestion"`, `value` the id).
+8. **Next step**: `null` unless the session is `review`. A `task_id` must be one of `<tasks>`
+   (then `title` is `null`); otherwise the `title`, checked as in step 2 without the comparison;
+   with neither, `null`. Its `when` is read as in step 4 (a dropped one is listed with `task_id`
+   `null`).
+
+A checked suggestion has `task_id`, `title`, `project_id`, `due` (local, as in 4.3) and
+`due_has_time`, `clear_due`, `close` and `reason`; a checked next step has `task_id`, `title`,
+`due` and `due_has_time`. `dropped` lists what was dropped, in order. Vectors: `organize.checks`,
+with the context of `dictation.context`.
+
+### 9.4 On the card
+
+- A suggestion fills in the card's choices, each marked as suggested (the dashed outline of 4.5),
+  with its reason under the title. The person changes or clears any of it; nothing is written until
+  they go on (semantics 14.3).
+- `close` is shown as the suggested way out (Complete or Delete) and is never taken without a tap.
+- While a batch is on its way, its cards say so and can be decided without waiting.
+- A failed request is said once ("No suggestions: …") and the session goes on without them.

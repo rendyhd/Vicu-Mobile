@@ -65,6 +65,7 @@ fun AskSheet(
     onClose: () -> Unit,
     onTaskClick: (Long) -> Unit,
     viewModel: AskViewModel,
+    onStartGuided: (String) -> Unit = {},
 ) {
     val reduceMotion = rememberReduceMotion()
     val close = {
@@ -79,6 +80,7 @@ fun AskSheet(
     ) {
         NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), isBackEnabled = open) { close() }
         val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val guide by viewModel.guide.collectAsStateWithLifecycle()
         val session = state.session
         // Grown once something was asked: the answers need the room, the list above stays in sight.
         val grown = session != null && (
@@ -104,7 +106,22 @@ fun AskSheet(
             ) {
                 Column(Modifier.navigationBarsPadding().imePadding()) {
                     Header(state, viewModel, onClose = close)
-                    if (grown) Conversation(state, viewModel, onTaskClick, Modifier.weight(1f))
+                    if (grown) {
+                        Conversation(state, viewModel, onTaskClick, Modifier.weight(1f))
+                    } else if (state.settings.askReady) {
+                        // Nothing asked yet: what needs a decision, and questions to start with (section 5.7).
+                        AskAgenda(
+                            items = guide.agenda,
+                            starters = viewModel.starters(guide.inboxId),
+                            enabled = session?.busy != true,
+                            onItem = { id ->
+                                close()
+                                onStartGuided(id)
+                            },
+                            onStarter = { text -> viewModel.send(text) },
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
                     if (state.settings.askReady) {
                         InputBar(state, viewModel)
                     } else {
