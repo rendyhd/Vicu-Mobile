@@ -7,12 +7,13 @@
 [![Website](https://img.shields.io/badge/website-vicutodo.app-ee9a4d)](https://vicutodo.app/)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%7C%20iOS%2017%2B-brightgreen)
+[![Ko-fi](https://img.shields.io/badge/support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/rendyhd)
 
 <p>
-  <img alt="Today on Android" width="200" height="445" src="https://vicutodo.app/assets/img/screens/android-today-light.webp">
-  <img alt="Quick add above the keyboard" width="200" height="445" src="https://vicutodo.app/assets/img/screens/android-quick-add-light.webp">
-  <img alt="Today on iPhone" width="200" height="435" src="https://vicutodo.app/assets/img/screens/ios-today-light.webp">
-  <img alt="A shared project on iPhone" width="200" height="435" src="https://vicutodo.app/assets/img/screens/ios-shared-light.webp">
+  <img alt="Today on Android" width="24%" src="https://vicutodo.app/assets/img/screens/android-today-light.webp">
+  <img alt="Quick add above the keyboard" width="24%" src="https://vicutodo.app/assets/img/screens/android-quick-add-light.webp">
+  <img alt="Today on iPhone" width="24%" src="https://vicutodo.app/assets/img/screens/ios-today-light.webp">
+  <img alt="A shared project on iPhone" width="24%" src="https://vicutodo.app/assets/img/screens/ios-shared-light.webp">
 </p>
 
 ## Get Vicu
@@ -152,6 +153,10 @@ Found a bug or have an idea? [Open an issue](https://github.com/rendyhd/Vicu-Mob
 - **[Vicu](https://github.com/rendyhd/Vicu)**: the desktop app for Windows, macOS and Linux, with Quick Entry, Quick View, voice input, Obsidian and browser links
 - **[Vikunja](https://vikunja.io/)**: the open-source backend that powers Vicu
 - **[Privacy policy](docs/privacy-policy.md)**: Vicu collects nothing; your data goes only to your own Vikunja server
+
+## Support Vicu
+
+Vicu is free and open source, with no ads, no account and no paid tier. If it helps you, you can [support it on Ko-fi](https://ko-fi.com/rendyhd).
 
 ## License
 
