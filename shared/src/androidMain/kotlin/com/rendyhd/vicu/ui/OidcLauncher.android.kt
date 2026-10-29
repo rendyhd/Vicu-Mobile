@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import com.rendyhd.vicu.auth.OidcHandler
+import com.rendyhd.vicu.auth.OidcSignInMode
 
 @Composable
 actual fun rememberOidcLauncher(
@@ -26,7 +27,12 @@ actual fun rememberOidcLauncher(
         onResult(code, state, error)
     }
     return { params ->
-        val intent = Intent(context, Class.forName("com.rendyhd.vicu.auth.OidcLoginActivity")).apply {
+        // The in-app web view, or the browser for a provider that signs in with a passkey.
+        val activity = when (params.mode) {
+            OidcSignInMode.WebView -> "com.rendyhd.vicu.auth.OidcLoginActivity"
+            OidcSignInMode.Browser -> "com.rendyhd.vicu.auth.OidcBrowserActivity"
+        }
+        val intent = Intent(context, Class.forName(activity)).apply {
             putExtra("auth_url", params.authUrl)
             putExtra("redirect_prefix", params.redirectUri)
             putExtra("expected_state", params.state)

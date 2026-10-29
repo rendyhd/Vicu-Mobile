@@ -57,8 +57,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.font.FontFamily
+import com.rendyhd.vicu.auth.OidcBrowserSignIn
+import com.rendyhd.vicu.data.remote.api.OidcProviderDto
+import com.rendyhd.vicu.ui.components.shared.copyPlainText
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -146,7 +156,27 @@ fun SetupScreen(
                                 oidcLauncher(params)
                             }
                         },
+                        onSelectOidcBrowser = { provider -> viewModel.showOidcBrowser(provider) },
                     )
+                }
+                SetupStep.OidcBrowser -> CenteredScrollingStep {
+                    val provider = state.selectedProvider
+                    if (provider != null) {
+                        OidcBrowserStep(
+                            provider = provider,
+                            providers = state.oidcProviders,
+                            passkeyPrompted = state.passkeyPrompted,
+                            error = state.error,
+                            onContinue = { chosen ->
+                                viewModel.showOidcBrowser(chosen, state.passkeyPrompted)
+                                val params = viewModel.getOidcAuthParams()
+                                if (params != null) {
+                                    oidcLauncher(params)
+                                }
+                            },
+                            onUseWebView = viewModel::goBack,
+                        )
+                    }
                 }
                 SetupStep.PasswordLogin -> CenteredScrollingStep {
                     PasswordLoginStep(
@@ -383,6 +413,7 @@ private fun AuthMethodPickerStep(
     onSelectPassword: () -> Unit,
     onSelectApiToken: () -> Unit,
     onSelectOidc: (com.rendyhd.vicu.data.remote.api.OidcProviderDto) -> Unit,
+    onSelectOidcBrowser: (com.rendyhd.vicu.data.remote.api.OidcProviderDto) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -422,6 +453,11 @@ private fun AuthMethodPickerStep(
                         Text("OpenID Connect", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+            }
+        }
+        oidcProviders.firstOrNull()?.let { provider ->
+            TextButton(onClick = { onSelectOidcBrowser(provider) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Uses a passkey? Sign in through your browser")
             }
         }
 
@@ -549,6 +585,83 @@ private fun PasswordLoginStep(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(if (showTotpField) "Verify" else "Sign In")
+        }
+    }
+}
+
+/**
+ * OIDC sign-in in the system browser, where the user's passkeys work. The browser comes back on
+ * [OidcBrowserSignIn.REDIRECT_URI], which the provider has to know: shown with a Copy button.
+ */
+@Composable
+private fun OidcBrowserStep(
+    provider: OidcProviderDto,
+    providers: List<OidcProviderDto>,
+    passkeyPrompted: Boolean,
+    error: String?,
+    onContinue: (OidcProviderDto) -> Unit,
+    onUseWebView: () -> Unit,
+) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copied by rememberSaveable { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "Sign in with your browser",
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        if (passkeyPrompted) {
+            Text(
+                text = "${provider.name} asked for a passkey. Passkeys can't be used in the in-app sign-in, so sign in through your browser instead.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        Text(
+            text = "Your browser returns to Vicu at the address below. Add it once as a redirect URL (callback URL) of the Vikunja client in ${provider.name}:",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SelectionContainer(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = OidcBrowserSignIn.REDIRECT_URI,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            OutlinedButton(onClick = {
+                scope.launch {
+                    clipboard.copyPlainText("Redirect URL", OidcBrowserSignIn.REDIRECT_URI)
+                    copied = true
+                    delay(1500)
+                    copied = false
+                }
+            }) {
+                Text(if (copied) "Copied" else "Copy")
+            }
+        }
+        if (error != null) {
+            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+        if (providers.size > 1) {
+            providers.forEach { option ->
+                Button(onClick = { onContinue(option) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Continue in browser with ${option.name}")
+                }
+            }
+        } else {
+            Button(onClick = { onContinue(provider) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Continue in browser")
+            }
+        }
+        TextButton(onClick = onUseWebView, modifier = Modifier.fillMaxWidth()) {
+            Text("Use the in-app sign-in instead")
         }
     }
 }

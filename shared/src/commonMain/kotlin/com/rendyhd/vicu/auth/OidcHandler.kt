@@ -10,6 +10,9 @@ sealed class OidcResult {
     data class Success(val token: String, val refreshToken: String? = null) : OidcResult()
     data class NeedsTOTP(val message: String? = null) : OidcResult()
     data class Error(val message: String) : OidcResult()
+
+    /** The page asked for a passkey, which the sign-in web view cannot use: sign in in the browser. */
+    data object PasskeyUnavailable : OidcResult()
 }
 
 class OidcHandler(
@@ -22,17 +25,29 @@ class OidcHandler(
     @Volatile
     private var pendingState: String? = null
 
+    /** The redirect the pending code is issued for; Vikunja exchanges the code with it. */
+    @Volatile
+    private var pendingRedirectUri: String? = null
+
     data class AuthParams(
         val authUrl: String,
         val redirectUri: String,
         val state: String,
+        val mode: OidcSignInMode = OidcSignInMode.WebView,
     )
 
-    fun prepareAuthParams(provider: OidcProviderDto, vikunjaUrl: String): AuthParams {
-        val baseUrl = vikunjaUrl.trimEnd('/')
-        val redirectUri = "$baseUrl/auth/openid/${provider.key}"
+    fun prepareAuthParams(
+        provider: OidcProviderDto,
+        vikunjaUrl: String,
+        mode: OidcSignInMode = OidcSignInMode.WebView,
+    ): AuthParams {
+        val redirectUri = when (mode) {
+            OidcSignInMode.WebView -> vikunjaCallback(vikunjaUrl, provider)
+            OidcSignInMode.Browser -> OidcBrowserSignIn.REDIRECT_URI
+        }
         val state = generateStateValue()
         pendingState = state
+        pendingRedirectUri = redirectUri
 
         val authUrl = "${provider.authUrl}" +
             "?client_id=${encodeUrl(provider.clientId)}" +
@@ -41,8 +56,11 @@ class OidcHandler(
             "&state=$state" +
             "&scope=${encodeUrl(SCOPE)}"
 
-        return AuthParams(authUrl, redirectUri, state)
+        return AuthParams(authUrl, redirectUri, state, mode)
     }
+
+    private fun vikunjaCallback(vikunjaUrl: String, provider: OidcProviderDto): String =
+        "${vikunjaUrl.trimEnd('/')}/auth/openid/${provider.key}"
 
     suspend fun handleCallbackResult(
         code: String?,
@@ -53,6 +71,10 @@ class OidcHandler(
         totpPasscode: String? = null,
     ): OidcResult {
         return try {
+            if (error == OidcBrowserSignIn.PASSKEY_UNAVAILABLE) {
+                pendingState = null
+                return OidcResult.PasskeyUnavailable
+            }
             if (error != null) {
                 pendingState = null
                 return OidcResult.Error("OIDC error: $error")
@@ -70,8 +92,7 @@ class OidcHandler(
                 return OidcResult.Error("OIDC state mismatch — possible CSRF attack")
             }
 
-            val baseUrl = vikunjaUrl.trimEnd('/')
-            val redirectUri = "$baseUrl/auth/openid/${provider.key}"
+            val redirectUri = pendingRedirectUri ?: vikunjaCallback(vikunjaUrl, provider)
 
             val callbackDto = OidcCallbackDto(
                 code = code,
@@ -107,5 +128,24 @@ internal fun oidcTotpChallenge(problem: VikunjaProblemDto?): OidcResult.NeedsTOT
     return OidcResult.NeedsTOTP(problem?.detail?.takeIf(String::isNotBlank))
 }
 
-expect fun encodeUrl(value: String): String
+private const val HEX = "0123456789ABCDEF"
+private const val UNRESERVED_MARKS = "_-!.~'()*"
+
+/**
+ * Percent-encodes [value] like Android's `Uri.encode`: letters, digits and `_-!.~'()*` stay as
+ * they are. Common code, so both platforms build the same authorization URL and host tests can
+ * run it (`Uri` is a stub there).
+ */
+fun encodeUrl(value: String): String = buildString {
+    for (byte in value.encodeToByteArray()) {
+        val b = byte.toInt() and 0xFF
+        val c = b.toChar()
+        if (b < 0x80 && (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in UNRESERVED_MARKS)) {
+            append(c)
+        } else {
+            append('%').append(HEX[b shr 4]).append(HEX[b and 0x0F])
+        }
+    }
+}
+
 expect fun generateStateValue(): String
