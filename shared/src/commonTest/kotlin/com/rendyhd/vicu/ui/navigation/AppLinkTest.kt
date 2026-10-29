@@ -17,6 +17,7 @@ class AppLinkTest {
         AppLink.OpenView(ViewTarget.CustomList("list a/b ü")),
         AppLink.AddTask(),
         AppLink.AddTask(projectId = 7),
+        AppLink.Dictate,
     )
 
     @Test
@@ -33,6 +34,7 @@ class AppLinkTest {
         assertEquals("vicu://view/TODAY", AppLink.OpenView(ViewTarget.Today).toUrl("vicu"))
         assertEquals("vicu://view/PROJECT/7", AppLink.OpenView(ViewTarget.Project(7)).toUrl("vicu"))
         assertEquals("vicu://add?project=7", AppLink.AddTask(7).toUrl("vicu"))
+        assertEquals("vicu://dictate", AppLink.Dictate.toUrl("vicu"))
     }
 
     @Test

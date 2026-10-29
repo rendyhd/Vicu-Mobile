@@ -9,9 +9,11 @@ import com.rendyhd.vicu.MainActivity
 import com.rendyhd.vicu.R
 
 /**
- * The app icon's long-press shortcuts: "Add task" (quick add) and "Add by voice"
- * ([VoiceAddActivity]). Published from code, not `shortcuts.xml`, because the debug build has its
- * own package name and a static shortcut has to name it.
+ * The app icon's long-press shortcuts, the same two as the iOS quick actions: "Add task" (quick
+ * add) and "Dictate" (smart dictation, listening, when it is set up; otherwise the voice card).
+ * Published from code, not `shortcuts.xml`, because the debug build has its own package name and a
+ * static shortcut has to name it. The earlier "Add by voice" ([VoiceAddActivity]) is left out; a
+ * copy pinned to the home screen keeps working, since the activity stays for the widgets.
  */
 object LauncherShortcuts {
     fun publish(context: Context) {
@@ -24,11 +26,15 @@ object LauncherShortcuts {
                     .putExtra(MainActivity.EXTRA_SHOW_TASK_ENTRY, true),
             )
             .build()
-        val addByVoice = ShortcutInfoCompat.Builder(context, "add_task_voice")
-            .setShortLabel(context.getString(R.string.shortcut_add_by_voice))
+        val dictate = ShortcutInfoCompat.Builder(context, "dictate")
+            .setShortLabel(context.getString(R.string.shortcut_dictate))
             .setIcon(IconCompat.createWithResource(context, R.drawable.ic_shortcut_mic))
-            .setIntent(Intent(context, VoiceAddActivity::class.java).setAction(Intent.ACTION_VIEW))
+            .setIntent(
+                Intent(context, MainActivity::class.java)
+                    .setAction(Intent.ACTION_VIEW)
+                    .putExtra(MainActivity.EXTRA_START_DICTATION, true),
+            )
             .build()
-        ShortcutManagerCompat.setDynamicShortcuts(context, listOf(addTask, addByVoice))
+        ShortcutManagerCompat.setDynamicShortcuts(context, listOf(addTask, dictate))
     }
 }

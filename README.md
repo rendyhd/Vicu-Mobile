@@ -49,8 +49,8 @@ The **bottom bar** keeps the Inbox first; the other three slots are any smart li
 - **Drag + onto a day or project** to start there.
 - **Hold + and say it.** Your words appear as you speak, with the date, project and labels picked out. Let go to add it, slide down to cancel.
 - **Share to Vicu** from any app: a link, photo or file becomes a task, with the files attached.
-- **On Android**: a Quick Settings tile, the Quick add widget with a mic and a + button, and **Add task** and **Add by voice** on the app icon.
-- **On iPhone and iPad**: "Hey Siri, add a task in Vicu", an **Add task** control for Control Center, the Lock Screen and the Action Button, and **Add task** when you hold the app icon.
+- **On Android**: a Quick Settings tile, the Quick add widget with a mic and a + button, and **Add task** and **Dictate** when you hold the app icon.
+- **On iPhone and iPad**: "Hey Siri, add a task in Vicu", an **Add task** control for Control Center, the Lock Screen and the Action Button, and **Add task** and **Dictate** when you hold the app icon.
 - **Works offline**: whatever you capture without a connection is sent once you are back.
 
 ## Type it the way you think

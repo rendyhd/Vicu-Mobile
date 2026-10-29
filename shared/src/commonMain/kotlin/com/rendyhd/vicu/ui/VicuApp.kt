@@ -149,6 +149,7 @@ import com.rendyhd.vicu.ai.AiSettings
 import com.rendyhd.vicu.ai.AiSettingsStore
 import com.rendyhd.vicu.ai.ask.AskList
 import com.rendyhd.vicu.ai.dictation.DictationController
+import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.ui.screens.dictation.DictationSheet
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.DateDisplayFormat
@@ -249,6 +250,8 @@ fun VicuApp(
     onNavigateToViewConsumed: () -> Unit = {},
     sharedContent: kotlinx.coroutines.flow.StateFlow<SharedContent?>? = null,
     onSharedContentConsumed: () -> Unit = {},
+    startDictation: kotlinx.coroutines.flow.StateFlow<Boolean>? = null,
+    onStartDictationConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -572,6 +575,26 @@ fun VicuApp(
     fabController.onDrop = { target ->
         taskEntryFromFab = true
         onShowTaskEntry(target.projectId, target.dueDate)
+    }
+
+    // The app icon's Dictate (Android launcher shortcut, iOS quick action): smart dictation, listening,
+    // when it is set up; otherwise the voice card without a hold, as "Say a task" (Add and Cancel).
+    val smartDictation: DictationMic = koinInject()
+    val startDictationValue = startDictation?.collectAsStateWithLifecycle()?.value
+    LaunchedEffect(startDictationValue, authState) {
+        if (startDictationValue != true) return@LaunchedEffect
+        if (authState == AuthState.Loading) return@LaunchedEffect
+        if (authState != AuthState.Authenticated) {
+            onStartDictationConsumed()
+            return@LaunchedEffect
+        }
+        // Read from the store: the collected settings start as the defaults until it has loaded.
+        if (aiSettingsStore.settings.first().dictationReady) {
+            smartDictation.tryIt()
+        } else {
+            fabController.sayTask(TaskDefaults(listName = "Inbox")) { onShowTaskEntry(null, null) }
+        }
+        onStartDictationConsumed()
     }
     val subtaskDisplayMode by drawerViewModel.subtaskDisplayMode.collectAsStateWithLifecycle()
 

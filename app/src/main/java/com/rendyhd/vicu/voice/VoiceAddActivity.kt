@@ -17,10 +17,10 @@ import org.koin.android.ext.android.inject
 
 /**
  * Adds a task by voice without opening the app (the Quick add widget's mic, the task list widget's
- * mic, the "Add by voice" launcher shortcut): the system speech screen hears the task, which is
- * read like quick add ("Call mom tomorrow 3pm #Family") and stored on the device; a toast says what
- * was added. No microphone permission: the speech screen is the system's. Without a speech
- * service it opens quick add instead, where the keyboard's mic works.
+ * mic, a pinned copy of the former "Add by voice" launcher shortcut): the system speech screen
+ * hears the task, which is read like quick add ("Call mom tomorrow 3pm #Family") and stored on the
+ * device; a toast says what was added. No microphone permission: the speech screen is the system's.
+ * Without a speech service it opens quick add instead, where the keyboard's mic works.
  */
 class VoiceAddActivity : ComponentActivity() {
     private val creator: TextTaskCreator by inject()

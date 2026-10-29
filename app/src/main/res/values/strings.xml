@@ -10,5 +10,5 @@
     <string name="quick_add_widget_name">Vicu Quick add</string>
     <string name="quick_add_widget_description">Add a task by voice or open quick add</string>
     <string name="shortcut_add_task">Add task</string>
-    <string name="shortcut_add_by_voice">Add by voice</string>
+    <string name="shortcut_dictate">Dictate</string>
 </resources>

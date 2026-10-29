@@ -93,6 +93,11 @@ object IosApp {
         KoinPlatform.getKoin().get<AppInputs>().open(AppLink.AddTask())
     }
 
+    /** Starts dictation (the home-screen quick action): smart dictation when it is set up, else the voice card. */
+    fun startDictation() {
+        KoinPlatform.getKoin().get<AppInputs>().open(AppLink.Dictate)
+    }
+
     /**
      * Adds a task from one sentence, read like quick add, and returns what Siri says back (the Add
      * a task intent: "Hey Siri, add a task in Vicu", then the task). Runs without the app's screen,

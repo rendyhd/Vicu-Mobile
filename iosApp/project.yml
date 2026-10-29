@@ -78,11 +78,14 @@ targets:
         # Read by the shared Kotlin code and the extensions.
         VicuUrlScheme: $(VICU_URL_SCHEME)
         VicuAppGroup: $(VICU_APP_GROUP)
-        # The home-screen quick action (SceneDelegate in AppDelegate.swift).
+        # The home-screen quick actions (SceneDelegate in AppDelegate.swift).
         UIApplicationShortcutItems:
           - UIApplicationShortcutItemType: com.rendyhd.vicu.add
             UIApplicationShortcutItemTitle: Add task
             UIApplicationShortcutItemIconType: UIApplicationShortcutIconTypeAdd
+          - UIApplicationShortcutItemType: com.rendyhd.vicu.dictate
+            UIApplicationShortcutItemTitle: Dictate
+            UIApplicationShortcutItemIconSymbolName: mic
         BGTaskSchedulerPermittedIdentifiers:
           - com.rendyhd.vicu.refresh
           - com.rendyhd.vicu.sync

@@ -41,6 +41,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SHOW_TASK_ENTRY = "show_task_entry"
         const val EXTRA_DEFAULT_PROJECT_ID = "default_project_id"
+
+        /** The launcher's Dictate shortcut: smart dictation or the voice card (`AppLink.Dictate`). */
+        const val EXTRA_START_DICTATION = "start_dictation"
     }
 
     private val authManager: AuthManager by inject()
@@ -57,6 +60,7 @@ class MainActivity : ComponentActivity() {
     private val _showTaskEntryProjectId = MutableStateFlow<Long?>(null)
     private val _navigateToView = MutableStateFlow<ViewTarget?>(null)
     private val _sharedContent = MutableStateFlow<SharedContent?>(null)
+    private val _startDictation = MutableStateFlow(false)
 
     private val launchNotificationPermissionRequest: () -> Unit = {
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -171,6 +175,8 @@ class MainActivity : ComponentActivity() {
                     onNavigateToViewConsumed = { _navigateToView.value = null },
                     sharedContent = _sharedContent,
                     onSharedContentConsumed = { _sharedContent.value = null },
+                    startDictation = _startDictation,
+                    onStartDictationConsumed = { _startDictation.value = false },
                 )
             }
         }
@@ -218,6 +224,10 @@ class MainActivity : ComponentActivity() {
             if (projectId != 0L) {
                 _showTaskEntryProjectId.value = projectId
             }
+        }
+
+        if (intent.getBooleanExtra(EXTRA_START_DICTATION, false)) {
+            _startDictation.value = true
         }
 
         intent.viewTargetOrNull()?.let { _navigateToView.value = it }
