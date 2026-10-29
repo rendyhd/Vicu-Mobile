@@ -38,7 +38,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import com.rendyhd.vicu.data.local.ScheduleAction
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -526,21 +525,13 @@ class TaskRepositoryImpl(
             .filterNot { it.isMetadata }
             .map { with(taskMapper) { it.toDomain() } }
 
-    override suspend fun applyScheduleAction(taskId: Long): NetworkResult<Task> {
+    override suspend fun setPriority(taskId: Long, priority: Int): NetworkResult<Task> {
         // Always start from the stored row: the swipe that triggered this may belong to a row
         // that was composed before the task changed elsewhere. update() diffs against the same
-        // row, so the patch holds only the field the action sets.
+        // row, so the patch holds only the priority.
         val current = taskDao.getByIdSync(currentId(taskId))?.let { with(taskMapper) { it.toDomain() } }
             ?: return NetworkResult.Error("Task $taskId is not in the local cache")
-        val action = behaviorPrefsStore.getPrefs().first().scheduleAction
-        val updated = when (action) {
-            ScheduleAction.DUE_TODAY -> {
-                val day = dayClock.day.value
-                current.copy(dueDate = DueDates.today(day.date, day.zone).toString())
-            }
-            ScheduleAction.PRIORITY_URGENT -> current.copy(priority = 4)
-        }
-        return update(updated)
+        return update(current.copy(priority = priority))
     }
 
     override suspend fun scheduleDue(taskId: Long, due: QuickDue): NetworkResult<Task> {

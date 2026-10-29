@@ -170,7 +170,6 @@ fun AnytimeScreen(
                                     },
                                     onSubtaskToggleDone = viewModel::toggleDone,
                                     onSubtaskClick = { child -> onTaskClick(child.id) },
-                                    onSchedule = { viewModel.scheduleTask(task.id) },
                                     selectionActive = selectionActive,
                                     selected = task.id in selectedIds,
                                     onLongClick = { selectionVm.toggle(task.id) },

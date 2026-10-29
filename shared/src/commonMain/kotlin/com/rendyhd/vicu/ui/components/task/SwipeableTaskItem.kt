@@ -7,13 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.outlined.PriorityHigh
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
-import com.rendyhd.vicu.ui.theme.LocalVicuColors
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -25,9 +23,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemGestures
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -62,6 +57,7 @@ import androidx.compose.ui.unit.max
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import com.rendyhd.vicu.data.local.SwipeAction
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.ui.theme.VicuMotion
 import com.rendyhd.vicu.ui.components.section.ProjectMeta
@@ -74,7 +70,6 @@ fun SwipeableTaskItem(
     task: Task,
     onToggleDone: () -> Unit,
     onClick: () -> Unit,
-    onSchedule: () -> Unit,
     modifier: Modifier = Modifier,
     contentStartPadding: Dp = 0.dp,
     enabled: Boolean = true,
@@ -96,15 +91,16 @@ fun SwipeableTaskItem(
     // rememberSwipeToDismissBoxState keeps the state object (and the confirmValueChange it was
     // created with) for the row's whole lifetime, but the row stays composed while its task is
     // edited elsewhere. Everything the swipe handler touches is therefore read through State, so
-    // a swipe always acts on the current task, subtask count and callbacks.
+    // a swipe always acts on the current task, subtask count, callbacks and swipe settings.
     val currentTask by rememberUpdatedState(task)
     val currentOnToggleDone by rememberUpdatedState(onToggleDone)
-    val currentOnSchedule by rememberUpdatedState(onSchedule)
-    // The app opens the When sheet for a swipe to schedule; without it the row runs its own action.
+    // What each direction does (Settings, Gestures); the app runs every action but Complete.
     val rowActions = LocalTaskRowActions.current
-    val currentSwipeSchedule by rememberUpdatedState<() -> Unit> {
-        if (rowActions?.swipeSchedule(currentTask.id) != true) currentOnSchedule()
-    }
+    val swipeRight = rowActions?.swipeRight ?: SwipeAction.COMPLETE
+    val swipeLeft = rowActions?.swipeLeft ?: SwipeAction.NONE
+    val currentSwipeRight by rememberUpdatedState(swipeRight)
+    val currentSwipeLeft by rememberUpdatedState(swipeLeft)
+    val currentRowActions by rememberUpdatedState(rowActions)
     val requestToggleDone: () -> Unit = {
         if (completionNeedsSubtaskConfirmation(currentTask)) {
             showCompletionConfirmation = true
@@ -113,6 +109,13 @@ fun SwipeableTaskItem(
         }
     }
     val currentRequestToggleDone by rememberUpdatedState(requestToggleDone)
+    val runSwipe: (SwipeAction) -> Unit = { action ->
+        when (action) {
+            SwipeAction.COMPLETE -> currentRequestToggleDone()
+            SwipeAction.NONE -> {}
+            else -> currentRowActions?.swipe(currentTask.id, action)
+        }
+    }
 
     // SwipeToDismissBox commits on fling velocity regardless of positionalThreshold, so a
     // quick flick could still trigger below the 50% mark. Track the live offset (Ref dance:
@@ -135,8 +138,8 @@ fun SwipeableTaskItem(
         confirmValueChange = { value ->
             if (SwipeCommit.committed(rowRefs.draggedFraction())) {
                 when (value) {
-                    SwipeToDismissBoxValue.StartToEnd -> currentRequestToggleDone()
-                    SwipeToDismissBoxValue.EndToStart -> currentSwipeSchedule()
+                    SwipeToDismissBoxValue.StartToEnd -> runSwipe(currentSwipeRight)
+                    SwipeToDismissBoxValue.EndToStart -> runSwipe(currentSwipeLeft)
                     SwipeToDismissBoxValue.Settled -> {}
                 }
             }
@@ -219,11 +222,12 @@ fun SwipeableTaskItem(
                 dismissDirection = dismissState.dismissDirection,
                 offsetPx = runCatching { dismissState.requireOffset() }.getOrNull() ?: 0f,
                 widthPx = rowRefs.widthPx,
-                scheduleLabel = rowActions?.swipeScheduleLabel ?: "Schedule",
+                startAction = swipeRight,
+                endAction = swipeLeft,
             )
         },
-        enableDismissFromStartToEnd = !task.done && !gestureFromEdge,
-        enableDismissFromEndToStart = !task.done && !gestureFromEdge,
+        enableDismissFromStartToEnd = !task.done && !gestureFromEdge && swipeRight != SwipeAction.NONE,
+        enableDismissFromEndToStart = !task.done && !gestureFromEdge && swipeLeft != SwipeAction.NONE,
     ) {
         TaskItem(
             task = task,
@@ -317,7 +321,8 @@ private fun CompletionConfirmationDialog(
 /**
  * What shows behind a row that is being swiped: the whole row tinted with the action's colour, a
  * little deeper the further it goes, and in the strip the row has uncovered an icon and a word
- * ("Complete", "Schedule"). At the commit point the strip turns to the full colour and the icon
+ * ("Complete", "Schedule"; [SwipeActions]). [startAction] is the swipe from the start, [endAction]
+ * the one from the end. At the commit point the strip turns to the full colour and the icon
  * pops (the pop spring); the same gesture plays GestureThresholdActivate (see the caller).
  * The distance is read from the row's offset, not from the state's progress, which reads 1 while
  * the row springs back to rest.
@@ -327,9 +332,9 @@ private fun SwipeBackground(
     dismissDirection: SwipeToDismissBoxValue,
     offsetPx: Float,
     widthPx: Float,
-    scheduleLabel: String,
+    startAction: SwipeAction,
+    endAction: SwipeAction,
 ) {
-    val colors = LocalVicuColors.current
     val surface = MaterialTheme.colorScheme.background
     val onSurface = MaterialTheme.colorScheme.onSurface
     // The direction and distance of the last frame that had a swipe: the background fades out from
@@ -358,15 +363,12 @@ private fun SwipeBackground(
     )
     if (direction == SwipeToDismissBoxValue.Settled || visible <= 0f) return
 
-    val complete = direction == SwipeToDismissBoxValue.StartToEnd
-    val role = if (complete) colors.swipeComplete else colors.swipeSchedule
+    val fromStart = direction == SwipeToDismissBoxValue.StartToEnd
+    val action = if (fromStart) startAction else endAction
+    val role = SwipeActions.role(action)
     val armed = fraction >= SwipeTint.COMMIT
-    val label = if (complete) "Complete" else scheduleLabel
-    val icon = when {
-        complete -> Icons.Outlined.Check
-        scheduleLabel == "Schedule" -> Icons.Outlined.CalendarMonth
-        else -> Icons.Outlined.PriorityHigh
-    }
+    val label = SwipeActions.word(action)
+    val icon = SwipeActions.icon(action)
 
     // The icon springs up to size each time the swipe arms.
     val pop = remember { Animatable(1f) }
@@ -400,16 +402,16 @@ private fun SwipeBackground(
     ) {
         Row(
             modifier = Modifier
-                .align(if (complete) Alignment.CenterStart else Alignment.CenterEnd)
+                .align(if (fromStart) Alignment.CenterStart else Alignment.CenterEnd)
                 .width(stripWidth)
                 .fillMaxHeight()
                 .clipToBounds()
                 .background(strip)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (complete) Arrangement.Start else Arrangement.End,
+            horizontalArrangement = if (fromStart) Arrangement.Start else Arrangement.End,
         ) {
-            if (complete) {
+            if (fromStart) {
                 SwipeIcon(icon, labelColor, pop.value)
                 Spacer(Modifier.width(8.dp))
                 SwipeWord(label, labelColor)
