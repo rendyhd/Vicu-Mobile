@@ -51,10 +51,13 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             onResult(false)
             return
         }
-        prefs.edit { putBoolean(KEY_ASKED, true) }
+        markAsked()
         pendingPermission = onResult
         launch()
     }
+
+    /** A prompt shown by another screen ([VoiceAddActivity]) counts too: Android may not show it again. */
+    fun markAsked() = prefs.edit { putBoolean(KEY_ASKED, true) }
 
     /**
      * The microphone permission for the local recorder (`AndroidAudioRecorder`), which asks through

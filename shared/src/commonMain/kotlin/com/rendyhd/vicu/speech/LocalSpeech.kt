@@ -105,6 +105,23 @@ sealed interface LocalSpeechEvent {
     data object Paused : LocalSpeechEvent
 }
 
+/** One recording with local speech as its users see it ([LocalSpeechSession]; fakes in tests). */
+interface SpeechRecording {
+    val state: StateFlow<LocalSpeechState>
+
+    /** Talking, phrases and pauses as they happen, for a recording with an end of turn; ends with the recording. */
+    val events: Flow<LocalSpeechEvent>
+
+    /** Starts listening; false when the model or microphone fails. */
+    suspend fun start(): Boolean
+
+    /** Stops recording and waits for the last phrases: the whole transcript. */
+    suspend fun finish(): String
+
+    /** Stops and throws everything away. */
+    fun cancel()
+}
+
 /**
  * One recording with local speech: records, cuts phrases with the voice detector, transcribes each
  * finished phrase at once in the background, in order, and joins the texts (section 3.2). With
@@ -122,14 +139,14 @@ class LocalSpeechSession(
     private val prompt: String?,
     /** The pause that ends a turn; null for a recording without turns. */
     private val endOfTurnMs: Long? = null,
-) {
+) : SpeechRecording {
     private val _state = MutableStateFlow(LocalSpeechState())
-    val state: StateFlow<LocalSpeechState> = _state.asStateFlow()
+    override val state: StateFlow<LocalSpeechState> = _state.asStateFlow()
 
     private val _events = Channel<LocalSpeechEvent>(Channel.UNLIMITED)
 
     /** With [endOfTurnMs]: talking, phrases and pauses as they happen; ends with the recording. */
-    val events: Flow<LocalSpeechEvent> = _events.receiveAsFlow()
+    override val events: Flow<LocalSpeechEvent> = _events.receiveAsFlow()
 
     private val audio = Channel<FloatArray>(Channel.UNLIMITED)
     private val phrases = Channel<FloatArray>(Channel.UNLIMITED)
@@ -149,7 +166,7 @@ class LocalSpeechSession(
     private var stopRequested = false
 
     /** Starts listening; false (with [LocalSpeechState.error]) when the model or microphone fails. */
-    suspend fun start(): Boolean {
+    override suspend fun start(): Boolean {
         val native = host.native()
         val vad = host.vad()
         if (vad == 0L) {
@@ -284,14 +301,14 @@ class LocalSpeechSession(
     }
 
     /** Stops recording and waits for the last phrases: the whole transcript. */
-    suspend fun finish(): String {
+    override suspend fun finish(): String {
         stopRequested = true
         stopRecording()
         return done.await()
     }
 
     /** Stops and throws everything away. */
-    fun cancel() {
+    override fun cancel() {
         cancelled = true
         stopRecording()
         detector?.cancel()
