@@ -74,7 +74,7 @@ class OidcHandlerTest {
     }
 
     @Test
-    fun `the passkey guard refuses modal requests, lets autofill through and signals the app`() {
+    fun `the passkey guard refuses modal requests - lets autofill through and signals the app`() {
         val script = OidcBrowserSignIn.passkeyGuardScript("tellTheApp()")
 
         assertTrue(script.contains("tellTheApp()"))
