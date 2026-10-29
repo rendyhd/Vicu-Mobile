@@ -34,6 +34,24 @@ class PhotonPlaceSearchTest {
     }
 
     @Test
+    fun `a street address is written in the order of the place's country`() {
+        val places = PhotonPlaceSearch.parse(
+            """
+            {"type":"FeatureCollection","features":[
+              {"type":"Feature","geometry":{"type":"Point","coordinates":[-122.03,37.33]},
+               "properties":{"street":"Infinite Loop","housenumber":"1","postcode":"95014","city":"Cupertino","country":"United States","countrycode":"US"}},
+              {"type":"Feature","geometry":{"type":"Point","coordinates":[4.9,52.36]},
+               "properties":{"street":"Keizersgracht","housenumber":"12","city":"Amsterdam","country":"Netherlands","countrycode":"NL"}}
+            ]}
+            """.trimIndent(),
+        )
+
+        assertEquals("1 Infinite Loop", places[0].name)
+        assertEquals("95014 Cupertino, United States", places[0].address)
+        assertEquals("Keizersgracht 12", places[1].name)
+    }
+
+    @Test
     fun `the search sends the text - a rounded position and a user agent`() = runTest {
         var url = ""
         var agent: String? = null

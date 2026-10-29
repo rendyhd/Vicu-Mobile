@@ -159,7 +159,7 @@ class IosPlaceSearch : PlaceSearch {
     }
 
     private fun address(placemark: CLPlacemark, name: String): String {
-        val street = listOfNotNull(placemark.thoroughfare, placemark.subThoroughfare).joinToString(" ")
+        val street = StreetAddress.line(placemark.thoroughfare, placemark.subThoroughfare, placemark.ISOcountryCode)
         val town = listOfNotNull(placemark.postalCode, placemark.locality).joinToString(" ")
         return listOf(street, town, placemark.country.orEmpty())
             .filter { it.isNotBlank() && it != name }

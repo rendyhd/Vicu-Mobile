@@ -83,7 +83,7 @@ class PhotonPlaceSearch(
                 val lat = coordinates.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
                 val props = obj["properties"] as? JsonObject ?: JsonObject(emptyMap())
                 fun text(key: String) = (props[key]?.jsonPrimitive?.takeIf { it.isString }?.content).orEmpty().trim()
-                val street = listOf(text("street"), text("housenumber")).filter { it.isNotBlank() }.joinToString(" ")
+                val street = StreetAddress.line(text("street"), text("housenumber"), text("countrycode"))
                 val name = text("name").ifBlank { street }.ifBlank { text("city") }.ifBlank { return@mapNotNull null }
                 val town = listOf(text("postcode"), text("city").ifBlank { text("district") }).filter { it.isNotBlank() }.joinToString(" ")
                 val address = listOf(street, town, text("country"))
