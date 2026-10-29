@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,7 +28,7 @@ class SelectingSpeechInput(
     private val recorder: AudioRecorder,
     private val host: SpeechEngineHost,
     private val models: SpeechModelManager,
-    settingsStore: AiSettingsStore,
+    private val settingsStore: AiSettingsStore,
     private val scope: CoroutineScope,
     /** The vocabulary hint for Whisper, built from the user's names when a recording starts. */
     private val hint: suspend () -> String?,
@@ -39,11 +40,25 @@ class SelectingSpeechInput(
     private var usingLocal = false
 
     /** The chosen local model when it is on the device and the engine loads, else null. */
-    private fun localModel(): SpeechModelSpec? {
+    private fun localModel(current: AiSettings = settings.value): SpeechModelSpec? {
         if (!host.isAvailable) return null
-        val spec = SpeechModelSpec.byId(settings.value.speechModelId) ?: return null
+        val spec = SpeechModelSpec.byId(current.speechModelId) ?: return null
         return spec.takeIf { models.isInstalled(it) }
     }
+
+    /**
+     * A recording with the chosen local model ending its turns at [endOfTurnMs], or null when none
+     * is chosen and on the device (the platform recognizer, or the system speech screen, then). It
+     * reads the stored settings, so a cold start from a widget sees the choice.
+     */
+    suspend fun localRecording(endOfTurnMs: Long): LocalSpeechSession? {
+        val stored = settingsStore.settings.first()
+        val spec = localModel(stored) ?: return null
+        return LocalSpeechSession(host, recorder, scope, models.pathOf(spec), spec, stored.speechLanguage, hint(), endOfTurnMs)
+    }
+
+    /** The microphone permission local speech records with. */
+    fun microphoneAccess(): MicrophoneAccess = recorder.access()
 
     override fun availability(): SpeechAvailability {
         if (localModel() == null) return platform.availability()

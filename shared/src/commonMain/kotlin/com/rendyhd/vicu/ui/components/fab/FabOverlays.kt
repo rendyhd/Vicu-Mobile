@@ -294,7 +294,7 @@ private fun HandsFreeButtons(capture: VoiceCapture, controller: FabController) {
  * grow: it only gets stronger, so the voice still shows without movement.
  */
 @Composable
-private fun MicPulse(level: Float, listening: Boolean, reduceMotion: Boolean) {
+internal fun MicPulse(level: Float, listening: Boolean, reduceMotion: Boolean) {
     val scheme = MaterialTheme.colorScheme
     val target = if (listening) level else 0f
     val animated by animateFloatAsState(target, VicuMotion.fastEffects.spec(), label = "micLevel")
