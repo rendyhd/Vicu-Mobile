@@ -41,7 +41,7 @@ class VicuApplication : Application(), SingletonImageLoader.Factory, KoinCompone
         super.onCreate()
         // Tell the shared module which build this is before anything logs or builds the HTTP
         // client: release builds get no request logging, no debug logs and no auth log file.
-        BuildInfo.configure(isDebug = BuildConfig.DEBUG)
+        BuildInfo.configure(isDebug = BuildConfig.DEBUG, versionName = BuildConfig.VERSION_NAME)
         AuthDebugLog.init(this)
         startKoin {
             androidContext(this@VicuApplication)

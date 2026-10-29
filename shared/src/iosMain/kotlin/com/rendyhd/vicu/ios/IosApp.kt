@@ -27,6 +27,7 @@ import com.rendyhd.vicu.voice.AppleSpeechBridge
 import com.rendyhd.vicu.voice.IosSpeechBridgeHolder
 import org.koin.core.context.startKoin
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSBundle
 import kotlin.experimental.ExperimentalNativeApi
 
 /**
@@ -50,7 +51,10 @@ object IosApp {
         if (started) return
         started = true
         // Before anything logs or builds the HTTP client: release builds log no requests.
-        BuildInfo.configure(isDebug = Platform.isDebugBinary)
+        BuildInfo.configure(
+            isDebug = Platform.isDebugBinary,
+            versionName = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "",
+        )
         AuthDebugLog.init(null)
         startKoin { modules(sharedModules + iosModule) }
         SingletonImageLoader.setSafe { KoinPlatform.getKoin().get<ImageLoader>() }

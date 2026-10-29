@@ -14,7 +14,13 @@ object BuildInfo {
     var isDebug: Boolean = false
         private set
 
-    fun configure(isDebug: Boolean) {
+    /** The app's version name ("2.5.1"), empty until [configure] runs. */
+    @Volatile
+    var versionName: String = ""
+        private set
+
+    fun configure(isDebug: Boolean, versionName: String = "") {
         this.isDebug = isDebug
+        this.versionName = versionName
     }
 }
