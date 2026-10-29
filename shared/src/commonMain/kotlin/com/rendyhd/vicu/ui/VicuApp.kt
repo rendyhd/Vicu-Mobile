@@ -61,7 +61,7 @@ import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.auth.AuthState
 import com.rendyhd.vicu.data.local.BehaviorPrefs
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
-import com.rendyhd.vicu.data.local.ScheduleAction
+import com.rendyhd.vicu.data.local.SwipeAction
 import com.rendyhd.vicu.domain.model.BottomBarSlot
 import com.rendyhd.vicu.domain.model.BottomBarSlotType
 import com.rendyhd.vicu.domain.model.CustomList
@@ -94,7 +94,10 @@ import com.rendyhd.vicu.ui.components.shared.SmartListIdentity
 import com.rendyhd.vicu.ui.theme.LocalVicuColors
 import com.rendyhd.vicu.domain.repository.QuickDue
 import com.rendyhd.vicu.domain.repository.TaskRepository
+import com.rendyhd.vicu.ui.components.picker.ProjectPickerDialog
+import com.rendyhd.vicu.ui.components.task.DeleteTaskDialog
 import com.rendyhd.vicu.ui.components.task.LocalTaskRowActions
+import com.rendyhd.vicu.util.descendantsDepthFirst
 import com.rendyhd.vicu.ui.components.task.TaskEntrySheet
 import com.rendyhd.vicu.ui.components.task.TaskRowActions
 import com.rendyhd.vicu.ui.components.task.LocalSubtaskDisplayMode
@@ -312,24 +315,63 @@ fun VicuApp(
     // Messages for outcomes nobody is looking at (an autosave that failed after the editor
     // closed). Shown in a snackbar above everything, including the full-screen editor.
     val appMessages: AppMessages = koinInject()
-    // A swipe to schedule opens the When sheet for that task (unless the swipe is set to "Urgent").
+    // The swipe actions the user chose (Settings, Gestures). Choose when, Move and Delete open their
+    // sheet or dialog here, over whatever screen the row is on; the others write at once.
     val behaviorPrefsStore: BehaviorPrefsStore = koinInject()
     val behaviorPrefs by behaviorPrefsStore.getPrefs().collectAsStateWithLifecycle(initialValue = BehaviorPrefs())
-    val swipeOpensWhen by rememberUpdatedState(behaviorPrefs.scheduleAction == ScheduleAction.DUE_TODAY)
+    val swipeRightPref by rememberUpdatedState(behaviorPrefs.swipeRight)
+    val swipeLeftPref by rememberUpdatedState(behaviorPrefs.swipeLeft)
+    val confirmBeforeDelete by rememberUpdatedState(behaviorPrefs.confirmBeforeDelete)
     var whenSheetTask by remember { mutableStateOf<Task?>(null) }
+    var moveSheetTask by remember { mutableStateOf<Task?>(null) }
+    var deleteDialogTask by remember { mutableStateOf<Task?>(null) }
+    // Deletes the stored task; its subtasks go too unless [deleteSubtasks] is false.
+    fun deleteSwiped(taskId: Long, deleteSubtasks: Boolean) {
+        scope.launch { appMessages.postIfRefused(taskRepository.delete(taskId, deleteSubtasks), "delete the task") }
+    }
     val taskRowActions = remember(taskRepository) {
         object : TaskRowActions {
             override fun scheduleDue(taskId: Long, due: QuickDue) {
                 scope.launch { appMessages.postIfRefused(taskRepository.scheduleDue(taskId, due), "schedule the task") }
             }
 
-            override val swipeScheduleLabel: String
-                get() = if (swipeOpensWhen) "Schedule" else "Urgent"
+            override val swipeRight: SwipeAction get() = swipeRightPref
 
-            override fun swipeSchedule(taskId: Long): Boolean {
-                if (!swipeOpensWhen) return false
-                scope.launch { whenSheetTask = taskRepository.getById(taskId).first() }
-                return true
+            override val swipeLeft: SwipeAction get() = swipeLeftPref
+
+            override fun swipe(taskId: Long, action: SwipeAction) {
+                scope.launch {
+                    when (action) {
+                        SwipeAction.CHOOSE_WHEN -> whenSheetTask = taskRepository.getById(taskId).first()
+                        SwipeAction.DUE_TODAY -> scheduleDue(taskId, QuickDue.TODAY)
+                        SwipeAction.DUE_TOMORROW -> scheduleDue(taskId, QuickDue.TOMORROW)
+                        SwipeAction.URGENT ->
+                            appMessages.postIfRefused(taskRepository.setPriority(taskId, 4), "mark the task urgent")
+                        SwipeAction.MOVE -> moveSheetTask = taskRepository.getById(taskId).first()
+                        SwipeAction.DELETE -> {
+                            val task = taskRepository.getById(taskId).first() ?: return@launch
+                            // A task with subtasks always asks, as the editor's delete does.
+                            if (confirmBeforeDelete || task.descendantsDepthFirst().isNotEmpty()) {
+                                deleteDialogTask = task
+                            } else {
+                                deleteSwiped(task.id, deleteSubtasks = true)
+                            }
+                        }
+                        // The row completes the task itself; Nothing never swipes.
+                        SwipeAction.COMPLETE, SwipeAction.NONE -> Unit
+                    }
+                }
+            }
+        }
+    }
+    // Moves the stored task and, as the editor does, its subtasks (Vikunja does not cascade a move).
+    fun moveSwiped(task: Task, projectId: Long) {
+        if (projectId == task.projectId) return
+        scope.launch {
+            val moved = taskRepository.moveToProject(task.id, projectId)
+            if (appMessages.postIfRefused(moved, "move the task")) return@launch
+            if (task.descendantsDepthFirst().isNotEmpty()) {
+                appMessages.postIfRefused(taskRepository.moveDescendantsToProject(task.id, projectId), "move the subtasks")
             }
         }
     }
@@ -897,6 +939,28 @@ fun VicuApp(
                 onDateSelected = { dueDate -> setWhenDue(target.id, dueDate) },
                 onClearDate = { setWhenDue(target.id, Constants.NULL_DATE_STRING) },
                 onDismiss = { whenSheetTask = null },
+            )
+        }
+
+        moveSheetTask?.let { target ->
+            val inboxId by authManager.inboxProjectId.collectAsStateWithLifecycle(initialValue = null)
+            ProjectPickerDialog(
+                projects = drawerUiState.allProjects,
+                selectedProjectId = target.projectId,
+                onProjectSelected = { projectId -> moveSwiped(target, projectId) },
+                onDismiss = { moveSheetTask = null },
+                inboxProjectId = inboxId ?: 0L,
+            )
+        }
+
+        deleteDialogTask?.let { target ->
+            DeleteTaskDialog(
+                descendantCount = target.descendantsDepthFirst().size,
+                onDelete = { deleteSubtasks ->
+                    deleteDialogTask = null
+                    deleteSwiped(target.id, deleteSubtasks)
+                },
+                onDismiss = { deleteDialogTask = null },
             )
         }
 

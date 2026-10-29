@@ -130,7 +130,10 @@ fun SettingsScreen(
                     listState = notificationsListState,
                 )
                 3 -> GesturesTab(
-                    scheduleAction = state.behaviorPrefs.scheduleAction,
+                    swipeRight = state.behaviorPrefs.swipeRight,
+                    swipeLeft = state.behaviorPrefs.swipeLeft,
+                    onSwipeRightChange = viewModel::setSwipeRight,
+                    onSwipeLeftChange = viewModel::setSwipeLeft,
                     listState = gesturesListState,
                 )
                 4 -> AssistantTab(

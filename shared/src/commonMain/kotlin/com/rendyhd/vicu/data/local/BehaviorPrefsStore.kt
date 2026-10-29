@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.map
  *  - Whether to play a sound on task completion (+ optional custom sound file URI)
  *  - Whether to require confirmation before destructive deletes
  */
-/** What the swipe-"schedule" and multi-select "Schedule" actions do to a task. */
-enum class ScheduleAction { DUE_TODAY, PRIORITY_URGENT }
+/**
+ * What swiping a task row does. Each direction has its own (Settings, Gestures); a direction set
+ * to [NONE] does not move.
+ */
+enum class SwipeAction { COMPLETE, CHOOSE_WHEN, DUE_TODAY, DUE_TOMORROW, URGENT, MOVE, DELETE, NONE }
 
 /** Controls whether subtasks stay in task details or can expand inline in task lists. */
 enum class SubtaskDisplayMode { INSIDE_TASK, EXPANDABLE }
@@ -34,7 +37,8 @@ data class BehaviorPrefs(
     val completionSoundUri: String? = null,
     val confirmBeforeDelete: Boolean = true,
     val inboxExcludeDated: Boolean = false,
-    val scheduleAction: ScheduleAction = ScheduleAction.DUE_TODAY,
+    val swipeRight: SwipeAction = SwipeAction.COMPLETE,
+    val swipeLeft: SwipeAction = SwipeAction.CHOOSE_WHEN,
     val keepEntryOpen: Boolean = false,
     val fabAlignStart: Boolean = false,
     val subtaskDisplayMode: SubtaskDisplayMode = SubtaskDisplayMode.INSIDE_TASK,
@@ -55,7 +59,22 @@ class BehaviorPrefsStore(
         private val KEY_COMPLETION_SOUND_URI = stringPreferencesKey("completion_sound_uri")
         private val KEY_CONFIRM_BEFORE_DELETE = booleanPreferencesKey("confirm_before_delete")
         private val KEY_INBOX_EXCLUDE_DATED = booleanPreferencesKey("inbox_exclude_dated")
+        private val KEY_SWIPE_RIGHT = stringPreferencesKey("swipe_right")
+        private val KEY_SWIPE_LEFT = stringPreferencesKey("swipe_left")
+
+        /** The swipe-left setting of earlier versions ("Choose when" or "Urgent"), read until swipe_left is written. */
         private val KEY_SCHEDULE_ACTION = stringPreferencesKey("schedule_action")
+
+        /**
+         * A stored swipe action: the name this version knows, else [fallback] (a name from a newer
+         * version, or none written).
+         */
+        internal fun swipeAction(name: String?, fallback: SwipeAction): SwipeAction =
+            SwipeAction.entries.firstOrNull { it.name == name } ?: fallback
+
+        /** What the old swipe-left setting ("Choose when" or "Urgent") becomes. */
+        internal fun legacySwipeLeft(scheduleAction: String?): SwipeAction =
+            if (scheduleAction == "PRIORITY_URGENT") SwipeAction.URGENT else SwipeAction.CHOOSE_WHEN
         private val KEY_KEEP_ENTRY_OPEN = booleanPreferencesKey("keep_entry_open")
         private val KEY_FAB_ALIGN_START = booleanPreferencesKey("fab_align_start")
         private val KEY_SUBTASK_DISPLAY_MODE = stringPreferencesKey("subtask_display_mode")
@@ -72,9 +91,8 @@ class BehaviorPrefsStore(
                 completionSoundUri = prefs[KEY_COMPLETION_SOUND_URI]?.takeIf { it.isNotBlank() },
                 confirmBeforeDelete = prefs[KEY_CONFIRM_BEFORE_DELETE] ?: true,
                 inboxExcludeDated = prefs[KEY_INBOX_EXCLUDE_DATED] ?: false,
-                scheduleAction = prefs[KEY_SCHEDULE_ACTION]
-                    ?.let { runCatching { ScheduleAction.valueOf(it) }.getOrNull() }
-                    ?: ScheduleAction.DUE_TODAY,
+                swipeRight = swipeAction(prefs[KEY_SWIPE_RIGHT], SwipeAction.COMPLETE),
+                swipeLeft = swipeAction(prefs[KEY_SWIPE_LEFT], legacySwipeLeft(prefs[KEY_SCHEDULE_ACTION])),
                 keepEntryOpen = prefs[KEY_KEEP_ENTRY_OPEN] ?: false,
                 fabAlignStart = prefs[KEY_FAB_ALIGN_START] ?: false,
                 subtaskDisplayMode = prefs[KEY_SUBTASK_DISPLAY_MODE]
@@ -110,8 +128,16 @@ class BehaviorPrefsStore(
         dataStore.edit { it[KEY_INBOX_EXCLUDE_DATED] = enabled }
     }
 
-    suspend fun setScheduleAction(action: ScheduleAction) {
-        dataStore.edit { it[KEY_SCHEDULE_ACTION] = action.name }
+    suspend fun setSwipeRight(action: SwipeAction) {
+        dataStore.edit { it[KEY_SWIPE_RIGHT] = action.name }
+    }
+
+    /** Also drops the old swipe-left setting, which this one replaces. */
+    suspend fun setSwipeLeft(action: SwipeAction) {
+        dataStore.edit {
+            it[KEY_SWIPE_LEFT] = action.name
+            it.remove(KEY_SCHEDULE_ACTION)
+        }
     }
 
     suspend fun setKeepEntryOpen(enabled: Boolean) {

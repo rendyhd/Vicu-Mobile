@@ -42,15 +42,14 @@ interface TaskRepository {
 
     suspend fun update(task: Task): NetworkResult<Task>
     /**
-     * Applies the user's configured "schedule" action (set due today / set urgent) to a task.
-     * The task is re-read from Room by id so a caller holding an old copy cannot write stale
-     * fields back, and only the field the action sets is patched.
+     * Sets the priority of a task (a swipe set to "Urgent"). The task is re-read from Room by id so
+     * a caller holding an old copy cannot write stale fields back, and only the priority is patched.
      */
-    suspend fun applyScheduleAction(taskId: Long): NetworkResult<Task>
+    suspend fun setPriority(taskId: Long, priority: Int): NetworkResult<Task>
 
     /**
      * The "Today" / "Tomorrow" quick pick: sets only the due date of the stored task to the end
-     * of that local day. Like [applyScheduleAction] the task is re-read by id, so the patch holds
+     * of that local day. Like [setPriority] the task is re-read by id, so the patch holds
      * just the due date whatever copy the caller saw.
      */
     suspend fun scheduleDue(taskId: Long, due: QuickDue): NetworkResult<Task>

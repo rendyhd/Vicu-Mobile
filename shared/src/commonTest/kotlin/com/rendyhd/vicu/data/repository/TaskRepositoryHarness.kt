@@ -4,7 +4,6 @@ import com.rendyhd.vicu.auth.authTestJson
 import com.rendyhd.vicu.auth.authTestJsonHeaders
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.data.local.LogbookPrefsStore
-import com.rendyhd.vicu.data.local.ScheduleAction
 import com.rendyhd.vicu.data.local.SyncCursorStore
 import com.rendyhd.vicu.data.sync.TaskRefresher
 import com.rendyhd.vicu.data.local.TempIdGenerator
@@ -52,7 +51,6 @@ class TaskRepositoryHarness(
     val taskDao: FakeTaskDao = FakeTaskDao(),
     val pendingActionDao: FakePendingActionDao = FakePendingActionDao(),
     val hooks: RecordingRepositoryHooks = RecordingRepositoryHooks(),
-    scheduleAction: ScheduleAction = ScheduleAction.DUE_TODAY,
     /** A clock frozen at the real day unless a test needs the day to change. */
     dayClock: DayClock = DayClock(CoroutineScope(Job()), ticking = false),
     val tempIds: TempIdGenerator = TempIdGenerator(InMemoryPreferencesDataStore()),
@@ -80,7 +78,6 @@ class TaskRepositoryHarness(
     }
 
     private val behaviorPrefsStore = BehaviorPrefsStore(InMemoryPreferencesDataStore())
-    private val scheduleActionDefault = scheduleAction
 
     private val client = HttpClient(
         MockEngine { request ->
@@ -125,10 +122,6 @@ class TaskRepositoryHarness(
         writeGate = writeGate,
         mappingDispatcher = mappingDispatcher,
     )
-
-    suspend fun initScheduleAction() {
-        behaviorPrefsStore.setScheduleAction(scheduleActionDefault)
-    }
 
     fun patches(): List<SentRequest> = sent.filter { it.method == "PATCH" }
 

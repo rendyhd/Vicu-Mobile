@@ -205,7 +205,6 @@ fun InboxScreen(
                             },
                             onSubtaskToggleDone = viewModel::toggleDone,
                             onSubtaskClick = { child -> onTaskClick(child.id) },
-                            onSchedule = { viewModel.scheduleTask(task.id) },
                             onLongClick = if (canDrag) null else ({ selectionVm.toggle(task.id) }),
                             onMoveUp = moves[task.id]?.takeIf { canDrag && it.up }
                                 ?.let { { viewModel.moveTaskBy(task.id, -1); Unit } },

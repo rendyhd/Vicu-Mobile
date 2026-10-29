@@ -101,13 +101,6 @@ class UpcomingViewModel(
         }
     }
 
-    /** Swipe-schedule: applies the configured Today/Urgent action via the repository. */
-    fun scheduleTask(taskId: Long) {
-        viewModelScope.launch {
-            taskRepository.applyScheduleAction(taskId)
-        }
-    }
-
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }

@@ -263,7 +263,6 @@ fun ProjectScreen(
                             },
                             onSubtaskToggleDone = viewModel::toggleDone,
                             onSubtaskClick = { child -> onTaskClick(child.id) },
-                            onSchedule = { viewModel.scheduleTask(task.id) },
                             // Draggable rows enter selection via lift-without-move
                             // (onDragStopped above); the rest keep plain long-press.
                             onLongClick = if (canDrag) null else ({ selectionVm.toggle(task.id) }),
@@ -313,7 +312,6 @@ fun ProjectScreen(
                         onRowClick = { task ->
                             if (selectionActive) selectionVm.toggle(task.id) else onTaskClick(task.id)
                         },
-                        onSchedule = { task -> viewModel.scheduleTask(task.id) },
                         onLongClickToggle = { task -> selectionVm.toggle(task.id) },
                         onMoveTask = { task, offset -> viewModel.moveTaskBy(task.id, offset) },
                         onAddTask = { pid -> onShowTaskEntry(pid, null) },
@@ -520,7 +518,6 @@ private fun LazyListScope.projectSectionItems(
     onDragStopped: (Task) -> Unit,
     onToggleDone: (Task) -> Unit,
     onRowClick: (Task) -> Unit,
-    onSchedule: (Task) -> Unit,
     onLongClickToggle: (Task) -> Unit,
     onMoveTask: (Task, Int) -> Unit,
     onAddTask: (Long) -> Unit,
@@ -562,7 +559,6 @@ private fun LazyListScope.projectSectionItems(
                     onClick = { onRowClick(task) },
                     onSubtaskToggleDone = onToggleDone,
                     onSubtaskClick = onRowClick,
-                    onSchedule = { onSchedule(task) },
                     onLongClick = if (canDrag) null else ({ onLongClickToggle(task) }),
                     contentStartPadding = ((depth + 1) * 16).dp,
                     onMoveUp = moves[task.id]?.takeIf { canDrag && it.up }
@@ -591,7 +587,6 @@ private fun LazyListScope.projectSectionItems(
                 onDragStopped = onDragStopped,
                 onToggleDone = onToggleDone,
                 onRowClick = onRowClick,
-                onSchedule = onSchedule,
                 onLongClickToggle = onLongClickToggle,
                 onMoveTask = onMoveTask,
                 onAddTask = onAddTask,

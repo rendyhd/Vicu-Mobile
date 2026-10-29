@@ -751,8 +751,12 @@ class SettingsViewModel(
         viewModelScope.launch { behaviorPrefsStore.setInboxExcludeDated(enabled) }
     }
 
-    fun setScheduleAction(action: com.rendyhd.vicu.data.local.ScheduleAction) {
-        viewModelScope.launch { behaviorPrefsStore.setScheduleAction(action) }
+    fun setSwipeRight(action: com.rendyhd.vicu.data.local.SwipeAction) {
+        viewModelScope.launch { behaviorPrefsStore.setSwipeRight(action) }
+    }
+
+    fun setSwipeLeft(action: com.rendyhd.vicu.data.local.SwipeAction) {
+        viewModelScope.launch { behaviorPrefsStore.setSwipeLeft(action) }
     }
 
     fun setKeepEntryOpen(enabled: Boolean) {

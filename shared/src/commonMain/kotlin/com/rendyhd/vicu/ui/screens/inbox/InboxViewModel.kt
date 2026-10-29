@@ -260,13 +260,6 @@ class InboxViewModel(
         }
     }
 
-    /** Swipe-schedule: applies the configured Today/Urgent action via the repository. */
-    fun scheduleTask(taskId: Long) {
-        viewModelScope.launch {
-            taskRepository.applyScheduleAction(taskId)
-        }
-    }
-
     /** The Retry of the failure message: repeats the failed completion, or refreshes. */
     fun retry() {
         val action = retryAction

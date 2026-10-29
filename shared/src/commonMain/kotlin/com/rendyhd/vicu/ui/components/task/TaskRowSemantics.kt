@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.rendyhd.vicu.data.local.SwipeAction
 import com.rendyhd.vicu.domain.repository.QuickDue
 import com.rendyhd.vicu.ui.theme.VicuColors
 
@@ -15,21 +16,25 @@ import com.rendyhd.vicu.ui.theme.VicuColors
 internal val MIN_TOUCH_TARGET: Dp = 48.dp
 
 /**
- * What the screens give a task row so it can be scheduled without the swipe gesture. Provided
- * once at the app root; a row without a provider simply offers no schedule actions.
+ * What the app gives a task row: the quick due dates a screen reader offers, and the swipe actions
+ * the user chose (Settings, Gestures). Provided once at the app root; a row without a provider
+ * offers no schedule actions, completes on a swipe to the right and does not swipe to the left.
  */
 interface TaskRowActions {
     /** Sets the due date of [taskId] to the end of [due]'s local day. */
     fun scheduleDue(taskId: Long, due: QuickDue)
 
-    /**
-     * A swipe to schedule on [taskId]. Returns true when the app took it (it opens the When sheet),
-     * false when the row should run its own configured action (the "Urgent" swipe setting).
-     */
-    fun swipeSchedule(taskId: Long): Boolean
+    /** What a swipe from the start to the end of the row does. */
+    val swipeRight: SwipeAction get() = SwipeAction.COMPLETE
 
-    /** The word beside the icon of a swipe to schedule: "Schedule" when it opens the When sheet, "Urgent" for the other setting. */
-    val swipeScheduleLabel: String get() = "Schedule"
+    /** What a swipe from the end to the start of the row does. */
+    val swipeLeft: SwipeAction get() = SwipeAction.NONE
+
+    /**
+     * Runs a swipe's [action] on [taskId]. Complete never comes here: the row completes the task
+     * itself, through its screen, so the completion hold and the subtask question apply.
+     */
+    fun swipe(taskId: Long, action: SwipeAction)
 }
 
 val LocalTaskRowActions = staticCompositionLocalOf<TaskRowActions?> { null }

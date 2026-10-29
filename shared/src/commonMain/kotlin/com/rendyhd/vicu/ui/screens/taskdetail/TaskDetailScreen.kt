@@ -36,6 +36,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.rendyhd.vicu.location.LocationReminder
 import com.rendyhd.vicu.ui.components.location.LocationDisclosureSheet
+import com.rendyhd.vicu.ui.components.task.DeleteTaskDialog
 import com.rendyhd.vicu.ui.components.task.PriorityMark
 import com.rendyhd.vicu.util.RecurrencePreset
 import com.rendyhd.vicu.util.RecurrenceValue
@@ -1177,37 +1178,10 @@ fun TaskDetailScreen(
         val descendantCount = state.task?.descendantsDepthFirst()?.size
             ?.takeIf { it > 0 }
             ?: state.subtasks.size
-        val hasDescendants = descendantCount > 0
-        AlertDialog(
-            onDismissRequest = viewModel::dismissDeleteConfirmation,
-            title = { Text(if (hasDescendants) "Delete task and subtasks?" else "Delete task?") },
-            text = {
-                Text(
-                    if (hasDescendants) {
-                        "This task has $descendantCount ${if (descendantCount == 1) "subtask" else "subtasks"}. " +
-                            "Delete them too, or keep them as standalone tasks."
-                    } else {
-                        "This action cannot be undone."
-                    },
-                )
-            },
-            confirmButton = {
-                Row {
-                    if (hasDescendants) {
-                        TextButton(onClick = { viewModel.deleteTask(deleteSubtasks = false) }) {
-                            Text("Keep subtasks")
-                        }
-                    }
-                    TextButton(onClick = { viewModel.deleteTask(deleteSubtasks = true) }) {
-                        Text(if (hasDescendants) "Delete all" else "Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissDeleteConfirmation) {
-                    Text("Cancel")
-                }
-            },
+        DeleteTaskDialog(
+            descendantCount = descendantCount,
+            onDelete = { deleteSubtasks -> viewModel.deleteTask(deleteSubtasks = deleteSubtasks) },
+            onDismiss = viewModel::dismissDeleteConfirmation,
         )
     }
 

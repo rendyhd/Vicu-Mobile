@@ -140,7 +140,7 @@ class FakeTaskRepository : TaskRepository {
         return result
     }
 
-    override suspend fun applyScheduleAction(taskId: Long): NetworkResult<Task> = NetworkResult.Error("not faked")
+    override suspend fun setPriority(taskId: Long, priority: Int): NetworkResult<Task> = NetworkResult.Error("not faked")
 
     /** (task id, day) of every [scheduleDue]; the stored row is not changed. */
     val quickDues = mutableListOf<Pair<Long, QuickDue>>()

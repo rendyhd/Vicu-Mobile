@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.ui.screens.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Swipe
 import androidx.compose.material.icons.outlined.SwipeLeft
 import androidx.compose.material.icons.outlined.SwipeRight
 import androidx.compose.material.icons.outlined.TouchApp
@@ -27,20 +29,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.rendyhd.vicu.data.local.ScheduleAction
+import com.rendyhd.vicu.data.local.SwipeAction
+import com.rendyhd.vicu.ui.components.task.SwipeActions
 
-/** What swiping a task to the left does under the chosen "Swipe to schedule" setting. */
-internal fun swipeLeftDescription(action: ScheduleAction): String = when (action) {
-    ScheduleAction.DUE_TODAY -> "Open the When sheet to choose a day and time"
-    ScheduleAction.PRIORITY_URGENT -> "Mark the task urgent (priority 4)"
-}
+/** Shown above the two swipe settings. */
+internal const val SWIPE_INTRO =
+    "Choose what swiping a task does. A swipe needs a drag of half the row's width."
 
 /**
  * What dragging does, and what a TalkBack user does instead: every row that can be dragged has
@@ -62,52 +68,56 @@ internal const val UNDO_TIP =
 
 @Composable
 internal fun GesturesTab(
-    scheduleAction: ScheduleAction,
+    swipeRight: SwipeAction,
+    swipeLeft: SwipeAction,
+    onSwipeRightChange: (SwipeAction) -> Unit,
+    onSwipeLeftChange: (SwipeAction) -> Unit,
     listState: LazyListState,
 ) {
+    // Which swipe is being chosen: true for the right one, false for the left, null for none.
+    var choosingRight by rememberSaveable { mutableStateOf<Boolean?>(null) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
     ) {
-        item(key = "gestures_header") {
-            SectionHeader(icon = Icons.Outlined.Gesture, title = "Gesture Guide")
+        item(key = "swipes_header") {
+            SectionHeader(icon = Icons.Outlined.Swipe, title = "Swipes")
         }
 
-        item(key = "gestures_intro") {
+        item(key = "swipes_intro") {
             Text(
-                text = "Learn how to interact with tasks using gestures.",
+                text = SWIPE_INTRO,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
-        item(key = "gesture_swipe_right") {
-            GestureRow(
+        item(key = "swipe_right") {
+            SwipeSettingRow(
                 icon = Icons.Outlined.SwipeRight,
                 gesture = "Swipe Right",
-                description = "Complete a task",
-                color = MaterialTheme.colorScheme.primary,
+                action = swipeRight,
+                onClick = { choosingRight = true },
             )
         }
 
-        item(key = "gesture_swipe_left") {
-            GestureRow(
+        item(key = "swipe_left") {
+            SwipeSettingRow(
                 icon = Icons.Outlined.SwipeLeft,
                 gesture = "Swipe Left",
-                description = swipeLeftDescription(scheduleAction),
-                color = MaterialTheme.colorScheme.secondary,
+                action = swipeLeft,
+                onClick = { choosingRight = false },
             )
         }
 
-        item(key = "gesture_swipe_setting") {
-            Text(
-                text = "Change what Swipe Left does under General > Preferences > Swipe to schedule. " +
-                    "A swipe needs a drag of half the row's width.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 72.dp, end = 16.dp, bottom = 4.dp),
-            )
+        item(key = "swipes_divider") {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        }
+
+        item(key = "gestures_header") {
+            SectionHeader(icon = Icons.Outlined.Gesture, title = "Other Gestures")
         }
 
         item(key = "gesture_tap") {
@@ -176,6 +186,43 @@ internal fun GesturesTab(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+
+    choosingRight?.let { right ->
+        ChoiceDialog(
+            title = if (right) "Swipe right" else "Swipe left",
+            options = SwipeAction.entries.map { it.name to SwipeActions.name(it) },
+            selected = (if (right) swipeRight else swipeLeft).name,
+            onPick = { name ->
+                val action = SwipeAction.valueOf(name)
+                if (right) onSwipeRightChange(action) else onSwipeLeftChange(action)
+                choosingRight = null
+            },
+            onDismiss = { choosingRight = null },
+        )
+    }
+}
+
+/** A swipe direction and the action it runs; tapping it opens the choice. */
+@Composable
+private fun SwipeSettingRow(
+    icon: ImageVector,
+    gesture: String,
+    action: SwipeAction,
+    onClick: () -> Unit,
+) {
+    val color = if (action == SwipeAction.NONE) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        SwipeActions.role(action).color
+    }
+    GestureRow(
+        icon = icon,
+        gesture = gesture,
+        description = SwipeActions.description(action),
+        color = color,
+        value = SwipeActions.name(action),
+        modifier = Modifier.clickable(onClickLabel = "Change", role = Role.Button, onClick = onClick),
+    )
 }
 
 @Composable
@@ -184,9 +231,11 @@ private fun GestureRow(
     gesture: String,
     description: String,
     color: Color,
+    value: String? = null,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -206,7 +255,7 @@ private fun GestureRow(
             )
         }
         Spacer(modifier = Modifier.width(16.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = gesture,
                 style = MaterialTheme.typography.bodyLarge,
@@ -216,6 +265,14 @@ private fun GestureRow(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (value != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }
