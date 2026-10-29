@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.Sender
+import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -79,7 +80,12 @@ object KtorClientFactory {
      * The status the project list (one project) answers [token] with, or null when no answer
      * came. Sent past this client's own 401 handling, so it never refreshes or ends the session.
      */
-    private suspend fun Sender.projectListStatus(refused: HttpRequestBuilder, token: String, apiBasePath: String): Int? = try {
+    private suspend fun Sender.projectListStatus(
+        refused: HttpRequestBuilder,
+        token: String,
+        apiBasePath: String,
+        userAgent: String,
+    ): Int? = try {
         val check = HttpRequestBuilder().apply {
             method = HttpMethod.Get
             url.takeFrom(refused.url)
@@ -89,6 +95,7 @@ object KtorClientFactory {
             url.parameters.append("page", "1")
             url.fragment = ""
             header(HttpHeaders.Authorization, "Bearer $token")
+            header(HttpHeaders.UserAgent, userAgent)
         }
         execute(check).response.status.value
     } catch (e: CancellationException) {
@@ -111,10 +118,16 @@ object KtorClientFactory {
         // is opt-in and only the debug build turns it on (see KoinModules).
         enableLogging: Boolean = false,
         tokenCheck: ApiTokenCheck = ApiTokenCheck(),
+        // The server lists a session under the User-Agent of its sign-in ([VikunjaUserAgent]).
+        userAgent: String = VikunjaUserAgent.PRODUCT,
     ): HttpClient {
         val client = HttpClient(engine) {
             install(ContentNegotiation) {
                 json(json)
+            }
+
+            install(UserAgent) {
+                agent = userAgent
             }
 
             if (enableLogging) {
@@ -183,7 +196,7 @@ object KtorClientFactory {
                 if (failedToken != null &&
                     isCollaborationPath(path, apiBasePathOf(baseUrlHolder)) &&
                     authManager.isApiToken(failedToken) &&
-                    tokenCheck.readsProjects(failedToken) { projectListStatus(request, failedToken, apiBasePathOf(baseUrlHolder)) }
+                    tokenCheck.readsProjects(failedToken) { projectListStatus(request, failedToken, apiBasePathOf(baseUrlHolder), userAgent) }
                 ) {
                     response.attributes.put(ApiTokenPermission.Refused, Unit)
                     return@intercept response

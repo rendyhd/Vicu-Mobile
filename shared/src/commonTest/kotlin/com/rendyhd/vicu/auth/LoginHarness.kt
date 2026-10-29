@@ -4,6 +4,7 @@ import com.rendyhd.vicu.data.local.WiperFixture
 import com.rendyhd.vicu.data.remote.ApiTokenCheck
 import com.rendyhd.vicu.data.remote.BaseUrlHolder
 import com.rendyhd.vicu.data.remote.KtorClientFactory
+import com.rendyhd.vicu.data.remote.VikunjaUserAgent
 import com.rendyhd.vicu.data.remote.api.VikunjaApiService
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -34,6 +35,7 @@ class LoginHarness(
     signedIn: Boolean = true,
     val fixture: WiperFixture = WiperFixture(),
     tokenCheck: ApiTokenCheck = ApiTokenCheck(),
+    userAgent: String = VikunjaUserAgent.PRODUCT,
     handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
 ) {
     val storage = InMemoryTokenStorage()
@@ -71,6 +73,7 @@ class LoginHarness(
             baseUrlHolder = baseUrlHolder,
             authManager = authManager,
             tokenCheck = tokenCheck,
+            userAgent = userAgent,
         )
         service = VikunjaApiService(client, authTestJson)
     }

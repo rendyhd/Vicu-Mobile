@@ -109,6 +109,7 @@ val networkModule = module {
             // Set by the host app from its BuildConfig before Koin starts.
             enableLogging = BuildInfo.isDebug,
             tokenCheck = ApiTokenCheck(time = get()),
+            userAgent = VikunjaUserAgent.current(),
         )
     }
     single { VikunjaApiService(get(), get()) }
