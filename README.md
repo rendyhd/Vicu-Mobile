@@ -125,11 +125,11 @@ On Android the widgets follow the Vicu colours or your wallpaper colours and ref
 
 ## iPhone and iPad
 
-The same app as on Android, with iOS gestures and system settings. A few things differ because of the platform: iOS keeps a limited number of notifications waiting, so Vicu plans the soonest reminders ahead; background sync runs when iOS allows it; some single sign-on providers, Google among them, do not allow sign-in inside an app (use your password or an API token there); and device colours and pasting an image into notes are Android only. The full list is in [docs/ios.md](docs/ios.md#differences-from-android).
+The same app as on Android, with iOS gestures and system settings. A few things differ because of the platform: iOS keeps a limited number of notifications waiting, so Vicu plans the soonest reminders ahead; background sync runs when iOS allows it; some single sign-on providers, Google among them, do not allow sign-in inside an app (sign in through your browser instead, or use your password or an API token); and device colours and pasting an image into notes are Android only. The full list is in [docs/ios.md](docs/ios.md#differences-from-android).
 
 ## First launch
 
-Enter your server URL, sign in with single sign-on (OpenID Connect), a username and password (with two-factor) or an API token, and choose your Inbox project (if another device already chose one, Vicu suggests it). Allow notifications so reminders can reach you, then add a widget, the Quick Settings tile or the Add task control, and save your places. On Android, a server with a certificate from your own certificate authority works once that certificate is installed on the phone.
+Enter your server URL, sign in with single sign-on (OpenID Connect), a username and password (with two-factor) or an API token, and choose your Inbox project (if another device already chose one, Vicu suggests it). If your identity provider signs you in with a passkey (Pocket ID, for example), choose "Sign in through your browser" and add `com.rendyhd.vicu:/oidc-callback` once as a redirect (callback) URL of the Vikunja client at the provider: passkeys don't work in the in-app sign-in. Allow notifications so reminders can reach you, then add a widget, the Quick Settings tile or the Add task control, and save your places. On Android, a server with a certificate from your own certificate authority works once that certificate is installed on the phone.
 
 ## Building from source
 

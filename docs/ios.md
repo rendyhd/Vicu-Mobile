@@ -279,8 +279,11 @@ background refresh, then syncs and says so in the snackbar.
   Quick-add parsing does not apply to a shared title. A share with files waits for a connection.
 - **Pasting an image into a description** is Android only; use Add image on iOS.
 - **Device colours** (Material You) are Android only; iOS always uses the Vicu scheme.
-- **OIDC sign-in** uses an in-app web view that catches Vikunja's own callback. Google and some
-  other providers refuse embedded web views; sign in with a password or an API token there.
+- **OIDC sign-in** uses an in-app web view that catches Vikunja's own callback. It cannot use
+  passkeys, and Google and some other providers refuse embedded web views; "Sign in through your
+  browser" signs in with `ASWebAuthenticationSession` instead, once `com.rendyhd.vicu:/oidc-callback`
+  is a redirect URL of the Vikunja client at the provider. A passkey prompt in the web view leads
+  there by itself.
 - **Saved UI state** comes back after iOS ended the app in the background and is dropped when
   the user closes the app in the app switcher.
 
@@ -353,4 +356,5 @@ The simulator cannot check these; do them with a TestFlight build on an iPhone:
 - The Local Network prompt with a server on the home network.
 - VoiceOver on the lists, the editor and quick add (rows read their title, date and state, and
   the row actions are offered).
-- OIDC with the user's own provider (the in-app web view must be accepted by the provider).
+- OIDC with the user's own provider (the in-app web view must be accepted by the provider), and
+  the browser sign-in with a passkey on a device (the simulator has no passkeys of the user's).

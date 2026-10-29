@@ -73,6 +73,26 @@
             android:name=".auth.OidcLoginActivity"
             android:exported="false"
             android:theme="@style/Theme.Vicu" />
+        <!-- OIDC sign-in in the browser (passkeys): waits for the redirect, which the receiver below
+             hands back. The redirect address is the same in every build (OidcBrowserSignIn). -->
+        <activity
+            android:name=".auth.OidcBrowserActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".auth.OidcRedirectActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.rendyhd.vicu" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"

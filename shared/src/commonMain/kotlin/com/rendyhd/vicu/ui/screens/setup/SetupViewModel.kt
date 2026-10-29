@@ -9,6 +9,7 @@ import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.auth.LoginDataAction
 import com.rendyhd.vicu.auth.LoginPlan
 import com.rendyhd.vicu.auth.OidcHandler
+import com.rendyhd.vicu.auth.OidcSignInMode
 import com.rendyhd.vicu.auth.OidcResult
 import com.rendyhd.vicu.auth.PasswordLoginHandler
 import com.rendyhd.vicu.auth.PasswordLoginResult
@@ -36,6 +37,8 @@ enum class SetupStep {
     PasswordLogin,
     OidcTotp,
     ApiTokenEntry,
+    /** OIDC sign-in in the system browser, for a provider that signs in with a passkey. */
+    OidcBrowser,
     OidcInProgress,
     ProjectSelection,
 }
@@ -54,6 +57,10 @@ data class SetupUiState(
     val showTotpField: Boolean = false,
     val apiToken: String = "",
     val selectedProvider: OidcProviderDto? = null,
+    /** Where the OIDC sign-in runs: the in-app web view, or the browser ([SetupStep.OidcBrowser]). */
+    val oidcMode: OidcSignInMode = OidcSignInMode.WebView,
+    /** The web view met a passkey prompt, so the browser step says why it is there. */
+    val passkeyPrompted: Boolean = false,
     val projects: List<Project> = emptyList(),
     val selectedProjectId: Long? = null,
     val setupComplete: Boolean = false,
@@ -181,23 +188,49 @@ class SetupViewModel(
         _uiState.update { it.copy(step = SetupStep.ApiTokenEntry, error = null) }
     }
 
+    /** A provider card of the picker: signs in in the app's web view. */
     fun selectOidcProvider(provider: OidcProviderDto) {
         _uiState.update {
-            it.copy(selectedProvider = provider, totpPasscode = "", error = null)
+            it.copy(
+                selectedProvider = provider,
+                oidcMode = OidcSignInMode.WebView,
+                passkeyPrompted = false,
+                totpPasscode = "",
+                error = null,
+            )
+        }
+    }
+
+    /** Shows the browser sign-in; [passkeyPrompted] when the web view met a passkey prompt. */
+    fun showOidcBrowser(provider: OidcProviderDto, passkeyPrompted: Boolean = false) {
+        _uiState.update {
+            it.copy(
+                step = SetupStep.OidcBrowser,
+                selectedProvider = provider,
+                oidcMode = OidcSignInMode.Browser,
+                passkeyPrompted = passkeyPrompted,
+                totpPasscode = "",
+                isLoading = false,
+                error = null,
+            )
         }
     }
 
     fun getOidcAuthParams(): OidcHandler.AuthParams? {
-        val provider = _uiState.value.selectedProvider ?: return null
-        val url = _uiState.value.serverUrl
+        val state = _uiState.value
+        val provider = state.selectedProvider ?: return null
         return try {
-            _uiState.update { it.copy(step = SetupStep.OidcInProgress) }
-            oidcHandler.prepareAuthParams(provider, url)
+            _uiState.update { it.copy(step = SetupStep.OidcInProgress, error = null) }
+            oidcHandler.prepareAuthParams(provider, state.serverUrl, state.oidcMode)
         } catch (e: Exception) {
-            _uiState.update { it.copy(error = "Failed to start OIDC: ${e.message}", step = SetupStep.AuthMethodPicker) }
+            _uiState.update { it.copy(error = "Failed to start OIDC: ${e.message}", step = oidcStartStep(it)) }
             null
         }
     }
+
+    /** Where an OIDC attempt goes back to: the browser step it was started from, or the picker. */
+    private fun oidcStartStep(state: SetupUiState): SetupStep =
+        if (state.oidcMode == OidcSignInMode.Browser) SetupStep.OidcBrowser else SetupStep.AuthMethodPicker
 
     fun retryOidcWithTotp(): OidcHandler.AuthParams? {
         if (!isTotpPasscodeComplete(_uiState.value.totpPasscode)) {
@@ -237,9 +270,10 @@ class SetupViewModel(
                         )
                     }
                 }
+                is OidcResult.PasskeyUnavailable -> showOidcBrowser(provider, passkeyPrompted = true)
                 is OidcResult.Error -> {
                     _uiState.update {
-                        it.copy(isLoading = false, error = result.message, step = SetupStep.AuthMethodPicker)
+                        it.copy(isLoading = false, error = result.message, step = oidcStartStep(it))
                     }
                 }
             }
@@ -393,9 +427,15 @@ class SetupViewModel(
             when (state.step) {
                 SetupStep.AuthMethodPicker -> state.copy(step = SetupStep.ServerUrl, error = null)
                 SetupStep.PasswordLogin -> state.copy(step = SetupStep.AuthMethodPicker, error = null, showTotpField = false)
-                SetupStep.OidcTotp -> state.copy(step = SetupStep.AuthMethodPicker, error = null, totpPasscode = "")
+                SetupStep.OidcTotp -> state.copy(step = oidcStartStep(state), error = null, totpPasscode = "")
                 SetupStep.ApiTokenEntry -> state.copy(step = SetupStep.AuthMethodPicker, error = null)
-                SetupStep.OidcInProgress -> state.copy(step = SetupStep.AuthMethodPicker, error = null, isLoading = false)
+                SetupStep.OidcBrowser -> state.copy(
+                    step = SetupStep.AuthMethodPicker,
+                    error = null,
+                    oidcMode = OidcSignInMode.WebView,
+                    passkeyPrompted = false,
+                )
+                SetupStep.OidcInProgress -> state.copy(step = oidcStartStep(state), error = null, isLoading = false)
                 // Signed in already: there is no method left to pick, only the Inbox to choose.
                 SetupStep.ServerUrl, SetupStep.ProjectSelection -> state
             }
