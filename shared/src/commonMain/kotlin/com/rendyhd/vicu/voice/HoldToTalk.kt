@@ -28,7 +28,7 @@ data class VoiceCapture(
     val phase: VoicePhase = VoicePhase.LISTENING,
     /** The finger slid down far enough that letting go cancels. */
     val cancelArmed: Boolean = false,
-    /** Started without a hold (a screen reader's "Say a task"): the card has Add and Cancel buttons. */
+    /** Started without a hold (a screen reader's "Say a task", the app icon's Dictate): the card has Add and Cancel buttons. */
     val handsFree: Boolean = false,
     /** What the list the + was held in gives the task (its project, Today's date). */
     val defaults: TaskDefaults = TaskDefaults(),
@@ -117,8 +117,11 @@ class HoldToTalk(
             }
             SpeechAvailability.NEEDS_PERMISSION -> {
                 speech.requestPermission { granted ->
-                    if (granted) {
-                        messages.post(if (handsFree) "Microphone allowed. Say a task again." else "Microphone allowed. Hold + and say the task.")
+                    // Without a hold (Say a task, the app icon's Dictate) it listens now; a hold is over.
+                    if (granted && handsFree) {
+                        begin(format, handsFree = true, defaults)
+                    } else if (granted) {
+                        messages.post("Microphone allowed. Hold + and say the task.")
                     }
                 }
                 VoiceBegin.ASKED_PERMISSION

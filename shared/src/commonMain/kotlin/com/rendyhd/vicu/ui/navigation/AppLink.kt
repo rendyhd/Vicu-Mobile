@@ -3,7 +3,7 @@ package com.rendyhd.vicu.ui.navigation
 /**
  * A link into the app, for platforms where widgets, notifications, controls and shortcuts open the
  * app by URL (iOS): `vicu://task/42`, `vicu://view/TODAY`, `vicu://view/PROJECT/7`,
- * `vicu://view/CUSTOM_LIST/<id>`, `vicu://add`, `vicu://add?project=7`. The scheme is the one the
+ * `vicu://view/CUSTOM_LIST/<id>`, `vicu://add`, `vicu://add?project=7`, `vicu://dictate`. The scheme is the one the
  * build registers ("vicu", or "vicu-debug" for the debug build) and is not checked when parsing.
  * View names are the frozen [ViewTarget.typeName]s.
  */
@@ -11,6 +11,9 @@ sealed interface AppLink {
     data class OpenTask(val taskId: Long) : AppLink
     data class OpenView(val target: ViewTarget) : AppLink
     data class AddTask(val projectId: Long? = null) : AppLink
+
+    /** Dictation: smart dictation, listening, when it is set up; otherwise the voice card. */
+    data object Dictate : AppLink
 
     /** This link as a URL with [scheme]. */
     fun toUrl(scheme: String): String = when (this) {
@@ -20,6 +23,7 @@ sealed interface AppLink {
             if (target.idOrEmpty.isNotEmpty()) append('/').append(percentEncode(target.idOrEmpty))
         }
         is AddTask -> if (projectId == null) "$scheme://add" else "$scheme://add?project=$projectId"
+        Dictate -> "$scheme://dictate"
     }
 
     companion object {
@@ -36,6 +40,7 @@ sealed interface AppLink {
                 "task" -> parts.getOrNull(1)?.toLongOrNull()?.takeIf { it != 0L }?.let { OpenTask(it) }
                 "view" -> ViewTarget.parse(parts.getOrNull(1), parts.getOrNull(2))?.let { OpenView(it) }
                 "add" -> AddTask(query["project"]?.toLongOrNull()?.takeIf { it != 0L })
+                "dictate" -> Dictate
                 else -> null
             }
         }

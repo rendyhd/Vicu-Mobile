@@ -112,9 +112,9 @@ and every call names that UDID. Taps and typing are done by hand or with the iOS
   and kept in SwiftUI scene storage, so it comes back when iOS ends the app in the background and
   is dropped when the user closes the app in the app switcher. A restore that crashed is not
   tried again.
-- Links: `vicu://task/<id>`, `vicu://view/<TYPE>[/<id>]`, `vicu://add[?project=<id>]`
-  (`AppLink`), handled through `onOpenURL` and `AppInputs`. Widgets, notifications, the
-  control, shortcuts and the quick action all open the app this way.
+- Links: `vicu://task/<id>`, `vicu://view/<TYPE>[/<id>]`, `vicu://add[?project=<id>]`,
+  `vicu://dictate` (`AppLink`), handled through `onOpenURL` and `AppInputs`. Widgets,
+  notifications, the control, shortcuts and the quick actions all open the app this way.
 
 ### Platform pieces (iosMain)
 
@@ -250,7 +250,10 @@ background are budgeted).
     See `docs/voice-input.md`.
   - "Open Vicu quick add" (`OpenQuickAddIntent` in `iosApp/Shared/`): opens the task entry; the
     Add task control runs it too.
-- **Home-screen quick action**: Add task (`SceneDelegate` in `AppDelegate.swift`).
+- **Home-screen quick actions**: Add task (quick add) and Dictate (`SceneDelegate` in
+  `AppDelegate.swift`); the same two as Android's launcher shortcuts. Dictate opens smart
+  dictation, listening, when it is set up, otherwise the voice card without a hold (Done and
+  Cancel), as "Say a task" does; see `docs/voice-input.md`.
 
 ### Share extension (iosApp/VicuShare)
 
@@ -273,7 +276,7 @@ background refresh, then syncs and says so in the snackbar.
   and sent when the app next runs (opened, or the background refresh). Android sends it from the
   widget straight away. A small Tasks widget has one tap target (opens the list), no + and no
   dates.
-- **Quick add**: the Control Center control, Siri and the home-screen quick action take the
+- **Quick add**: the Control Center control, Siri and the home-screen quick actions take the
   place of Android's quick-add tile; Settings > Notifications explains how to add the control.
 - **Share**: a native sheet adds the share to the Inbox; Android opens the full task entry.
   Quick-add parsing does not apply to a shared title. A share with files waits for a connection.
@@ -346,7 +349,7 @@ The simulator cannot check these; do them with a TestFlight build on an iPhone:
   lock-screen actions.
 - Background refresh: after a few hours, Settings > General > Background activity lists runs.
 - The widgets and their buttons, the Add task control, Siri ("Add a task in Vicu", also on a
-  locked phone and in CarPlay) and the home-screen quick action.
+  locked phone and in CarPlay) and the home-screen quick actions (Add task, Dictate).
 - The share extension from Safari, Photos and Files.
 - Location reminders with the app closed: arrive and leave, set while already at the place
   (fires on the next arrival), after a restart, and the Always prompt.

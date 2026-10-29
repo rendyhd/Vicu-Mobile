@@ -249,6 +249,18 @@ class HoldToTalkTest {
     }
 
     @Test
+    fun handsFreeListensOnceTheMicrophoneIsAllowed() = runTest {
+        speech.available = SpeechAvailability.NEEDS_PERMISSION
+        val voice = session()
+        assertEquals(VoiceBegin.ASKED_PERMISSION, voice.begin(format, handsFree = true))
+        speech.available = SpeechAvailability.READY
+        speech.permissionCallback!!(true)
+        assertEquals(1, speech.starts)
+        assertEquals(true, voice.state.value?.handsFree)
+        assertNull(nextMessage())
+    }
+
+    @Test
     fun refusedOrMissingFallsBackToTheSystemScreen() = runTest {
         speech.systemSpeech = true
         speech.available = SpeechAvailability.DENIED

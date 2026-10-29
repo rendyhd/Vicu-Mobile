@@ -67,6 +67,14 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>com.rendyhd.vicu.add</string>
 		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>mic</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Dictate</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.rendyhd.vicu.dictate</string>
+		</dict>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>

@@ -57,6 +57,8 @@ fun MainViewController(restoredUiState: String): UIViewController = ComposeUIVie
                 onNavigateToViewConsumed = { inputs.navigateToView.value = null },
                 sharedContent = inputs.sharedContent,
                 onSharedContentConsumed = { inputs.sharedContent.value = null },
+                startDictation = inputs.startDictation,
+                onStartDictationConsumed = { inputs.startDictation.value = false },
             )
         }
     }

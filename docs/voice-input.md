@@ -89,6 +89,8 @@ A place phrase works here too: "call mom when I get home" sets the location remi
   reads nothing back), so it works hands-free and in CarPlay.
 - **Shortcuts and the Action Button**: "Dictate Text" followed by Vicu's "Add a task" with the
   dictated text as its Task adds in one step.
+- **Home-screen quick actions** (touch and hold the icon): "Add task" (quick add) and "Dictate"
+  (see App icon shortcuts below).
 - **In the app**: hold + (above), or the keyboard's microphone in quick add.
 
 ## Android
@@ -96,10 +98,23 @@ A place phrase works here too: "call mom when I get home" sets the location remi
 - **Quick add widget** (2x1): the mic opens the system speech screen ("What's the task?") over the
   home screen, adds the task without opening the app and shows the confirmation as a toast; + opens
   quick add. The Tasks widget has the same mic next to its +.
-- **App icon shortcuts** (long-press): "Add task" (quick add) and "Add by voice".
+- **App icon shortcuts** (long-press, `LauncherShortcuts`): "Add task" (quick add) and "Dictate"
+  (see App icon shortcuts below). The earlier "Add by voice" is no longer offered; a copy pinned
+  to the home screen still opens `VoiceAddActivity`.
 - **In the app**: hold + (above), or the keyboard's microphone in quick add.
 - `VoiceAddActivity` uses `RecognizerIntent`, the system's speech screen, so it needs no
   microphone permission (only holding + does). Without a speech service it opens quick add instead.
+
+## App icon shortcuts
+
+Both platforms offer the same two when the app icon is held: "Add task" opens quick add, and
+"Dictate" (`AppLink.Dictate`, `vicu://dictate`; `MainActivity.EXTRA_START_DICTATION` on Android,
+`IosApp.startDictation` on iOS) opens the app listening. With smart dictation set up it is the
+draft sheet with the microphone on, for the Inbox (as Try it in Settings, `DictationMic.tryIt`,
+in brain dump when that was left on); otherwise it is the voice card without a hold, with Done
+(or Add) and Cancel (`FabController.sayTask`, as a screen reader's "Say a task"), and quick add when the device
+cannot listen at all. On the first use the microphone prompt comes first, and the card listens as
+soon as it is allowed. Signed out, it opens the app and nothing more.
 
 ## With the assistant
 

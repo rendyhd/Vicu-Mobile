@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    /// Puts [SceneDelegate] next to SwiftUI's own, for the home-screen quick action.
+    /// Puts [SceneDelegate] next to SwiftUI's own, for the home-screen quick actions.
     func application(
         _ application: UIApplication,
         configurationForConnecting connectingSceneSession: UISceneSession,
@@ -33,10 +33,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
-/// The home-screen quick action (Info.plist UIApplicationShortcutItems): Add task opens the
-/// task entry, whether the app was running or not.
+/// The home-screen quick actions (Info.plist UIApplicationShortcutItems): Add task opens the
+/// task entry and Dictate starts dictation, whether the app was running or not.
 final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     static let addTask = "com.rendyhd.vicu.add"
+    static let dictate = "com.rendyhd.vicu.dictate"
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         if let item = connectionOptions.shortcutItem {
@@ -53,8 +54,14 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 
     private func handle(_ item: UIApplicationShortcutItem) -> Bool {
-        guard item.type == Self.addTask else { return false }
-        IosApp.shared.openQuickAdd()
+        switch item.type {
+        case Self.addTask:
+            IosApp.shared.openQuickAdd()
+        case Self.dictate:
+            IosApp.shared.startDictation()
+        default:
+            return false
+        }
         return true
     }
 }
