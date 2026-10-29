@@ -71,6 +71,7 @@ internal fun LazyListScope.accountSection(
 internal fun LazyListScope.appearanceSection(
     state: SettingsUiState,
     useDeviceColors: Boolean,
+    pureBlack: Boolean,
     viewModel: SettingsViewModel,
 ) {
     item(key = "theme_header") {
@@ -114,6 +115,16 @@ internal fun LazyListScope.appearanceSection(
                 }
             }
         }
+    }
+
+    // Pure black only changes the dark theme, so it is offered wherever that can be in use.
+    if (state.themeMode != ThemeMode.Light) item(key = "pure_black") {
+        SwitchRow(
+            label = "Pure black",
+            description = "A black background in the dark theme, for OLED screens",
+            checked = pureBlack,
+            onCheckedChange = viewModel::setPureBlack,
+        )
     }
 
     if (supportsDeviceColors) item(key = "use_device_colors") {

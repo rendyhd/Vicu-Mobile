@@ -11,6 +11,7 @@ import com.rendyhd.vicu.data.local.ThemeMode
 fun VicuTheme(
     themeMode: ThemeMode = ThemeMode.System,
     dynamicColor: Boolean = false,
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -21,7 +22,13 @@ fun VicuTheme(
 
     val deviceScheme = if (dynamicColor) platformDynamicColorScheme(darkTheme) else null
     val useDeviceColors = deviceScheme != null
-    val colorScheme = deviceScheme ?: if (darkTheme) VicuDarkColorScheme else VicuLightColorScheme
+    val baseScheme = deviceScheme ?: if (darkTheme) VicuDarkColorScheme else VicuLightColorScheme
+    // Pure black only changes the dark theme; the Vicu scheme has it precomputed.
+    val colorScheme = when {
+        !darkTheme || !pureBlack -> baseScheme
+        deviceScheme == null -> VicuBlackColorScheme
+        else -> remember(deviceScheme) { deviceScheme.withPureBlack() }
+    }
 
     // With device colours the status and swipe colours are shifted towards the wallpaper primary.
     val vicuColors = remember(colorScheme, darkTheme, useDeviceColors) {

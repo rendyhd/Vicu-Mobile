@@ -316,6 +316,9 @@ class SettingsViewModel(
     val useDeviceColors: StateFlow<Boolean> = themePrefsStore.useDeviceColors
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val pureBlack: StateFlow<Boolean> = themePrefsStore.pureBlack
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
             themePrefsStore.setThemeMode(mode)
@@ -327,6 +330,12 @@ class SettingsViewModel(
             themePrefsStore.setUseDeviceColors(enabled)
             // The widgets follow the same colours.
             platformSettingsHooks.updateWidgets()
+        }
+    }
+
+    fun setPureBlack(enabled: Boolean) {
+        viewModelScope.launch {
+            themePrefsStore.setPureBlack(enabled)
         }
     }
 

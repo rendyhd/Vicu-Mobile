@@ -45,6 +45,7 @@ fun SettingsScreen(
     val assistantState by assistantViewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val useDeviceColors by viewModel.useDeviceColors.collectAsStateWithLifecycle()
+    val pureBlack by viewModel.pureBlack.collectAsStateWithLifecycle()
     val routineHistoryCount by viewModel.routineHistoryCount.collectAsStateWithLifecycle()
     val syncedDataUnsynced by viewModel.syncedDataUnsynced.collectAsStateWithLifecycle()
     val projectItems by viewModel.projectItems.collectAsStateWithLifecycle()
@@ -108,6 +109,7 @@ fun SettingsScreen(
                 0 -> GeneralTab(
                     state = state,
                     useDeviceColors = useDeviceColors,
+                    pureBlack = pureBlack,
                     viewModel = viewModel,
                     openDialog = { dialog = it },
                     onPickCompletionSound = pickCompletionSound,

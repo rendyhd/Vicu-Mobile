@@ -17,13 +17,15 @@ import kotlin.test.assertTrue
 
 /**
  * The pairs of `android.contrast` in design-tokens-v1.json, resolved per theme: colour scheme
- * roles come from the Vicu schemes in code, custom colours and role.* from the fixture.
+ * roles come from the Vicu schemes in code, custom colours and role.* from the fixture. Pure black
+ * is not in the fixture; it is the dark theme on black surfaces, so it takes the dark values.
  */
 class AndroidContrastTest {
 
     private val themes = listOf(
         Triple("light", VicuLightColorScheme, VicuLightColors),
         Triple("dark", VicuDarkColorScheme, VicuDarkColors),
+        Triple("black", VicuBlackColorScheme, VicuDarkColors),
     )
 
     private fun linear(c: Float): Double {
@@ -41,7 +43,7 @@ class AndroidContrastTest {
     }
 
     private fun themeColor(obj: JsonObject, theme: String): Color =
-        DesignTokensFixture.parseHex(obj.getValue(theme).jsonPrimitive.content)
+        DesignTokensFixture.parseHex(obj.getValue(if (theme == "black") "dark" else theme).jsonPrimitive.content)
 
     private fun resolve(ref: String, theme: String, scheme: ColorScheme, colors: VicuColors): Color = when {
         ref.startsWith("colorScheme.") ->
@@ -91,7 +93,7 @@ class AndroidContrastTest {
         }
 
     @Test
-    fun `every contrast pair of the fixture meets its minimum in both themes`() {
+    fun `every contrast pair of the fixture meets its minimum in every theme`() {
         val pairs = DesignTokensFixture.android.getValue("contrast").jsonArray
         assertTrue(pairs.isNotEmpty())
         var checked = 0

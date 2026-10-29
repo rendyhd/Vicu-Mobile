@@ -18,4 +18,15 @@ class ThemePrefsStoreTest {
         store.setUseDeviceColors(false)
         assertFalse(store.useDeviceColors.first())
     }
+
+    @Test
+    fun `pure black is off until the switch is turned on`() = runTest {
+        val store = ThemePrefsStore(InMemoryPreferencesDataStore())
+        assertFalse(store.pureBlack.first())
+        store.setPureBlack(true)
+        assertTrue(store.pureBlack.first())
+        assertFalse(store.useDeviceColors.first())
+        store.setPureBlack(false)
+        assertFalse(store.pureBlack.first())
+    }
 }
