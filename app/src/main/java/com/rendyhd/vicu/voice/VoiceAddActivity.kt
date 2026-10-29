@@ -89,8 +89,9 @@ class VoiceAddActivity : ComponentActivity() {
             val state by current.state.collectAsState()
             val themeMode by themePrefsStore.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.System)
             val useDeviceColors by themePrefsStore.useDeviceColors.collectAsStateWithLifecycle(initialValue = false)
+            val pureBlack by themePrefsStore.pureBlack.collectAsStateWithLifecycle(initialValue = false)
             LaunchedEffect(state == null) { if (state == null) finish() }
-            VicuTheme(themeMode = themeMode, dynamicColor = useDeviceColors) {
+            VicuTheme(themeMode = themeMode, dynamicColor = useDeviceColors, pureBlack = pureBlack) {
                 state?.let { VoiceAddCard(it, onDone = current::done, onCancel = current::cancel) }
             }
         }
