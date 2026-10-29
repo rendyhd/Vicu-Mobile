@@ -30,6 +30,7 @@ fun MainViewController(restoredUiState: String): UIViewController = ComposeUIVie
     val themePrefs = remember { koin.get<ThemePrefsStore>() }
     val inputs = remember { koin.get<AppInputs>() }
     val themeMode by themePrefs.themeMode.collectAsState(initial = ThemeMode.System)
+    val pureBlack by themePrefs.pureBlack.collectAsState(initial = false)
 
     // The window follows the app's theme, so the status bar and system sheets match it.
     val controller = LocalUIViewController.current
@@ -41,7 +42,7 @@ fun MainViewController(restoredUiState: String): UIViewController = ComposeUIVie
         }
     }
 
-    VicuTheme(themeMode = themeMode, dynamicColor = false) {
+    VicuTheme(themeMode = themeMode, dynamicColor = false, pureBlack = pureBlack) {
         RestorableUiState(restoredUiState) {
             VicuApp(
                 authManager = authManager,

@@ -110,3 +110,16 @@ val VicuDarkColorScheme: ColorScheme = darkColorScheme(
     onTertiaryFixed = Color(0xFF351000),
     onTertiaryFixedVariant = Color(0xFF7A3000),
 )
+
+// Pure black (Settings, General, Appearance; for OLED screens): a dark scheme with the page and the
+// surfaces at its level made black. Sheets, menus, the drawer and the bottom bar keep their container
+// colours, so they still sit a step lighter than the page. A device setting with no desktop
+// counterpart, so it is not in the fixture; AndroidContrastTest runs the fixture's pairs against it.
+fun ColorScheme.withPureBlack(): ColorScheme = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceDim = Color.Black,
+    surfaceContainerLowest = Color.Black,
+)
+
+val VicuBlackColorScheme: ColorScheme = VicuDarkColorScheme.withPureBlack()

@@ -20,6 +20,7 @@ class ThemePrefsStore(
     companion object {
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_USE_DEVICE_COLORS = booleanPreferencesKey("use_device_colors")
+        private val KEY_PURE_BLACK = booleanPreferencesKey("pure_black")
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
@@ -35,6 +36,11 @@ class ThemePrefsStore(
         prefs[KEY_USE_DEVICE_COLORS] ?: false
     }
 
+    /** Pure black page and surfaces whenever the dark theme is in use, for OLED screens (default off). */
+    val pureBlack: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_PURE_BLACK] ?: false
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = when (mode) {
@@ -47,6 +53,10 @@ class ThemePrefsStore(
 
     suspend fun setUseDeviceColors(enabled: Boolean) {
         dataStore.edit { it[KEY_USE_DEVICE_COLORS] = enabled }
+    }
+
+    suspend fun setPureBlack(enabled: Boolean) {
+        dataStore.edit { it[KEY_PURE_BLACK] = enabled }
     }
 }
 

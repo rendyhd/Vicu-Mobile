@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 internal fun GeneralTab(
     state: SettingsUiState,
     useDeviceColors: Boolean,
+    pureBlack: Boolean,
     viewModel: SettingsViewModel,
     openDialog: (SettingsDialog) -> Unit,
     onPickCompletionSound: () -> Unit,
@@ -34,7 +35,7 @@ internal fun GeneralTab(
         state = listState,
     ) {
         accountSection(state, openDialog)
-        appearanceSection(state, useDeviceColors, viewModel)
+        appearanceSection(state, useDeviceColors, pureBlack, viewModel)
         bottomBarSection(state, viewModel, openDialog)
         drawerSection(state, askReady = aiSettings.askReady, viewModel)
         widgetSection(state, viewModel)
