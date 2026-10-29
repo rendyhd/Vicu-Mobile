@@ -2,11 +2,7 @@ package com.rendyhd.vicu.ui.components.shared
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,7 +43,7 @@ import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.util.parseHexColor
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomBarSlotEditor(
     currentSlot: BottomBarSlot,
@@ -226,47 +222,12 @@ fun BottomBarSlotEditor(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        IconRegistry.PRESET_ICONS.forEach { iconOption ->
-                            val isSelected = selectedIconKey == iconOption.key
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .then(
-                                        if (isSelected) {
-                                            Modifier.border(
-                                                2.dp,
-                                                MaterialTheme.colorScheme.primary,
-                                                RoundedCornerShape(8.dp),
-                                            )
-                                        } else {
-                                            Modifier.border(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outlineVariant,
-                                                RoundedCornerShape(8.dp),
-                                            )
-                                        },
-                                    )
-                                    .clickable { selectedIconKey = iconOption.key },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    iconOption.icon,
-                                    contentDescription = iconOption.label,
-                                    tint = if (isSelected) {
-                                        chosenColor ?: MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
-                    }
+                    Spacer(Modifier.height(4.dp))
+                    IconPicker(
+                        selectedKey = selectedIconKey,
+                        onSelect = { selectedIconKey = it },
+                        selectedTint = chosenColor,
+                    )
 
                     Spacer(Modifier.height(12.dp))
                     Text(
