@@ -79,8 +79,6 @@ private val ORDER_OPTIONS = listOf(
     "desc" to "Descending",
 )
 
-private val ICON_OPTIONS = IconRegistry.PRESET_ICONS.map { it.key to it.label }
-
 /** "Changed" counts local days with today included (cross-app semantics 3.3); 0 is no condition. */
 private val CHANGED_OPTIONS = listOf(
     0 to "Any time",
@@ -191,12 +189,13 @@ fun CustomListDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                DropdownSelector(
-                    label = "Icon",
-                    options = ICON_OPTIONS,
-                    selected = icon,
-                    onSelect = { icon = it },
+                Text(
+                    text = "Icon",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                IconPicker(selectedKey = icon, onSelect = { icon = it })
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -31,6 +31,7 @@ data class IconOption(
 
 object IconRegistry {
 
+    /** The key syncs as a custom list's `icon` and the desktop draws the same keys (custom-list-icons.ts): never rename one. */
     val PRESET_ICONS: List<IconOption> = listOf(
         IconOption("folder", Icons.Outlined.Folder, "Folder"),
         IconOption("star", Icons.Outlined.Star, "Star"),
