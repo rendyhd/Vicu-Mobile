@@ -42,8 +42,64 @@ data class AiSettings(
     val speakAnswers: Boolean = true,
     /** The dictation sheet's Brain dump switch, as the person last left it (section 4.8). */
     val brainDump: Boolean = false,
+    /** What each other preset was last set to, so choosing it again brings it back (section 7.2). */
+    val remembered: Map<String, ProviderSetup> = emptyMap(),
+    /** The saved addresses of each typed preset, the latest first (section 7.2). */
+    val savedAddresses: Map<String, List<ProviderSetup>> = emptyMap(),
+    /** Keys of typed presets are stored per address; false until a key stored per preset has moved. */
+    val keysPerAddress: Boolean = false,
 ) {
     val isSetUp: Boolean get() = providerId != null && address.isNotBlank()
+
+    /** The id the key is stored under: the preset, and for a typed preset its address too. */
+    fun keyId(): String? = providerId?.let { keyIdFor(it, address) }
+
+    /** The saved addresses of the preset in use. */
+    fun saved(): List<ProviderSetup> = providerId?.let { savedAddresses[it] }.orEmpty()
+
+    /** The address in use is one of the saved ones. */
+    fun isAddressSaved(): Boolean = saved().any { sameAddress(it.address, address) }
+
+    /** Saves the address in use with its models, first in the list, at most `saved_addresses_max`. */
+    fun savingAddress(): AiSettings {
+        val id = providerId ?: return this
+        if (address.isBlank()) return this
+        val entry = ProviderSetup(address, dictationModel, askModel)
+        val rest = saved().filterNot { sameAddress(it.address, address) }
+        return copy(savedAddresses = savedAddresses + (id to (listOf(entry) + rest).take(AiContract.limits.savedAddressesMax)))
+    }
+
+    /** The saved entry of the address in use follows a model change. */
+    fun withSavedModels(): AiSettings {
+        val id = providerId ?: return this
+        val list = saved()
+        if (list.none { sameAddress(it.address, address) }) return this
+        return copy(
+            savedAddresses = savedAddresses + (id to list.map {
+                if (sameAddress(it.address, address)) it.copy(dictationModel = dictationModel, askModel = askModel) else it
+            }),
+        )
+    }
+
+    /** Another preset: what this one was set to is remembered, and the other's comes back (section 7.2). */
+    fun choosingProvider(preset: ProviderPreset): AiSettings {
+        if (providerId == preset.id) return this
+        val kept = providerId?.let { remembered + (it to ProviderSetup(address, dictationModel, askModel)) } ?: remembered
+        val back = kept[preset.id]
+        // One model to start with: the quicker suggestion, for Ask too (Ask's own is a choice).
+        val model = preset.suggestedDictation ?: preset.suggestedAsk ?: ""
+        val fixed = preset.address.orEmpty()
+        return copy(
+            providerId = preset.id,
+            address = if (preset.addressEditable) back?.address?.ifBlank { null } ?: fixed else fixed,
+            dictationModel = back?.dictationModel?.ifBlank { null } ?: model,
+            askModel = back?.askModel?.ifBlank { null } ?: model,
+            dictationOn = false,
+            askOn = false,
+            talkOn = false,
+            remembered = kept - preset.id,
+        )
+    }
 
     fun modelKey(model: String): String = "$providerId|${address.trimEnd('/')}|$model"
 
@@ -96,8 +152,32 @@ data class AiSettings(
         /** Plain http to a server outside the local network: the setup screen's warning. */
         fun isInsecureRemote(address: String): Boolean =
             address.trim().startsWith("http://", ignoreCase = true) && !isLocalAddress(address)
+
+        fun keyIdFor(providerId: String, address: String): String =
+            if (AiContract.provider(providerId)?.addressEditable == true) "$providerId|${address.trim().trimEnd('/')}" else providerId
+
+        fun sameAddress(a: String, b: String): Boolean = a.trim().trimEnd('/') == b.trim().trimEnd('/')
+
+        /**
+         * A 404 or 405 from this typed address may mean its version path is missing (section 2.4): no
+         * path segment starts with `v` and a digit, and the last one is not `api`.
+         */
+        fun mayLackVersionPath(address: String): Boolean {
+            val rest = address.trim().substringAfter("://")
+            val segments = rest.substringBefore('?').split('/').drop(1).filter { it.isNotEmpty() }
+            if (segments.any { it.length >= 2 && it[0].lowercaseChar() == 'v' && it[1].isDigit() }) return false
+            return !segments.lastOrNull().equals("api", ignoreCase = true)
+        }
     }
 }
+
+/** What a preset was set to: its address and models (section 7.2). */
+@Serializable
+data class ProviderSetup(
+    val address: String = "",
+    val dictationModel: String = "",
+    val askModel: String = "",
+)
 
 @Serializable
 data class ModelCapabilities(

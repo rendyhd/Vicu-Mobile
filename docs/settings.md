@@ -169,7 +169,7 @@ Stores that hold app state, not settings:
 | `FabHintStore` (`fab_hint`) | The one-time "Hold + to say a task" hint: tasks added through the + button's quick add (counted up to 5), whether the hint was shown, whether a task was added by holding + | Kept | Included |
 | `ConversationStore` (`ai_conversations`) | The last 5 Ask and Talk conversations, each up to 100 messages, with the task ids their tools returned | Cleared (they name the old account's tasks) | Excluded |
 | `KeptTranscriptStore` (`ai_kept_transcript`) | A dictation the model could not turn into tasks, kept until it is added or discarded | Cleared | Excluded |
-| `AiKeyStore` (Android: Tink-encrypted DataStore `ai_keys`; iOS: the Keychain) | The provider's API key, per provider. Never synced, never logged | Kept (a device setting); "Delete assistant data" removes it | Excluded |
+| `AiKeyStore` (Android: Tink-encrypted DataStore `ai_keys`; iOS: the Keychain) | The provider's API key, per provider, and per address for a typed provider (Other, Ollama, Open WebUI). Never synced, never logged | Kept (a device setting); "Delete assistant data" removes it | Excluded |
 | Speech models (files in `noBackupFilesDir/speech-models`, iOS Application Support excluded from backup) | Downloaded Whisper and Parakeet models, checked by SHA-256 | Kept | Excluded |
 | `AndroidSpeechInput` (SharedPreferences `speech_input`, Android only) | Whether the first hold of + asked for the microphone, so a refusal is told apart from never asked | Kept | Included |
 

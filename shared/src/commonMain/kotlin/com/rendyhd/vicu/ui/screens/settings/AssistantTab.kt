@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Lock
@@ -122,27 +123,17 @@ internal fun AssistantTab(
         }
         if (preset != null) {
             item(key = "address") {
-                var address by remember(settings.providerId) { mutableStateOf(settings.address) }
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                if (preset.addressEditable) {
+                    TypedAddress(settings, onSave = viewModel::saveAddress, onUseSaved = viewModel::useSavedAddress, onRemoveSaved = viewModel::removeSavedAddress)
+                } else {
                     OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it },
+                        value = settings.address,
+                        onValueChange = {},
                         label = { Text("Address") },
                         singleLine = true,
-                        enabled = preset.addressEditable,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    if (preset.addressEditable && address.trim() != settings.address) {
-                        TextButton(onClick = { viewModel.setAddress(address) }) { Text("Save address") }
-                    }
-                    if (AiSettings.isInsecureRemote(address)) {
-                        Text(
-                            "This address uses plain http outside your local network: your tasks would travel unencrypted.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
                 }
             }
             item(key = "key") {
@@ -552,6 +543,110 @@ private fun SpeechModelRow(
             }
         }
         HorizontalDivider(Modifier.padding(start = 56.dp))
+    }
+}
+
+private enum class AddressEdit { EDIT, ADD }
+
+/**
+ * The address of a typed preset (`docs/ai-assistant-v1.md`, sections 2.1 and 7.2): saved, it shows as a
+ * value with Edit; the saved addresses are picked or removed in a dialog, which also adds one.
+ */
+@Composable
+private fun TypedAddress(
+    settings: AiSettings,
+    onSave: (address: String, replacing: Boolean) -> Unit,
+    onUseSaved: (String) -> Unit,
+    onRemoveSaved: (String) -> Unit,
+) {
+    var mode by rememberSaveable(settings.providerId) { mutableStateOf<AddressEdit?>(null) }
+    var picker by rememberSaveable { mutableStateOf(false) }
+    val editing = mode ?: if (settings.address.isBlank()) AddressEdit.EDIT else null
+    val saved = settings.saved()
+
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        if (editing == null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                    Text("Address", style = MaterialTheme.typography.bodyLarge)
+                    Text(settings.address, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = { mode = AddressEdit.EDIT }) { Text("Edit") }
+            }
+            TextButton(onClick = { if (saved.size > 1) picker = true else mode = AddressEdit.ADD }) {
+                Text(if (saved.size > 1) "Saved addresses (${saved.size})" else "Add address")
+            }
+        } else {
+            var typed by rememberSaveable(settings.providerId, editing) {
+                mutableStateOf(if (editing == AddressEdit.EDIT) settings.address else "")
+            }
+            OutlinedTextField(
+                value = typed,
+                onValueChange = { typed = it },
+                label = { Text(if (editing == AddressEdit.ADD) "New address" else "Address") },
+                placeholder = { Text("http://192.168.1.10:1234/v1") },
+                supportingText = { Text(AiContract.message("addressHelp")) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (AiSettings.isInsecureRemote(typed)) {
+                Text(
+                    "This address uses plain http outside your local network: your tasks would travel unencrypted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Row {
+                TextButton(
+                    onClick = {
+                        onSave(typed, editing == AddressEdit.EDIT)
+                        mode = null
+                    },
+                    enabled = typed.isNotBlank(),
+                ) { Text("Save address") }
+                if (settings.address.isNotBlank()) TextButton(onClick = { mode = null }) { Text("Cancel") }
+            }
+        }
+    }
+
+    if (picker) {
+        AlertDialog(
+            onDismissRequest = { picker = false },
+            title = { Text("Saved addresses") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    for (entry in saved) {
+                        val current = AiSettings.sameAddress(entry.address, settings.address)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                Modifier.weight(1f)
+                                    .selectable(selected = current, onClick = { onUseSaved(entry.address); picker = false }, role = Role.RadioButton)
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = current, onClick = null)
+                                Column(Modifier.padding(start = 12.dp)) {
+                                    Text(entry.address, style = MaterialTheme.typography.bodyMedium)
+                                    if (entry.dictationModel.isNotBlank()) {
+                                        Text(entry.dictationModel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            if (!current) {
+                                IconButton(onClick = { onRemoveSaved(entry.address) }) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Remove ${entry.address}")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mode = AddressEdit.ADD; picker = false }) { Text("Add address") }
+            },
+            dismissButton = { TextButton(onClick = { picker = false }) { Text("Close") } },
+        )
     }
 }
 

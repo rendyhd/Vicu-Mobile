@@ -113,7 +113,7 @@ class AskSessionTest {
             override fun now(): Instant = now
             override fun zone(): TimeZone = zone
         }
-        val session = AskSession(AiProviders(LlmClient(engine), keys), settings, backend, proposals, store, Conversation("c"), time) { "id" }
+        val session = AskSession(AiProviders(LlmClient(engine), keys, settings), settings, backend, proposals, store, Conversation("c"), time) { "id" }
         return Harness(session, sent, tasks, proposals, store)
     }
 

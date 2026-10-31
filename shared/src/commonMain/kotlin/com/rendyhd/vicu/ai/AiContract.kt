@@ -133,6 +133,7 @@ class AiLimits(private val o: JsonObject) {
     val organizeNotesMaxChars get() = n("organize_notes_max_chars")
     val organizeReasonMaxChars get() = n("organize_reason_max_chars")
     val organizeMaxTokens get() = n("organize_max_tokens")
+    val savedAddressesMax get() = n("saved_addresses_max")
 }
 
 /** A provider preset (section 2.1). */

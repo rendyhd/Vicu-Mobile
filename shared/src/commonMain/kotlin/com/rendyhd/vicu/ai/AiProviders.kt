@@ -8,6 +8,8 @@ import com.rendyhd.vicu.ai.provider.ProviderConnection
 import com.rendyhd.vicu.ai.provider.StructuredAnswers
 import com.rendyhd.vicu.ai.provider.StructuredMode
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -31,32 +33,84 @@ data class ConnectionTest(
 class AiProviders(
     private val client: LlmClient,
     private val keys: AiKeyStore,
+    private val settingsStore: AiSettingsStore,
 ) {
     val structured = StructuredAnswers(client)
 
     val llm: LlmClient get() = client
 
+    private val keyMove = Mutex()
+
     suspend fun connection(settings: AiSettings): ProviderConnection? {
         val preset = settings.providerId?.let { AiContract.provider(it) } ?: return null
         if (settings.address.isBlank()) return null
-        return ProviderConnection(preset, settings.address, keys.getKey(preset.id))
+        return ProviderConnection(preset, settings.address, key(settings))
+    }
+
+    /** The key for the preset and, when typed, the address of [settings] (section 7.2). */
+    suspend fun key(settings: AiSettings): String? {
+        val id = settings.keyId() ?: return null
+        moveKeysToAddresses()
+        return keys.getKey(id)
+    }
+
+    /** Stores [key] for the preset and address of [settings]; null or blank removes it. */
+    suspend fun setKey(settings: AiSettings, key: String?) {
+        val id = settings.keyId() ?: return
+        moveKeysToAddresses()
+        keys.setKey(id, key)
+    }
+
+    /** Forgets the key of a saved [address] of [providerId]. */
+    suspend fun forgetKey(providerId: String, address: String) {
+        moveKeysToAddresses()
+        keys.setKey(AiSettings.keyIdFor(providerId, address), null)
+    }
+
+    /**
+     * Keys of typed presets used to be stored per preset; once, each moves to the address it was last
+     * used with: the address in use, else the preset's default (section 7.2).
+     */
+    private suspend fun moveKeysToAddresses() = keyMove.withLock {
+        val settings = settingsStore.current()
+        if (settings.keysPerAddress) return@withLock
+        for (preset in AiContract.providers.filter { it.addressEditable }) {
+            val key = keys.getKey(preset.id) ?: continue
+            val address = if (settings.providerId == preset.id) settings.address else preset.address.orEmpty()
+            if (address.isNotBlank()) keys.setKey(AiSettings.keyIdFor(preset.id, address), key)
+            keys.setKey(preset.id, null)
+        }
+        settingsStore.update { it.copy(keysPerAddress = true) }
     }
 
     suspend fun listModels(settings: AiSettings): List<String> {
         val connection = connection(settings) ?: return emptyList()
-        return client.listModels(connection)
+        return try {
+            client.listModels(connection)
+        } catch (e: LlmException) {
+            throw withAddressHint(e, connection)
+        }
     }
+
+    /** A 404 or 405 from a typed address without a version path says what is likely missing (section 2.4). */
+    private fun withAddressHint(e: LlmException, connection: ProviderConnection): LlmException =
+        if (lacksVersionPath(e, connection)) LlmException(e.kind, "${e.message} ${AiContract.message("addressVersionHint")}", e.status) else e
+
+    private fun lacksVersionPath(e: LlmException, connection: ProviderConnection): Boolean =
+        connection.preset.addressEditable && e.status in ADDRESS_STATUSES && AiSettings.mayLackVersionPath(connection.address)
 
     /** The model list, one structured answer (json_schema, then prompt) and one tool call. */
     suspend fun test(settings: AiSettings, model: String): ConnectionTest {
         val connection = connection(settings) ?: return ConnectionTest(null, null, false, listOf("Choose a provider and its address first."))
         val problems = mutableListOf<String>()
+        var hint = false
         val models = try {
             client.listModels(connection)
         } catch (e: CancellationException) {
             throw e
         } catch (e: LlmException) {
             if (e.kind == LlmException.Kind.AUTH) problems += "The key was not accepted: ${e.message}"
+            hint = hint || lacksVersionPath(e, connection)
             null
         }
 
@@ -89,6 +143,7 @@ class AiProviders(
                 throw e
             } catch (e: LlmException) {
                 problems += "${mode.wire}: ${e.message}"
+                hint = hint || lacksVersionPath(e, connection)
                 if (e.kind == LlmException.Kind.AUTH || e.kind == LlmException.Kind.NETWORK || e.kind == LlmException.Kind.NOT_FOUND) break
             }
         }
@@ -116,8 +171,10 @@ class AiProviders(
             throw e
         } catch (e: LlmException) {
             problems += "Tools: ${e.message}"
+            hint = hint || lacksVersionPath(e, connection)
             false
         }
+        if (hint) problems += AiContract.message("addressVersionHint")
         return ConnectionTest(models, structuredMode, tools, problems)
     }
 
@@ -130,5 +187,6 @@ class AiProviders(
 
     private companion object {
         const val PROBE_MAX_TOKENS = 1_024
+        val ADDRESS_STATUSES = setOf(404, 405)
     }
 }
