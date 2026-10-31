@@ -43,6 +43,7 @@ import com.rendyhd.vicu.ui.components.section.SectionLevel
 import com.rendyhd.vicu.ui.components.selection.SelectionAction
 import com.rendyhd.vicu.ui.components.selection.SelectionPickers
 import com.rendyhd.vicu.ui.components.selection.SelectionTopBar
+import com.rendyhd.vicu.ui.components.selection.assignAction
 import com.rendyhd.vicu.ui.components.selection.SelectionViewModel
 import com.rendyhd.vicu.ui.components.shared.EmptyState
 import com.rendyhd.vicu.ui.components.shared.LocalFabAlignStart
@@ -94,6 +95,7 @@ fun AnytimeScreen(
                     onMove = { selectionAction = SelectionAction.MOVE_PROJECT },
                     onApplyLabel = { selectionAction = SelectionAction.APPLY_LABEL },
                     onRemove = { selectionAction = SelectionAction.REMOVE },
+                    onAssign = selectionVm.assignAction { selectionAction = SelectionAction.ASSIGN },
                     onDuplicate = selectionVm::bulkDuplicate,
                     copyTitles = selectionVm::selectedTitles,
                 )

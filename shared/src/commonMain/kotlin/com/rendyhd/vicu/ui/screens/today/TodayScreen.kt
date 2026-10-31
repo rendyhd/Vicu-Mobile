@@ -52,6 +52,7 @@ import com.rendyhd.vicu.ui.components.section.showsGroupHeader
 import com.rendyhd.vicu.ui.components.selection.SelectionAction
 import com.rendyhd.vicu.ui.components.selection.SelectionPickers
 import com.rendyhd.vicu.ui.components.selection.SelectionTopBar
+import com.rendyhd.vicu.ui.components.selection.assignAction
 import com.rendyhd.vicu.ui.components.selection.SelectionViewModel
 import com.rendyhd.vicu.ui.components.shared.LocalFabAlignStart
 import com.rendyhd.vicu.ui.components.shared.LocalClockDay
@@ -130,6 +131,7 @@ fun TodayScreen(
                     onMove = { selectionAction = SelectionAction.MOVE_PROJECT },
                     onApplyLabel = { selectionAction = SelectionAction.APPLY_LABEL },
                     onRemove = { selectionAction = SelectionAction.REMOVE },
+                    onAssign = selectionVm.assignAction { selectionAction = SelectionAction.ASSIGN },
                     onDuplicate = selectionVm::bulkDuplicate,
                     copyTitles = selectionVm::selectedTitles,
                 )

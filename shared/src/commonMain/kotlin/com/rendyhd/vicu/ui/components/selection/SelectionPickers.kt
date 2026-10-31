@@ -8,6 +8,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.ui.components.collab.BulkAssignSheet
 import com.rendyhd.vicu.ui.components.picker.LabelPickerDialog
 import com.rendyhd.vicu.ui.components.picker.PriorityPickerDialog
 import com.rendyhd.vicu.ui.components.picker.ProjectPickerDialog
@@ -20,6 +26,7 @@ enum class SelectionAction {
     MOVE_PROJECT,
     APPLY_LABEL,
     REMOVE,
+    ASSIGN,
 }
 
 @Composable
@@ -55,6 +62,26 @@ fun SelectionPickers(
     }
 
     when (action) {
+        SelectionAction.ASSIGN -> {
+            var tasks by remember { mutableStateOf<List<Task>?>(null) }
+            var changed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { tasks = selectionVm.selectedTasks() }
+            val projects by selectionVm.projects.collectAsStateWithLifecycle()
+            tasks?.let { selected ->
+                val projectIds = selected.map { it.projectId }.distinct()
+                BulkAssignSheet(
+                    tasks = selected,
+                    projectTitle = projectIds.singleOrNull()?.let { id -> projects.firstOrNull { it.id == id }?.title },
+                    onChanged = { changed = true },
+                    onDismiss = {
+                        // Like the other bulk actions, a change ends the selection.
+                        if (changed) selectionVm.clear()
+                        onDismiss()
+                    },
+                )
+            }
+        }
+
         SelectionAction.SCHEDULE -> WhenSheet(
             currentDate = null,
             onDateSelected = { confirm(); selectionVm.bulkSchedule(it) },
