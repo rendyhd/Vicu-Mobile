@@ -66,6 +66,7 @@ class SettingsViewModelStateTest {
         val pending: FakePendingActionDao,
         val labels: FakeLabelRepository,
         val projects: FakeProjectRepository,
+        val repositoryHooks: RecordingRepositoryHooks,
     )
 
     private class QuietHooks : PlatformSettingsHooks {
@@ -97,6 +98,7 @@ class SettingsViewModelStateTest {
         val pending = FakePendingActionDao()
         val labels = FakeLabelRepository(listOf(Label(2, "beta"), Label(1, "Alpha")))
         val projects = FakeProjectRepository(projectList)
+        val repositoryHooks = RecordingRepositoryHooks()
         val vm = SettingsViewModel(
             authManager = harness.authManager,
             tokenStorage = harness.storage,
@@ -112,7 +114,7 @@ class SettingsViewModelStateTest {
             reviewPrefsStore = ReviewPrefsStore(InMemoryPreferencesDataStore()),
             logbookPrefsStore = LogbookPrefsStore(InMemoryPreferencesDataStore()),
             routinePrefsStore = RoutinePrefsStore(InMemoryPreferencesDataStore()),
-            repositoryHooks = RecordingRepositoryHooks(),
+            repositoryHooks = repositoryHooks,
             pendingActionDao = pending,
             networkMonitor = FakeNetworkMonitor(online = true),
             sessionCleanup = harness.sessionCleanup,
@@ -122,7 +124,7 @@ class SettingsViewModelStateTest {
             projectActions = testProjectActions(projects, auth = harness.authManager),
             taskOrderPreferences = TaskOrderPreferences(InMemorySyncedEntries()),
         )
-        return Rig(vm, harness, pending, labels, projects)
+        return Rig(vm, harness, pending, labels, projects, repositoryHooks)
     }
 
     @Test
@@ -216,6 +218,25 @@ class SettingsViewModelStateTest {
         r.vm.clearMessages()
         awaitUntil { r.vm.uiState.value.error == null }
         assertFalse(r.vm.uiState.value.successMessage != null)
+        collector.cancel()
+        r.harness.close()
+    }
+
+    @Test
+    fun `Play sounds the completion sound and says so when it cannot be played`() = runTest {
+        val r = rig()
+        val collector = launch(UnconfinedTestDispatcher(testScheduler)) { r.vm.uiState.collect { } }
+        awaitUntil { r.vm.uiState.value.username == "rendy" }
+
+        r.vm.playCompletionSound()
+        awaitUntil { r.repositoryHooks.previews == 1 }
+        assertNull(r.vm.uiState.value.error)
+
+        r.repositoryHooks.previewPlays = false
+        r.vm.playCompletionSound()
+        awaitUntil { r.vm.uiState.value.error != null }
+        assertEquals(2, r.repositoryHooks.previews)
+        assertEquals("This sound can't be played. Pick another file.", r.vm.uiState.value.error)
         collector.cancel()
         r.harness.close()
     }

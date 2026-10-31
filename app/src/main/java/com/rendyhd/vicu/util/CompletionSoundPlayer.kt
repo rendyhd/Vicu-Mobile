@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.first
  *   in Settings take effect immediately.
  * - Any failure (missing file, codec issue, no notification sound configured)
  *   is logged and swallowed — completion sound is a non-essential affordance.
+ *   Settings' Play button uses [preview], which reports it.
  */
 class CompletionSoundPlayer(
     private val context: Context,
@@ -29,19 +30,25 @@ class CompletionSoundPlayer(
 
     suspend fun play() {
         val current = prefs.getPrefs().first()
-        if (!current.completionSoundEnabled) return
+        if (current.completionSoundEnabled) start(current.completionSoundUri)
+    }
 
-        val uri: Uri? = current.completionSoundUri
+    /** Plays the chosen sound even with the switch off; false when it cannot be played. */
+    suspend fun preview(): Boolean = start(prefs.getPrefs().first().completionSoundUri)
+
+    private fun start(customUri: String?): Boolean {
+        val uri: Uri? = customUri
             ?.takeIf { it.isNotBlank() }
             ?.toUri()
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         if (uri == null) {
             Log.d(TAG, "No completion sound URI resolved; silent")
-            return
+            return false
         }
 
-        try {
-            val mp = MediaPlayer().apply {
+        val mp = MediaPlayer()
+        return try {
+            mp.apply {
                 setDataSource(context, uri)
                 setOnErrorListener { player, what, extra ->
                     Log.w(TAG, "MediaPlayer error what=$what extra=$extra")
@@ -52,8 +59,11 @@ class CompletionSoundPlayer(
                 prepare()
             }
             mp.start()
+            true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to play completion sound: ${e.message}")
+            mp.release()
+            false
         }
     }
 }

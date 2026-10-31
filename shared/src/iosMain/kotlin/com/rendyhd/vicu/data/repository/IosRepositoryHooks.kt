@@ -41,6 +41,8 @@ class IosRepositoryHooks(
         appScope.launch { soundPlayer.play() }
     }
 
+    override suspend fun previewCompletionSound(): Boolean = soundPlayer.preview()
+
     override suspend fun scheduleAlarm(task: Task) {
         notifications().requestReplan()
     }

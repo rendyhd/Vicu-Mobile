@@ -456,6 +456,16 @@ class RecordingRepositoryHooks : PlatformRepositoryHooks {
 
     override fun playCompletionSound() = Unit
 
+    /** What [previewCompletionSound] answers. */
+    var previewPlays = true
+    var previews = 0
+        private set
+
+    override suspend fun previewCompletionSound(): Boolean {
+        previews++
+        return previewPlays
+    }
+
     override suspend fun scheduleAlarm(task: Task) {
         scheduled += task.id
     }

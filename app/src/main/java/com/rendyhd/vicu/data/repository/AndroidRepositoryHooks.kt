@@ -16,6 +16,7 @@ import com.rendyhd.vicu.worker.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AndroidRepositoryHooks(
     private val context: Context,
@@ -39,6 +40,9 @@ class AndroidRepositoryHooks(
             completionSoundPlayer.play()
         }
     }
+
+    override suspend fun previewCompletionSound(): Boolean =
+        withContext(Dispatchers.IO) { completionSoundPlayer.preview() }
 
     override suspend fun scheduleAlarm(task: Task) {
         alarmScheduler.scheduleForTask(task)
