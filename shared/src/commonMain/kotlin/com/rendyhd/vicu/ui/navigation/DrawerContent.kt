@@ -392,13 +392,15 @@ fun DrawerContent(
                         ) { clickGuard ->
                             NavigationDrawerItem(
                                 label = { Text(list.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                icon = {
-                                    Icon(
-                                        IconRegistry.PRESET_ICONS.firstOrNull { it.key == list.icon }?.icon
-                                            ?: Icons.Outlined.FilterList,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                // None leaves the icon's room to the name (a null slot has no gap either).
+                                icon = IconRegistry.customListIcon(list.icon)?.let { vector ->
+                                    {
+                                        Icon(
+                                            vector,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 },
                                 selected = currentRoute == "CustomListRoute/${list.id}",
                                 onClick = clickGuard.guarded { onNavigate(CustomListRoute(list.id)) },
@@ -638,12 +640,17 @@ private fun ProjectItem(
     }
     NavigationDrawerItem(
         label = { Text(project.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        icon = {
-            Icon(
-                Icons.Outlined.Folder,
-                contentDescription = null,
-                tint = projectColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // A project without an icon starts its name where the folder would be (cross-app semantics 11.3).
+        icon = if (project.showIcon) {
+            {
+                Icon(
+                    Icons.Outlined.Folder,
+                    contentDescription = null,
+                    tint = projectColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            null
         },
         badge = badge,
         selected = selected,

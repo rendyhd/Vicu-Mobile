@@ -320,13 +320,15 @@ internal fun SettingsProjectRow(
             .padding(start = settingsProjectIndent(depth), end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            Icons.Outlined.Folder,
-            contentDescription = null,
-            tint = parseHexColor(project.hexColor) ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        if (project.showIcon) {
+            Icon(
+                Icons.Outlined.Folder,
+                contentDescription = null,
+                tint = parseHexColor(project.hexColor) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         // The title takes what it needs and the tag follows it; a long title gives way to the tag.
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -406,13 +408,15 @@ internal fun ArchivedProjectRow(
             .padding(start = settingsProjectIndent(depth), end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            Icons.Outlined.Folder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        if (project.showIcon) {
+            Icon(
+                Icons.Outlined.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Text(
             text = project.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -488,13 +492,15 @@ internal fun CustomListRow(
             .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            Icons.Outlined.FilterList,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        IconRegistry.customListIcon(customList.icon)?.let { vector ->
+            Icon(
+                vector,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = customList.name,

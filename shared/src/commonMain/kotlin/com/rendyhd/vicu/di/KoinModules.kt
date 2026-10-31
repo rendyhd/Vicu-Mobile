@@ -169,6 +169,7 @@ val repositoryModule = module {
             projectRefresher = get(),
             pendingActionDao = get(),
             platformHooks = get(),
+            projectIcons = get(),
         )
     }
     single<LabelRepository> {
@@ -223,6 +224,7 @@ val repositoryModule = module {
     single { TaskOrderPreferences(synced = get<SyncedPreferences>()) }
     single { RoutinePersonalPreferences(synced = get<SyncedPreferences>()) }
     single { ProjectCategoryPreferences(synced = get<SyncedPreferences>()) }
+    single { ProjectIconPreferences(synced = get<SyncedPreferences>()) }
     single { WeeklyReviewPreferences(synced = get<SyncedPreferences>()) }
     single<CollaborationRepository> {
         CollaborationRepositoryImpl(
@@ -436,6 +438,7 @@ val commonModule = module {
             categoryPreferences = get(),
             appMessages = get(),
             appScope = get(),
+            iconPreferences = get(),
         )
     }
     single {

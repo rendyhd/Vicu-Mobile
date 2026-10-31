@@ -30,9 +30,12 @@ fun IconPicker(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     selectedTint: Color? = null,
+    /** Offers None first: the name alone, with no icon (a custom list, section 11.3 for projects). */
+    allowNone: Boolean = false,
 ) {
+    val options = if (allowNone) listOf(IconRegistry.NONE_OPTION) + IconRegistry.PRESET_ICONS else IconRegistry.PRESET_ICONS
     FlowRow(modifier = modifier.selectableGroup()) {
-        IconRegistry.PRESET_ICONS.forEach { option ->
+        options.forEach { option ->
             IconTile(
                 option = option,
                 selected = option.key == selectedKey,

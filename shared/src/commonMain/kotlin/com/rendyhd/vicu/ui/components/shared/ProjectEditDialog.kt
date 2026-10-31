@@ -8,19 +8,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -35,10 +41,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.domain.model.Project
+import com.rendyhd.vicu.ui.screens.shared.ProjectActions
 import com.rendyhd.vicu.util.PRESET_COLORS
 import com.rendyhd.vicu.util.parseHexColor
+import org.koin.compose.koinInject
 
 /**
  * Collects all descendant project ids of [rootId] with a visited guard, so pre-existing
@@ -83,6 +94,10 @@ fun ProjectEditDialog(
     var selectedColor by remember { mutableStateOf(project?.hexColor.orEmpty()) }
     var parentId by remember { mutableLongStateOf(startingParentId(project, initialParentId)) }
     var parentDropdownExpanded by remember { mutableStateOf(false) }
+    // The icon of an existing project, saved with Save (cross-app semantics 11.3): the folder, or
+    // none so the name (which may start with an emoji) begins where the icon would be.
+    var showIcon by remember { mutableStateOf(project?.showIcon ?: true) }
+    val projectActions: ProjectActions = koinInject()
 
     // Exclude the project being edited AND its descendants from parent options, so a cycle
     // (A→B→A) can't be created — such a cycle would StackOverflow any recursive tree walk.
@@ -213,6 +228,37 @@ fun ProjectEditDialog(
                     }
                 }
 
+                if (project != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Icon",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.selectableGroup()) {
+                        FilterChip(
+                            selected = showIcon,
+                            onClick = { showIcon = true },
+                            label = { Text("Folder") },
+                            leadingIcon = { Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            modifier = Modifier.semantics { role = Role.RadioButton },
+                        )
+                        FilterChip(
+                            selected = !showIcon,
+                            onClick = { showIcon = false },
+                            label = { Text("None") },
+                            modifier = Modifier.semantics { role = Role.RadioButton },
+                        )
+                    }
+                    Text(
+                        text = "With None the name starts where the icon would be, for a name that begins with an emoji.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+
                 // Sharing applies at once, apart from Save (admins of an existing project only).
                 if (project != null) {
                     ProjectSharingSection(project = project, modifier = Modifier.padding(top = 24.dp))
@@ -223,6 +269,7 @@ fun ProjectEditDialog(
             TextButton(
                 onClick = {
                     if (name.isNotBlank()) {
+                        if (project != null && showIcon != project.showIcon) projectActions.setShowIcon(project.id, showIcon)
                         onSave(name.trim(), selectedColor, parentId)
                     }
                 },

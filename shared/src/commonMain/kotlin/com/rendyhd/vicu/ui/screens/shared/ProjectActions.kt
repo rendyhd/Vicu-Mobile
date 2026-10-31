@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ui.screens.shared
 
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.repository.ProjectCategoryPreferences
+import com.rendyhd.vicu.data.repository.ProjectIconPreferences
 import com.rendyhd.vicu.data.repository.SyncedPreferences
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.domain.model.ProjectShares
@@ -77,6 +78,8 @@ class ProjectActions(
     /** Where a deleted category's Undo is offered, and the scope that outlives the screen to run it. */
     private val appMessages: AppMessages? = null,
     private val appScope: CoroutineScope? = null,
+    /** Which projects are drawn without an icon (section 11.3); null in tests that do not use it. */
+    private val iconPreferences: ProjectIconPreferences? = null,
 ) {
     /** The Inbox project's id, null until one is chosen. */
     val inboxProjectId: Flow<Long?> get() = authManager.inboxProjectId
@@ -93,6 +96,16 @@ class ProjectActions(
     suspend fun edit(project: Project, title: String, hexColor: String, parentProjectId: Long): ProjectActionResult {
         val updated = project.copy(title = title, hexColor = hexColor, parentProjectId = parentProjectId)
         return projectRepository.update(updated).toResult("Project updated")
+    }
+
+    /**
+     * Draws [projectId] with its folder or without an icon, on every device of the account (cross-app
+     * semantics 11.3). Runs in the app scope, so a dialog that closes on Save does not stop it.
+     */
+    fun setShowIcon(projectId: Long, show: Boolean) {
+        val preferences = iconPreferences ?: return
+        val scope = appScope ?: return
+        scope.launch { preferences.setShowIcon(projectId, show) }
     }
 
     /** Makes [projectId] the Inbox, on every device of the account: the same as the Inbox project picker. */

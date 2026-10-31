@@ -195,7 +195,7 @@ fun CustomListDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                IconPicker(selectedKey = icon, onSelect = { icon = it })
+                IconPicker(selectedKey = icon, onSelect = { icon = it }, allowNone = true)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
