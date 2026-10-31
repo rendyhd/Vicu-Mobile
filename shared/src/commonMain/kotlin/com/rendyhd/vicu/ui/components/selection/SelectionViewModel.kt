@@ -22,6 +22,7 @@ import com.rendyhd.vicu.util.descendantsDepthFirst
 import com.rendyhd.vicu.util.RelationKind
 import com.rendyhd.vicu.util.unfinishedDescendants
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -90,6 +92,19 @@ class SelectionViewModel(
 
     val labels: StateFlow<List<Label>> = labelRepository.getAll()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    /** The projects of the selected tasks, for whether Assign is offered (cross-app semantics 9.2). */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val selectedProjectIds: StateFlow<Set<Long>> = _selectedIds
+        .mapLatest { ids -> if (ids.isEmpty()) emptySet() else taskRepository.getByIds(ids).mapTo(mutableSetOf()) { it.projectId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** The selected tasks, in the order they were selected. */
+    suspend fun selectedTasks(): List<Task> {
+        val ids = _selectedIds.value.toList()
+        val byId = taskRepository.getByIds(ids.toSet()).associateBy { it.id }
+        return ids.mapNotNull { byId[it] }
+    }
 
     fun toggle(id: Long) {
         _selectedIds.update { if (id in it) it - id else it + id }

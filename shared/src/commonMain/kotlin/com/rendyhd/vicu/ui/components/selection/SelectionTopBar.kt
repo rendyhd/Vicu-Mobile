@@ -21,6 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rendyhd.vicu.ui.components.collab.BulkAssign
+import com.rendyhd.vicu.ui.components.collab.LocalCollab
 import com.rendyhd.vicu.ui.components.shared.copyPlainText
 import kotlinx.coroutines.launch
 
@@ -40,6 +43,8 @@ fun SelectionTopBar(
     onMove: () -> Unit,
     onApplyLabel: () -> Unit,
     onRemove: () -> Unit,
+    /** Assign, only while every selected task is in a shared project you may write (semantics 9.2). */
+    onAssign: (() -> Unit)? = null,
     onDuplicate: (() -> Unit)? = null,
     /** The selected tasks' titles for Copy titles, one per line on the clipboard (semantics 15). */
     copyTitles: (suspend () -> List<String>)? = null,
@@ -86,6 +91,12 @@ fun SelectionTopBar(
                     overflowExpanded = false
                     onApplyLabel()
                 }
+                if (onAssign != null) {
+                    SelectionMenuItem("Assign…") {
+                        overflowExpanded = false
+                        onAssign()
+                    }
+                }
                 if (onDuplicate != null) {
                     SelectionMenuItem("Duplicate") {
                         overflowExpanded = false
@@ -119,4 +130,11 @@ private fun SelectionMenuItem(
         text = { Text(label) },
         onClick = onClick,
     )
+}
+
+/** Assign in the selection's menu while it can be used (cross-app semantics 9.2), else null. */
+@Composable
+fun SelectionViewModel.assignAction(open: () -> Unit): (() -> Unit)? {
+    val projectIds by selectedProjectIds.collectAsStateWithLifecycle()
+    return if (BulkAssign.canAssign(projectIds, LocalCollab.current.state)) open else null
 }
