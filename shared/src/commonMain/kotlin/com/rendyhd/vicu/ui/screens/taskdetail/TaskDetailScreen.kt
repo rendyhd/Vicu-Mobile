@@ -368,6 +368,7 @@ fun TaskDetailScreen(
                     showRelationPicker = true
                 },
                 onDelete = viewModel::requestDeleteTask,
+                onDuplicate = viewModel::duplicateTask,
                 menuEnabled = state.task != null,
                 // Break into steps (docs/ai-assistant-v1.md, section 4): the model's tasks become subtasks.
                 onBreakIntoSteps = state.task?.takeIf { aiSettings.dictationReady && !it.done }?.let { task ->
@@ -1384,6 +1385,7 @@ private fun EditorHeader(
     onClose: () -> Unit,
     onAddRelation: () -> Unit,
     onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
     menuEnabled: Boolean,
     modifier: Modifier = Modifier,
     onBreakIntoSteps: (() -> Unit)? = null,
@@ -1420,6 +1422,13 @@ private fun EditorHeader(
                         },
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text("Duplicate") },
+                    onClick = {
+                        showMore = false
+                        onDuplicate()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Delete task", color = MaterialTheme.colorScheme.error) },
                     onClick = {

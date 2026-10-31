@@ -16,9 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.rendyhd.vicu.ui.components.shared.copyPlainText
+import kotlinx.coroutines.launch
 
 /**
  * Contextual app bar shown while multi-select is active. Today and Complete stay one tap away;
@@ -36,9 +40,14 @@ fun SelectionTopBar(
     onMove: () -> Unit,
     onApplyLabel: () -> Unit,
     onRemove: () -> Unit,
+    onDuplicate: (() -> Unit)? = null,
+    /** The selected tasks' titles for Copy titles, one per line on the clipboard (semantics 15). */
+    copyTitles: (suspend () -> List<String>)? = null,
 ) {
     var overflowExpanded by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     TopAppBar(
         title = { Text("$count selected") },
@@ -76,6 +85,21 @@ fun SelectionTopBar(
                 SelectionMenuItem("Apply label") {
                     overflowExpanded = false
                     onApplyLabel()
+                }
+                if (onDuplicate != null) {
+                    SelectionMenuItem("Duplicate") {
+                        overflowExpanded = false
+                        onDuplicate()
+                    }
+                }
+                if (copyTitles != null) {
+                    SelectionMenuItem(if (count == 1) "Copy title" else "Copy titles") {
+                        overflowExpanded = false
+                        scope.launch {
+                            val titles = copyTitles()
+                            if (titles.isNotEmpty()) clipboard.copyPlainText("Task titles", titles.joinToString("\n"))
+                        }
+                    }
                 }
                 SelectionMenuItem("Remove") {
                     overflowExpanded = false

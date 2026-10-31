@@ -2,6 +2,8 @@ package com.rendyhd.vicu.ui.components.selection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rendyhd.vicu.data.repository.Duplicated
+import com.rendyhd.vicu.data.repository.TaskDuplicator
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.domain.model.Task
@@ -58,6 +60,7 @@ class SelectionViewModel(
     navigationTicker: NavigationTicker = NavigationTicker(),
     /** Where completed rows that no screen holds go: the app-wide "Completed, Undo" toast. */
     private val completionToast: CompletionToast = NoCompletionToast,
+    private val taskDuplicator: TaskDuplicator? = null,
 ) : ViewModel() {
 
     init {
@@ -219,6 +222,41 @@ class SelectionViewModel(
             val outcomes = runBulk(ids.toList()) { taskRepository.delete(it) }
             finishBulk("remove", outcomes)
         }
+    }
+
+    /**
+     * Duplicates every selected task once (semantics 15); a selected subtask of another selected
+     * task is copied with it, not again on its own.
+     */
+    fun bulkDuplicate() {
+        val ids = _selectedIds.value
+        val duplicator = taskDuplicator ?: return
+        if (ids.isEmpty()) return
+        appScope.launch {
+            val selected = taskRepository.getByIds(ids)
+            val inside = selected.flatMapTo(mutableSetOf()) { task -> task.descendantsDepthFirst().map { it.id } }
+            val roots = selected.filter { it.id !in inside }.associateBy { it.id }
+            val outcomes = runBulk(ids.filter { it in roots }) { id -> duplicator.duplicate(roots.getValue(id)) }
+            val made = outcomes.count { !it.failed }
+            val incomplete = outcomes.count { ((it.result as? NetworkResult.Success<*>)?.data as? Duplicated)?.complete == false }
+            if (made > 0) {
+                appMessages.post(
+                    when {
+                        incomplete > 0 -> "Duplicated, but some labels, people or subtasks could not be copied"
+                        made == 1 -> "Task duplicated"
+                        else -> "$made tasks duplicated"
+                    },
+                )
+            }
+            finishBulk("duplicate", outcomes)
+        }
+    }
+
+    /** The selected tasks' titles in the order they were selected, for Copy titles. */
+    suspend fun selectedTitles(): List<String> {
+        val ids = _selectedIds.value.toList()
+        val byId = taskRepository.getByIds(ids.toSet()).associateBy { it.id }
+        return ids.mapNotNull { byId[it]?.title }
     }
 
     fun bulkApplyLabel(labelId: Long) {

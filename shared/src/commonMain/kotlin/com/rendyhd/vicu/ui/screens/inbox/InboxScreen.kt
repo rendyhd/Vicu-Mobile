@@ -112,6 +112,8 @@ fun InboxScreen(
                     onMove = { selectionAction = SelectionAction.MOVE_PROJECT },
                     onApplyLabel = { selectionAction = SelectionAction.APPLY_LABEL },
                     onRemove = { selectionAction = SelectionAction.REMOVE },
+                    onDuplicate = selectionVm::bulkDuplicate,
+                    copyTitles = selectionVm::selectedTitles,
                 )
             } else {
                 VicuTopAppBar(
