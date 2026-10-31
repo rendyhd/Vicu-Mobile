@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.ui.screens.today
 
 import com.rendyhd.vicu.voice.TaskDefaults
+import com.rendyhd.vicu.domain.model.isFinished
 import com.rendyhd.vicu.ui.components.fab.FabDropTarget
 import com.rendyhd.vicu.ui.components.fab.fabDropTarget
 import com.rendyhd.vicu.ui.navigation.ScreenReady
@@ -10,15 +11,22 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -33,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -40,6 +49,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.ui.components.shared.FabClearance
 import org.koin.compose.viewmodel.koinViewModel
@@ -67,7 +79,9 @@ import com.rendyhd.vicu.ui.screens.shared.TaskProjectGroup
 import com.rendyhd.vicu.util.DateContext
 import com.rendyhd.vicu.util.DateDisplay
 import com.rendyhd.vicu.util.DueDates
+import com.rendyhd.vicu.util.TodayRoutines
 import com.rendyhd.vicu.util.parseHexColor
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,14 +103,44 @@ fun TodayScreen(
     val listState = rememberLazyListState()
     val topBarScroll = rememberVicuTopBarScroll()
 
+    // Routines on Today (cross-app semantics 6.10): one row per routine, the ones due now up to the
+    // limit, the rest behind one line that opens in place until Today is left. What is due now
+    // follows the clock, checked twice a minute.
+    val routineDay = state.routineDay
+    val nowMinutes by produceState(viewModel.minutesNow(), routineDay.date) {
+        while (true) {
+            delay(30_000)
+            value = viewModel.minutesNow()
+        }
+    }
+    val routinePlan = remember(routineDay, nowMinutes, state.routineLimit) {
+        TodayRoutines.plan(
+            items = routineDay.occurrences,
+            nowMinutes = nowMinutes,
+            limit = state.routineLimit,
+            routineId = { it.routine.definition.id },
+            name = { it.routine.definition.name },
+            minutes = { it.slot.reminderMinutes },
+            finished = { it.status.isFinished },
+            carried = { it.scheduledDate < routineDay.date },
+        )
+    }
+    var routinesOpened by remember { mutableStateOf(false) }
+    val shownRoutines = when {
+        state.routinesFolded -> emptyList()
+        routinesOpened -> routinePlan.rows
+        else -> routinePlan.visible
+    }
+    val routineLine = routinePlan.lineText?.takeIf { !state.routinesFolded }
+
     // The routines are read apart from the tasks and can come in after them. LazyColumn keeps the
     // first visible row where it is, so a list still at its top would then start at the first
     // task with the routines above it, out of sight; it goes back to the top instead.
-    val openRoutineCount = state.routineDay.open.size
-    LaunchedEffect(openRoutineCount > 0) {
-        if (openRoutineCount == 0) return@LaunchedEffect
+    val routineItemCount = if (routinePlan.rows.isEmpty()) 0 else 1 + shownRoutines.size + (if (routineLine != null) 1 else 0)
+    LaunchedEffect(routineItemCount > 0) {
+        if (routineItemCount == 0) return@LaunchedEffect
         withFrameNanos { }
-        if (listState.firstVisibleItemIndex == openRoutineCount + 1 && listState.firstVisibleItemScrollOffset == 0) {
+        if (listState.firstVisibleItemIndex == routineItemCount && listState.firstVisibleItemScrollOffset == 0) {
             listState.scrollToItem(0)
         }
     }
@@ -178,27 +222,53 @@ fun TodayScreen(
             ) {
                 // Finished routines (completed or skipped) are left out; the count still covers the day.
                 val openRoutines = state.routineDay.open
-                if (openRoutines.isNotEmpty()) {
+                if (routinePlan.rows.isNotEmpty()) {
                     item(key = "routine_header", contentType = "header") {
+                        val folded = state.routinesFolded
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = !folded,
+                                    role = Role.Button,
+                                    onValueChange = { open -> viewModel.setRoutinesFolded(!open) },
+                                )
+                                .semantics { stateDescription = if (folded) "Collapsed" else "Expanded" }
+                                .padding(start = 20.dp, end = 8.dp, top = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "Routines · ${state.routineDay.completedCount}/${state.routineDay.scheduledCount}",
+                                "Routines · ${routineDay.completedCount}/${routineDay.scheduledCount}",
                                 style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.weight(1f),
                             )
+                            Icon(
+                                if (folded) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp).size(20.dp),
+                            )
+                            Spacer(Modifier.weight(1f))
                             TextButton(onClick = onOpenRoutines) { Text("Manage") }
                         }
                     }
-                    items(openRoutines, key = { "routine_${it.key}" }, contentType = { "occurrence" }) { occurrence ->
+                    items(shownRoutines, key = { "routine_${it.routineId}" }, contentType = { "occurrence" }) { row ->
                         RoutineOccurrenceRow(
-                            occurrence = occurrence,
-                            onToggle = { viewModel.toggleRoutine(occurrence) },
-                            onSkip = { viewModel.skipRoutine(occurrence) },
+                            occurrence = row.item,
+                            onToggle = { viewModel.toggleRoutine(row.item) },
+                            onSkip = { viewModel.skipRoutine(row.item) },
+                            progress = row.progress,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp).animateItem(),
                         )
+                    }
+                    if (routineLine != null) {
+                        item(key = "routine_line", contentType = "routine_line") {
+                            TextButton(
+                                onClick = { routinesOpened = !routinesOpened },
+                                modifier = Modifier.padding(start = 12.dp).animateItem(),
+                            ) {
+                                Text(if (routinesOpened) "Show less" else routineLine)
+                            }
+                        }
                     }
                 }
 

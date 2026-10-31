@@ -11,6 +11,7 @@ import com.rendyhd.vicu.domain.model.RoutineOccurrence
 import com.rendyhd.vicu.domain.repository.LabelRepository
 import com.rendyhd.vicu.domain.repository.ProjectRepository
 import com.rendyhd.vicu.domain.repository.RoutineRepository
+import com.rendyhd.vicu.util.TodayRoutines
 import com.rendyhd.vicu.domain.repository.TaskRepository
 import com.rendyhd.vicu.ui.navigation.NavigationTicker
 import com.rendyhd.vicu.ui.screens.shared.CompletionHold
@@ -45,8 +46,11 @@ data class TodayUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val completedTaskIds: Set<Long> = emptySet(),
-    /** Today's routines; empty when routines or their Today section are turned off. The screen lists [RoutineDay.open]. */
+    /** Today's routines; empty when routines or their Today section are turned off. The screen plans the rows (TodayRoutines). */
     val routineDay: RoutineDay = RoutineDay("", emptyList()),
+    /** How many due-now routines show (cross-app semantics 6.10), and whether the section is folded. */
+    val routineLimit: Int = TodayRoutines.DEFAULT_LIMIT,
+    val routinesFolded: Boolean = false,
     /** The next open task due after today; what an emptied Today offers (see [nextUpcomingTask]). */
     val nextUpcoming: Task? = null,
 )
@@ -56,7 +60,7 @@ class TodayViewModel(
     private val projectRepository: ProjectRepository,
     private val labelRepository: LabelRepository,
     private val routineRepository: RoutineRepository,
-    routinePrefsStore: RoutinePrefsStore,
+    private val routinePrefsStore: RoutinePrefsStore,
     private val authManager: AuthManager,
     private val refresher: ScreenRefresher,
     private val dayClock: DayClock,
@@ -97,6 +101,11 @@ class TodayViewModel(
             // Once at start and again whenever the day changes (yesterday's open health
             // occurrences are closed out).
             dayClock.today.collect { routineRepository.finalizeAndPrune() }
+        }
+        viewModelScope.launch {
+            routinePrefsStore.visibility.collect { visibility ->
+                _uiState.update { it.copy(routineLimit = visibility.todayLimit, routinesFolded = visibility.todayFolded) }
+            }
         }
         viewModelScope.launch {
             routinesForToday.collect { day ->
@@ -187,6 +196,15 @@ class TodayViewModel(
                 else -> Unit
             }
         }
+    }
+
+    /** The local time of day in minutes, for which routines are due now. */
+    fun minutesNow(): Int = dayClock.minutesNow()
+
+    /** Folds Today's routine section to its header, or opens it; kept on this device. */
+    fun setRoutinesFolded(folded: Boolean) {
+        _uiState.update { it.copy(routinesFolded = folded) }
+        viewModelScope.launch { routinePrefsStore.setTodayFolded(folded) }
     }
 
     fun skipRoutine(occurrence: RoutineOccurrence) {
