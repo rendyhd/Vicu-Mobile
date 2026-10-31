@@ -1,6 +1,8 @@
 package com.rendyhd.vicu.ui.components.selection
 
+import com.rendyhd.vicu.data.repository.TaskDuplicator
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.ui.FakeCollaborationRepository
 import com.rendyhd.vicu.ui.FakeLabelRepository
 import com.rendyhd.vicu.ui.FakeProjectRepository
 import com.rendyhd.vicu.ui.FakeTaskRepository
@@ -12,6 +14,7 @@ import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.FixedTimeSource
 import com.rendyhd.vicu.util.NetworkResult
+import com.rendyhd.vicu.util.RelationKind
 import com.rendyhd.vicu.util.SchedulerTimeSource
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
@@ -55,7 +58,7 @@ class SelectionViewModelTest {
         val toast: CompletionToastCenter,
     )
 
-    private fun TestScope.rig(vararg ids: Long): Rig {
+    private fun TestScope.rig(vararg ids: Long, duplicate: Boolean = false): Rig {
         val tasks = FakeTaskRepository()
         ids.forEach { tasks.put(Task(id = it, title = "Task $it", projectId = 1)) }
         val messages = AppMessages()
@@ -82,6 +85,7 @@ class SelectionViewModelTest {
             ),
             navigationTicker = navigation,
             completionToast = toast,
+            taskDuplicator = if (duplicate) TaskDuplicator(tasks, labels, FakeCollaborationRepository()) else null,
         )
         return Rig(tasks, vm, received, labels, navigation, toast)
     }
@@ -338,5 +342,32 @@ class SelectionViewModelTest {
 
         assertEquals(listOf("Could not label 1 of 2 tasks: no access"), rig.received.map { it.text })
         assertEquals(setOf(2L), rig.vm.selectedIds.value)
+    }
+
+    @Test
+    fun `duplicate copies each selected task once and a selected subtask only with its parent`() = runTest {
+        val rig = rig(duplicate = true)
+        rig.tasks.put(Task(id = 1, title = "Parent", projectId = 1, relatedTasks = mapOf(RelationKind.SUBTASK to listOf(Task(id = 2, title = "Child")))))
+        rig.tasks.put(Task(id = 2, title = "Child", projectId = 1))
+        rig.tasks.put(Task(id = 3, title = "Other", projectId = 1))
+        var next = 100L
+        rig.tasks.createHandler = { NetworkResult.Success(it.copy(id = next++)) }
+        rig.tasks.createSubtaskHandler = { _, child -> NetworkResult.Success(child.copy(id = next++)) }
+        rig.select(2, 1, 3)
+
+        rig.vm.bulkDuplicate()
+        runCurrent()
+
+        assertEquals(listOf("Parent", "Other"), rig.tasks.created.map { it.title })
+        assertEquals(listOf("Child"), rig.tasks.createdSubtasks.map { it.second.title })
+        assertEquals("2 tasks duplicated", rig.received.last().text)
+        assertEquals(emptySet(), rig.vm.selectedIds.value)
+    }
+
+    @Test
+    fun `copy titles gives the titles in the order they were selected`() = runTest {
+        val rig = rig(1, 2, 3)
+        rig.select(3, 1)
+        assertEquals(listOf("Task 3", "Task 1"), rig.vm.selectedTitles())
     }
 }

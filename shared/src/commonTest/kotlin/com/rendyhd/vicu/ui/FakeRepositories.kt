@@ -3,10 +3,16 @@ package com.rendyhd.vicu.ui
 import com.rendyhd.vicu.data.sync.ScreenRefresher
 import com.rendyhd.vicu.data.sync.SyncStaleness
 import com.rendyhd.vicu.domain.model.Attachment
+import com.rendyhd.vicu.domain.model.CollabState
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
+import com.rendyhd.vicu.domain.model.ProjectShares
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.domain.model.TaskComment
+import com.rendyhd.vicu.domain.model.TaskSignal
+import com.rendyhd.vicu.domain.model.User
 import com.rendyhd.vicu.domain.repository.AttachmentRepository
+import com.rendyhd.vicu.domain.repository.CollaborationRepository
 import com.rendyhd.vicu.domain.repository.LabelRepository
 import com.rendyhd.vicu.domain.repository.LogbookPage
 import com.rendyhd.vicu.domain.repository.ProjectRepository
@@ -396,4 +402,39 @@ class FakeAttachmentRepository : AttachmentRepository {
     }
 
     override suspend fun refreshForTask(taskId: Long): NetworkResult<Unit> = NetworkResult.Success(Unit)
+}
+
+/** Collaboration with a settable [state]; assignee changes are recorded and succeed unless [assignHandler] says otherwise. */
+class FakeCollaborationRepository(initial: CollabState = CollabState()) : CollaborationRepository {
+    override val state = MutableStateFlow(initial)
+    override val signals = MutableStateFlow<Map<Long, TaskSignal>>(emptyMap())
+
+    /** (task id, person id, assigned) per call of [setAssigned]. */
+    val assigned = mutableListOf<Triple<Long, Long, Boolean>>()
+    var assignHandler: (Task, User, Boolean) -> NetworkResult<Unit> = { _, _, _ -> NetworkResult.Success(Unit) }
+
+    override suspend fun setAssigned(task: Task, person: User, assigned: Boolean): NetworkResult<Unit> {
+        this.assigned += Triple(task.id, person.id, assigned)
+        return assignHandler(task, person, assigned)
+    }
+
+    override suspend fun refreshMembers(force: Boolean): NetworkResult<Unit> = NetworkResult.Success(Unit)
+    override suspend fun refreshSignals(): NetworkResult<Unit> = NetworkResult.Success(Unit)
+    override suspend fun refreshSignalsFor(filter: String): NetworkResult<Unit> = NetworkResult.Success(Unit)
+    override suspend fun refresh(force: Boolean): NetworkResult<Unit> = NetworkResult.Success(Unit)
+    override suspend fun memberPermissions(projectId: Long): Map<Long, Int?> = emptyMap()
+    override fun comments(taskId: Long): Flow<List<TaskComment>> = flowOf(emptyList())
+    override suspend fun refreshComments(taskId: Long): NetworkResult<Boolean> = NetworkResult.Success(false)
+    override suspend fun loadOlderComments(taskId: Long, page: Int): NetworkResult<Boolean> = NetworkResult.Success(false)
+    override suspend fun postComment(taskId: Long, html: String): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun editComment(taskId: Long, commentId: Long, html: String): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun deleteComment(taskId: Long, commentId: Long): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun markRead(taskId: Long) = Unit
+    override suspend fun isSubscribed(taskId: Long): NetworkResult<Boolean> = NetworkResult.Success(false)
+    override suspend fun setSubscribed(taskId: Long, subscribed: Boolean): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun shares(projectId: Long): NetworkResult<ProjectShares> = NetworkResult.Error("not faked")
+    override suspend fun findUser(username: String): NetworkResult<User?> = NetworkResult.Success(null)
+    override suspend fun share(projectId: Long, username: String, permission: Int): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun updateShare(projectId: Long, username: String, permission: Int): NetworkResult<Unit> = NetworkResult.Error("not faked")
+    override suspend fun removeShare(projectId: Long, username: String): NetworkResult<Unit> = NetworkResult.Error("not faked")
 }

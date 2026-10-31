@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.data.local.NlpPrefsStore
 import com.rendyhd.vicu.data.local.TempIdGenerator
+import com.rendyhd.vicu.data.repository.TaskDuplicator
 import com.rendyhd.vicu.domain.model.Attachment
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
@@ -97,6 +98,7 @@ class TaskDetailViewModel(
     private val appMessages: AppMessages,
     private val dayClock: DayClock,
     private val tempIds: TempIdGenerator? = null,
+    private val taskDuplicator: TaskDuplicator? = null,
 ) : ViewModel() {
 
     companion object {
@@ -798,6 +800,31 @@ class TaskDetailViewModel(
                 _uiState.update { it.copy(showDeleteConfirmation = true) }
             } else {
                 deleteTask()
+            }
+        }
+    }
+
+    /**
+     * Duplicate in the editor's menu (semantics 15): the edits are saved first, then the copy is
+     * made from the saved task and opened here, since a copy is usually made to be changed.
+     */
+    fun duplicateTask() {
+        val duplicator = taskDuplicator ?: return
+        val id = _uiState.value.task?.id ?: return
+        saveIfChanged()
+        viewModelScope.launch {
+            // Saves run one at a time under this lock; taking it waits for the one just started.
+            saveMutex.withLock { }
+            val source = taskRepository.getByIds(setOf(id)).firstOrNull() ?: _uiState.value.task ?: return@launch
+            when (val result = duplicator.duplicate(source)) {
+                is NetworkResult.Success -> {
+                    loadTask(result.data.copy.id)
+                    appMessages.post(
+                        if (result.data.complete) "Duplicated. This is the copy." else "Duplicated, but some labels, people or subtasks could not be copied",
+                    )
+                }
+                is NetworkResult.Error -> appMessages.post("Could not duplicate the task: ${result.message}")
+                is NetworkResult.Loading -> Unit
             }
         }
     }

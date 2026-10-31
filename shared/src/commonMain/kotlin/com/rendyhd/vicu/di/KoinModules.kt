@@ -240,6 +240,7 @@ val repositoryModule = module {
         )
     }
     single { CollaborationSync(api = get(), collaborationDao = get(), pendingActionDao = get(), tokenStorage = get()) }
+    single { TaskDuplicator(tasks = get(), labels = get(), collaboration = get()) }
     single {
         RoutineArchiveStore(
             api = get(),
