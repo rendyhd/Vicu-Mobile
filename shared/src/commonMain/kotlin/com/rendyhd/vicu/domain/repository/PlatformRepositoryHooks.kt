@@ -6,6 +6,12 @@ interface PlatformRepositoryHooks {
     fun triggerSync()
     fun updateWidgets()
     fun playCompletionSound()
+
+    /**
+     * Settings' Play button: plays the chosen completion sound, even with the switch off. False
+     * when it cannot be played (a file that is gone or will not decode), so Settings can say so.
+     */
+    suspend fun previewCompletionSound(): Boolean
     suspend fun scheduleAlarm(task: Task)
     suspend fun cancelAlarm(taskId: Long)
     suspend fun rescheduleAlarms()

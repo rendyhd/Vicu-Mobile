@@ -367,6 +367,15 @@ class SettingsViewModel(
         viewModelScope.launch { behaviorPrefsStore.setCompletionSoundUri(uri) }
     }
 
+    /** The Play button next to the sound: plays it, or says it cannot be played (issue 71). */
+    fun playCompletionSound() {
+        viewModelScope.launch {
+            if (!repositoryHooks.previewCompletionSound()) {
+                _messages.update { "This sound can't be played. Pick another file." to null }
+            }
+        }
+    }
+
     // --- Inbox project ---
 
     /** The Inbox project picker and a project's "Set as Inbox". */

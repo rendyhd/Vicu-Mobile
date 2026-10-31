@@ -21,18 +21,27 @@ class IosCompletionSoundPlayer(private val prefs: BehaviorPrefsStore) {
 
     suspend fun play() {
         val current = prefs.getPrefs().first()
-        if (!current.completionSoundEnabled) return
-        val custom = current.completionSoundUri
+        if (current.completionSoundEnabled) start(current.completionSoundUri)
+    }
+
+    /** Settings' Play button: the chosen sound even with the switch off; false when it cannot be played. */
+    suspend fun preview(): Boolean = start(prefs.getPrefs().first().completionSoundUri)
+
+    private fun start(customUri: String?): Boolean {
+        val custom = customUri
             ?.takeIf { it.isNotBlank() && NSFileManager.defaultManager.fileExistsAtPath(it) }
         val url = custom?.let { NSURL.fileURLWithPath(it) }
             ?: NSBundle.mainBundle.URLForResource("complete", withExtension = "wav")
-            ?: return
-        try {
+            ?: return false
+        return try {
             AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryAmbient, error = null)
             AVAudioSession.sharedInstance().setActive(true, error = null)
-            player = AVAudioPlayer(contentsOfURL = url, error = null).also { it.play() }
+            val next = AVAudioPlayer(contentsOfURL = url, error = null)
+            player = next
+            next.play()
         } catch (e: Exception) {
             Logger.w(TAG, "Could not play the completion sound: ${e.message}")
+            false
         }
     }
 
