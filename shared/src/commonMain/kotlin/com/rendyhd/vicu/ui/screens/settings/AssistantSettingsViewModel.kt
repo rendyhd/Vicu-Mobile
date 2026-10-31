@@ -83,44 +83,87 @@ class AssistantSettingsViewModel(
     }
 
     private suspend fun refreshKey() {
-        val id = store.current().providerId ?: return local.update { it.copy(hasKey = false) }
-        local.update { it.copy(hasKey = !keys.getKey(id).isNullOrBlank()) }
+        val settings = store.current()
+        if (settings.providerId == null) return local.update { it.copy(hasKey = false) }
+        local.update { it.copy(hasKey = !providers.key(settings).isNullOrBlank()) }
     }
 
+    /** Another preset; what it was set to before comes back (section 7.2). */
     fun chooseProvider(id: String) {
         val preset = AiContract.provider(id) ?: return
         viewModelScope.launch {
-            store.update {
-                if (it.providerId == id) {
-                    it
+            store.update { it.choosingProvider(preset) }
+            local.update { it.copy(models = emptyList(), test = null, modelsError = null) }
+            refreshKey()
+        }
+    }
+
+    /**
+     * Save address of a typed preset. [replacing] (Edit) puts the address in place of the one in use,
+     * which takes its key along; otherwise (Add address) it is saved next to it.
+     */
+    fun saveAddress(address: String, replacing: Boolean) {
+        val typed = address.trim()
+        if (typed.isEmpty()) return
+        viewModelScope.launch {
+            val before = store.current()
+            val id = before.providerId ?: return@launch
+            if (AiSettings.sameAddress(before.address, typed)) {
+                store.update { it.savingAddress() }
+                return@launch
+            }
+            val oldKey = if (replacing) providers.key(before) else null
+            store.update { s ->
+                val kept = if (replacing) {
+                    s.copy(savedAddresses = s.savedAddresses + (id to s.saved().filterNot { AiSettings.sameAddress(it.address, s.address) }))
                 } else {
-                    // One model to start with: the quicker suggestion, for Ask too (Ask's own is a choice).
-                    val model = preset.suggestedDictation ?: preset.suggestedAsk ?: ""
-                    it.copy(
-                        providerId = id,
-                        address = preset.address ?: "",
-                        dictationModel = model,
-                        askModel = model,
-                        dictationOn = false,
-                        askOn = false,
-                        talkOn = false,
-                    )
+                    s.savingAddress()
                 }
+                kept.copy(address = typed).savingAddress()
+            }
+            if (replacing && before.address.isNotBlank()) {
+                val now = store.current()
+                if (!oldKey.isNullOrBlank() && providers.key(now).isNullOrBlank()) providers.setKey(now, oldKey)
+                providers.forgetKey(id, before.address)
+            }
+            local.update { it.copy(models = emptyList(), test = null, modelsError = null) }
+            refreshKey()
+            testNewModels()
+        }
+    }
+
+    /** A saved address of the preset in use, with the models and key it was used with. */
+    fun useSavedAddress(address: String) {
+        viewModelScope.launch {
+            store.update { s ->
+                val entry = s.saved().firstOrNull { AiSettings.sameAddress(it.address, address) } ?: return@update s
+                s.withSavedModels().copy(
+                    address = entry.address,
+                    dictationModel = entry.dictationModel.ifBlank { s.dictationModel },
+                    askModel = entry.askModel.ifBlank { s.askModel },
+                ).savingAddress()
             }
             local.update { it.copy(models = emptyList(), test = null, modelsError = null) }
             refreshKey()
         }
     }
 
-    fun setAddress(address: String) {
-        viewModelScope.launch { store.update { it.copy(address = address.trim()) } }
-        local.update { it.copy(test = null) }
+    /** Forgets a saved address and its key; the address in use stays. */
+    fun removeSavedAddress(address: String) {
+        viewModelScope.launch {
+            val s = store.current()
+            val id = s.providerId ?: return@launch
+            if (AiSettings.sameAddress(s.address, address)) return@launch
+            store.update { it.copy(savedAddresses = it.savedAddresses + (id to it.saved().filterNot { e -> AiSettings.sameAddress(e.address, address) })) }
+            providers.forgetKey(id, address)
+        }
     }
 
     fun setKey(key: String) {
         viewModelScope.launch {
-            val id = store.current().providerId ?: return@launch
-            keys.setKey(id, key.trim().ifEmpty { null })
+            val settings = store.current()
+            if (settings.providerId == null) return@launch
+            providers.setKey(settings, key.trim().ifEmpty { null })
             local.update { it.copy(test = null, message = if (key.isBlank()) "Key removed" else "Key saved on this device") }
             refreshKey()
             testNewModels()
@@ -129,7 +172,7 @@ class AssistantSettingsViewModel(
 
     fun setDictationModel(model: String) {
         viewModelScope.launch {
-            store.update { it.copy(dictationModel = model.trim()) }
+            store.update { it.copy(dictationModel = model.trim()).withSavedModels() }
             testNewModels()
         }
     }
@@ -137,14 +180,14 @@ class AssistantSettingsViewModel(
     /** The one model: dictation's, and Ask's too unless Ask has its own ([askToo] false). */
     fun setModel(model: String, askToo: Boolean) {
         viewModelScope.launch {
-            store.update { it.copy(dictationModel = model.trim(), askModel = if (askToo) model.trim() else it.askModel) }
+            store.update { it.copy(dictationModel = model.trim(), askModel = if (askToo) model.trim() else it.askModel).withSavedModels() }
             testNewModels()
         }
     }
 
     fun setAskModel(model: String) {
         viewModelScope.launch {
-            store.update { it.copy(askModel = model.trim()) }
+            store.update { it.copy(askModel = model.trim()).withSavedModels() }
             testNewModels()
         }
     }

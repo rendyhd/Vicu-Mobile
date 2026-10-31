@@ -84,7 +84,7 @@ val aiModule = module {
     single { ConversationStore(createDataStore(get(), "ai_conversations")) }
     single { KeptTranscriptStore(createDataStore(get(), "ai_kept_transcript")) }
     single { LlmClient(engine = get()) }
-    single { AiProviders(client = get(), keys = get()) }
+    single { AiProviders(client = get(), keys = get(), settingsStore = get()) }
     single { SpeechEngineHost(native = get(), storage = get(), io = get<AppDispatchers>().io) }
     single { SpeechModelManager(engine = get(), storage = get(), scope = get(), io = get<AppDispatchers>().io) }
     single {
