@@ -484,14 +484,16 @@ private fun SubprojectRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Folder,
-            contentDescription = null,
-            tint = parseHexColor(project.hexColor)
-                ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        if (project.showIcon) {
+            Icon(
+                imageVector = Icons.Outlined.Folder,
+                contentDescription = null,
+                tint = parseHexColor(project.hexColor)
+                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        }
         Text(
             text = project.title,
             style = MaterialTheme.typography.bodyLarge,

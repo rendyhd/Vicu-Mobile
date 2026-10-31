@@ -56,6 +56,18 @@ object SyncedPrefKeys {
     fun taskOrderProject(key: String): Long? =
         if (key.startsWith(TASK_ORDER_PROJECT_PREFIX)) key.removePrefix(TASK_ORDER_PROJECT_PREFIX).toLongOrNull() else null
 
+    private const val PROJECT_ICON_PREFIX = "project_icon."
+
+    /** A project's icon (section 11.3): [ICON_NONE], or no entry for the folder. */
+    fun projectIconOf(projectId: Long): String = "$PROJECT_ICON_PREFIX$projectId"
+
+    /** The project of a `project_icon.<id>` key, or null for any other key. */
+    fun projectIconProject(key: String): Long? =
+        if (key.startsWith(PROJECT_ICON_PREFIX)) key.removePrefix(PROJECT_ICON_PREFIX).toLongOrNull() else null
+
+    /** The icon value of a project, and the icon key of a custom list, drawn without an icon. */
+    const val ICON_NONE = "none"
+
     private const val ROUTINE_REMINDERS_PREFIX = "routine_reminders."
     private const val ROUTINE_HIDDEN_PREFIX = "routine_hidden."
 

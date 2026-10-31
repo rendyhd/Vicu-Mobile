@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ui.components.shared
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Code
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.Work
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rendyhd.vicu.domain.model.BottomBarSlot
 import com.rendyhd.vicu.domain.model.BottomBarSlotType
+import com.rendyhd.vicu.domain.model.SyncedPrefKeys
 
 data class IconOption(
     val key: String,
@@ -53,6 +55,19 @@ object IconRegistry {
     )
 
     private val ICON_MAP: Map<String, ImageVector> = PRESET_ICONS.associate { it.key to it.icon }
+
+    /** The key of "no icon": a custom list (or a project, section 11.3) drawn with its name alone. */
+    const val NONE = SyncedPrefKeys.ICON_NONE
+
+    /** The None tile of a picker that offers it. */
+    val NONE_OPTION = IconOption(NONE, Icons.Outlined.Block, "None")
+
+    /**
+     * The icon a custom list is drawn with: its preset, the filter for an empty or unknown key, or
+     * null for [NONE], which leaves the room of the icon to the name.
+     */
+    fun customListIcon(key: String): ImageVector? =
+        if (key == NONE) null else ICON_MAP[key] ?: Icons.Outlined.FilterList
 
     /** The smart list a slot type shows, or null for a project or custom list slot. */
     fun smartListIdentity(type: BottomBarSlotType): SmartListIdentity? = when (type) {

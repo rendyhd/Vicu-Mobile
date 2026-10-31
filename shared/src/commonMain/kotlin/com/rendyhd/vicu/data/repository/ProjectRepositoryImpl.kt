@@ -20,6 +20,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -34,30 +36,36 @@ class ProjectRepositoryImpl(
     private val platformHooks: PlatformRepositoryHooks,
     /** Where Room rows are mapped to domain models: off the main thread; tests pass an unconfined one. */
     private val mappingDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Which projects are drawn without an icon (synced settings); none without it. */
+    private val projectIcons: ProjectIconPreferences? = null,
 ) : ProjectRepository {
+
+    private val withoutIcon: Flow<Set<Long>> = projectIcons?.withoutIcon ?: flowOf(emptySet())
+
+    private fun Project.withIcon(hidden: Set<Long>): Project = if (id in hidden) copy(showIcon = false) else this
 
     private companion object {
         const val ENTITY_TYPE = "project"
     }
 
     override fun getAll(): Flow<List<Project>> =
-        projectDao.getAll().map { entities ->
-            entities.map { with(projectMapper) { it.toDomain() } }
+        combine(projectDao.getAll(), withoutIcon) { entities, hidden ->
+            entities.map { with(projectMapper) { it.toDomain() }.withIcon(hidden) }
         }.flowOn(mappingDispatcher)
 
     override fun getAllIncludingArchived(): Flow<List<Project>> =
-        projectDao.getAllIncludingArchived().map { entities ->
-            entities.map { with(projectMapper) { it.toDomain() } }
+        combine(projectDao.getAllIncludingArchived(), withoutIcon) { entities, hidden ->
+            entities.map { with(projectMapper) { it.toDomain() }.withIcon(hidden) }
         }.flowOn(mappingDispatcher)
 
     override fun getById(id: Long): Flow<Project?> =
-        projectDao.getById(id).map { entity ->
-            entity?.let { with(projectMapper) { it.toDomain() } }
+        combine(projectDao.getById(id), withoutIcon) { entity, hidden ->
+            entity?.let { with(projectMapper) { it.toDomain() }.withIcon(hidden) }
         }.flowOn(mappingDispatcher)
 
     override fun getChildren(parentId: Long): Flow<List<Project>> =
-        projectDao.getChildren(parentId).map { entities ->
-            entities.map { with(projectMapper) { it.toDomain() } }
+        combine(projectDao.getChildren(parentId), withoutIcon) { entities, hidden ->
+            entities.map { with(projectMapper) { it.toDomain() }.withIcon(hidden) }
         }.flowOn(mappingDispatcher)
 
     override suspend fun create(project: Project): NetworkResult<Project> {
