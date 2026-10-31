@@ -390,6 +390,8 @@ fun RoutineOccurrenceRow(
     onToggle: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    /** How far the routine is today, as `1/3`, when it has more than one time (Today, semantics 6.10). */
+    progress: String? = null,
 ) {
     val complete = occurrence.status == OccurrenceStatus.COMPLETED
     val skipped = occurrence.status == OccurrenceStatus.SKIPPED
@@ -428,6 +430,7 @@ fun RoutineOccurrenceRow(
                 )
                 val detail = buildList {
                     add(timeText(occurrence.slot.reminderMinutes, LocalDateFormat.current))
+                    progress?.let { add(it) }
                     if (occurrence.status == OccurrenceStatus.NOT_LOGGED) add("Not logged")
                     when {
                         loggedBy != null -> add(loggedBy)

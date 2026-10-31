@@ -56,6 +56,9 @@ class DayClock(
         if (ticking) arm()
     }
 
+    /** The local time of day now, in minutes after midnight (for what is due soon). */
+    fun minutesNow(): Int = time.now().toLocalDateTime(time.zone()).let { it.hour * 60 + it.minute }
+
     /** Re-reads the day now and restarts the midnight timer from the current time. */
     fun refresh() {
         _day.value = read()

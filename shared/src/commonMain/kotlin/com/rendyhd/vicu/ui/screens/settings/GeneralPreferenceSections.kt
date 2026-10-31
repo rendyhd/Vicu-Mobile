@@ -37,6 +37,10 @@ import com.rendyhd.vicu.util.parser.SyntaxMode
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.rendyhd.vicu.util.TodayRoutines
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -297,6 +301,9 @@ internal fun LazyListScope.routinesSection(
                 checked = state.routineVisibility.showInToday,
                 onCheckedChange = viewModel::setRoutinesShowInToday,
             )
+        }
+        if (state.routineVisibility.showInToday) {
+            item(key = "routines_today_limit") { RoutinesTodayLimitRow(state.routineVisibility.todayLimit, viewModel::setRoutinesTodayLimit) }
         }
         item(key = "routines_hidden") { HiddenSharedRoutines() }
     }
@@ -559,5 +566,25 @@ private fun HiddenSharedRoutines(viewModel: HiddenRoutinesViewModel = koinViewMo
                 ) { Text("Show") }
             }
         }
+    }
+}
+
+/** How many routines due now Today shows before "Show more" (cross-app semantics 6.10). */
+@Composable
+private fun RoutinesTodayLimitRow(limit: Int, onPick: (Int) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val label = { value: Int -> if (value == TodayRoutines.ALL) "All" else value.toString() }
+    SettingsValueRow("Routines shown on Today", label(limit), onClick = { open = true })
+    if (open) {
+        ChoiceDialog(
+            title = "Routines shown on Today",
+            options = TodayRoutines.LIMIT_CHOICES.map { it.toString() to label(it) },
+            selected = limit.toString(),
+            onPick = { picked ->
+                onPick(picked.toInt())
+                open = false
+            },
+            onDismiss = { open = false },
+        )
     }
 }

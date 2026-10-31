@@ -756,6 +756,10 @@ class SettingsViewModel(
         viewModelScope.launch { routinePrefsStore.setShowInToday(show) }
     }
 
+    fun setRoutinesTodayLimit(limit: Int) {
+        viewModelScope.launch { routinePrefsStore.setTodayLimit(limit) }
+    }
+
     fun setInboxExcludeDated(enabled: Boolean) {
         viewModelScope.launch { behaviorPrefsStore.setInboxExcludeDated(enabled) }
     }
