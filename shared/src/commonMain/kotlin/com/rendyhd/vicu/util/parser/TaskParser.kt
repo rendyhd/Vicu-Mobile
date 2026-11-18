@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.util.parser
 
+import com.rendyhd.vicu.util.CurrentTimesOfDay
+import com.rendyhd.vicu.util.TimeOfDay
 import com.rendyhd.vicu.location.PlaceMatch
 import com.rendyhd.vicu.location.PlacePhrases
 import com.rendyhd.vicu.location.SavedPlace
@@ -44,6 +46,8 @@ object TaskParser {
         places: List<SavedPlace> = emptyList(),
         people: List<Person> = emptyList(),
         weekStart: WeekStart = WeekStart.DEFAULT,
+        /** The account's times of day (contract section 5.6); the app's current ones by default. */
+        timesOfDay: List<TimeOfDay> = CurrentTimesOfDay.value,
     ): ParseResult {
         val now = reference ?: systemNow(zone)
         val result = MutableParseResult(title = rawInput)
@@ -152,6 +156,7 @@ object TaskParser {
             dayFirst = isDayFirstLocale(config.locale ?: deviceLocaleTag()),
             hidden = forPhrases.hidden,
             weekStart = weekStart,
+            timesOfDay = timesOfDay,
         )
 
         // Pro: `starts <date>` is a start date, read before the due date and never as one.

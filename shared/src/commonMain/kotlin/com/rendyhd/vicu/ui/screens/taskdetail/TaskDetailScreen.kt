@@ -1,5 +1,10 @@
 package com.rendyhd.vicu.ui.screens.taskdetail
 
+import com.rendyhd.vicu.ui.components.shared.LocalWhenChoices
+import com.rendyhd.vicu.util.WhenChoices
+import kotlinx.datetime.toLocalDateTime
+import com.rendyhd.vicu.util.WhenValue
+import com.rendyhd.vicu.util.DueDates
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -700,16 +705,36 @@ fun TaskDetailScreen(
                             emphasis = overdue,
                         )
                         RowPresets(visible = openRow == "date") {
-                            val dueDay = WhenLogic.valueOfDue(task.dueDate, clockDay.zone).date
-                            WhenLogic.quickChoices(clockDay.date, clockDay.weekStart).distinctBy { it.date }.forEach { choice ->
-                                PresetChip(
-                                    label = choice.label,
-                                    selected = dueDay == choice.date,
-                                    onClick = {
-                                        viewModel.setDueDate(movedDue(task.dueDate, choice.date, clockDay.zone))
-                                        openRow = null
-                                    },
-                                )
+                            // The account's day choices, then Move by for a task with a date (section 22).
+                            val choices = LocalWhenChoices.current
+                            val dueValue = WhenLogic.valueOfDue(task.dueDate, clockDay.zone)
+                            val now = SystemTimeSource.now().toLocalDateTime(clockDay.zone)
+                            WhenChoices.days(choices.days, now, choices.times, clockDay.weekStart)
+                                .distinctBy { it.date to it.time }
+                                .forEach { choice ->
+                                    PresetChip(
+                                        label = choice.id.label,
+                                        selected = dueValue.date == choice.date && (choice.time == null || choice.time == dueValue.time),
+                                        onClick = {
+                                            val due = choice.time?.let { WhenLogic.dueOf(WhenValue(choice.date, it), clockDay.zone)?.toString() }
+                                                ?: movedDue(task.dueDate, choice.date, clockDay.zone)
+                                            viewModel.setDueDate(due)
+                                            openRow = null
+                                        },
+                                    )
+                                }
+                            val due = DateUtils.parseIsoDate(task.dueDate)
+                            if (hasDueDate && due != null) {
+                                choices.moveBy.forEach { step ->
+                                    val day = WhenChoices.moveDay(DueDates.localDateOf(due, clockDay.zone), step, clockDay.date)
+                                    PresetChip(
+                                        label = "${step.label} · ${DateDisplay.formatWeekdayDay(day, LocalDateFormat.current)}",
+                                        onClick = {
+                                            viewModel.setDueDate(WhenChoices.moveBy(due, step, clockDay.date, clockDay.zone).toString())
+                                            openRow = null
+                                        },
+                                    )
+                                }
                             }
                             PresetChip(label = "Pick a date…", onClick = { showDatePicker = true })
                             if (hasDueDate) {

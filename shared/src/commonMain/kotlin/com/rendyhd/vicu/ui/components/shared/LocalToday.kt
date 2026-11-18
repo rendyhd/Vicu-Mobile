@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ui.components.shared
 
 import androidx.compose.runtime.compositionLocalOf
 import com.rendyhd.vicu.util.ClockDay
+import com.rendyhd.vicu.util.WhenChoiceSet
 import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -22,3 +23,10 @@ val LocalClockDay = compositionLocalOf {
     val zone = TimeZone.currentSystemDefault()
     ClockDay(Clock.System.todayIn(zone), zone)
 }
+
+/**
+ * The account's When choices (contract section 22): the times of day, the day choices and the
+ * Move by steps the When pickers offer. Provided once at the app root; the default is the
+ * contract's defaults, for previews.
+ */
+val LocalWhenChoices = compositionLocalOf { WhenChoiceSet() }

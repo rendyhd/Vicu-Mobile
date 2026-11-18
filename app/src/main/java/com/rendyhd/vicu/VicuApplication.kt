@@ -11,6 +11,7 @@ import com.rendyhd.vicu.notification.NotificationChannelManager
 import com.rendyhd.vicu.util.BuildInfo
 import com.rendyhd.vicu.util.DayChangeReceiver
 import com.rendyhd.vicu.data.repository.WeekStartPreferences
+import com.rendyhd.vicu.data.repository.WhenChoicesPreferences
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.NetworkMonitor
 import com.rendyhd.vicu.widget.WidgetUpdateScheduler
@@ -34,6 +35,7 @@ class VicuApplication : Application(), SingletonImageLoader.Factory, KoinCompone
     private val imageLoader: ImageLoader by inject()
     private val dayClock: DayClock by inject()
     private val weekStartPreferences: WeekStartPreferences by inject()
+    private val whenChoicesPreferences: WhenChoicesPreferences by inject()
     private val networkMonitor: NetworkMonitor by inject()
     private val authManager: AuthManager by inject()
     private val appScope: CoroutineScope by inject()
@@ -55,6 +57,8 @@ class VicuApplication : Application(), SingletonImageLoader.Factory, KoinCompone
         DayChangeReceiver.register(this, dayClock)
         // Every ClockDay carries the account's week start from here on (contract section 2.1).
         dayClock.follow(weekStartPreferences.weekStart)
+        // The quick-add parser reads the account's times of day (contract section 5.6).
+        whenChoicesPreferences.follow(appScope)
         // Location reminders: follow changes from now on, and hand the regions over again (Play
         // services forgets them after a reboot and when location was off).
         locationReminders.start()

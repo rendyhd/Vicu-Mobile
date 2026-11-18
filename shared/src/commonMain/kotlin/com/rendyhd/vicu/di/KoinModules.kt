@@ -257,6 +257,7 @@ val repositoryModule = module {
     // The app start makes DayClock follow it (VicuApplication, IosApp), so every ClockDay carries it.
     single { WeekStartPreferences(synced = get<SyncedPreferences>()) }
     single { PlannerPreferences(synced = get<SyncedPreferences>()) }
+    single { WhenChoicesPreferences(synced = get<SyncedPreferences>()) }
     // Pro (contract 21): its synced keys, and the ledger, which syncs only while Pro is on.
     single { ProPreferences(synced = get<SyncedPreferences>()) }
     single { ProCaptureSource(behaviorPrefs = get(), proPreferences = get(), labelRepository = get(), proLedger = get()) }

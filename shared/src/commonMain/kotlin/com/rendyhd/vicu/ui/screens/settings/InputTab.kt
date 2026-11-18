@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddTask
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Gesture
@@ -31,7 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,9 +47,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.data.local.SwipeAction
+import com.rendyhd.vicu.data.repository.WhenChoicesPreferences
+import com.rendyhd.vicu.ui.components.picker.WhenChoicesEditor
 import com.rendyhd.vicu.ui.components.task.EntryChipsEditor
 import com.rendyhd.vicu.ui.components.task.EntryOpenFullRow
 import com.rendyhd.vicu.ui.components.task.SwipeActions
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 /** Shown above the two swipe settings. */
 internal const val SWIPE_INTRO =
@@ -93,6 +100,7 @@ internal fun InputTab(
         state = listState,
     ) {
         quickAddSection(state, viewModel)
+        whenChoicesSection()
         inputParsingSection(state, viewModel)
 
         item(key = "swipes_header") {
@@ -329,4 +337,30 @@ internal fun LazyListScope.quickAddSection(
     item(key = "quick_add_divider") {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     }
+}
+
+/** When: the times of day, day choices and Move by steps every When picker offers (contract section 22). */
+internal fun LazyListScope.whenChoicesSection() {
+    item(key = "when_header") {
+        SectionHeader(icon = Icons.Outlined.CalendarMonth, title = "When")
+    }
+    item(key = "when_choices") { WhenChoicesSetting() }
+    item(key = "when_divider") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+@Composable
+private fun WhenChoicesSetting() {
+    val preferences = koinInject<WhenChoicesPreferences>()
+    val scope = rememberCoroutineScope()
+    val choices by preferences.choices.collectAsState(initial = null)
+    val current = choices ?: return
+    WhenChoicesEditor(
+        choices = current,
+        onTimes = { scope.launch { preferences.setTimes(it) } },
+        onDays = { scope.launch { preferences.setDays(it) } },
+        onMoveBy = { scope.launch { preferences.setMoveBy(it) } },
+        onReset = { scope.launch { preferences.reset() } },
+    )
 }

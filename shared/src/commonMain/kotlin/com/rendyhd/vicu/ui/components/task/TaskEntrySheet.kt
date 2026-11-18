@@ -130,6 +130,7 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import coil3.compose.AsyncImage
 import com.rendyhd.vicu.domain.model.SharedContent
 import com.rendyhd.vicu.permission.NotificationPermissionCoordinator
+import com.rendyhd.vicu.ui.components.picker.WhenChoicesDialog
 import com.rendyhd.vicu.ui.components.picker.CustomTimeDialog
 import com.rendyhd.vicu.ui.components.picker.RecurrencePickerDialog
 import com.rendyhd.vicu.ui.components.picker.ReminderPickerDialog
@@ -223,6 +224,7 @@ fun TaskEntrySheet(
     // Details shows every chip for this draft; the setting decides which are there without it.
     var detailsOpen by rememberSaveable { mutableStateOf(false) }
     var customizingChips by rememberSaveable { mutableStateOf(false) }
+    var editingWhenChoices by rememberSaveable { mutableStateOf(false) }
 
     // Shared text arrives as notes, so they show at once then, and keep showing while the user
     // edits them down to nothing.
@@ -544,6 +546,7 @@ fun TaskEntrySheet(
                     now = LocalTime(now.hour, now.minute),
                     onPick = { value -> pickWhen(viewModel, value, day.zone) },
                     onCustomTime = { showCustomTime = true },
+                    onEditChoices = { editingWhenChoices = true },
                 )
             }
             EntryTray.REMIND -> {
@@ -1017,6 +1020,10 @@ fun TaskEntrySheet(
                 }
             }
         }
+    }
+
+    if (editingWhenChoices) {
+        WhenChoicesDialog(onDismiss = { editingWhenChoices = false })
     }
 
     if (customizingChips) {

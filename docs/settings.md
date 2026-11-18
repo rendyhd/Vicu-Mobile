@@ -50,6 +50,12 @@ Contract section 13; design-system section 5 for the header.
 - **Week starts on** (`week_start`, contract section 2.1, `WeekStartPreferences`; Settings, General,
   Preferences) is a synced preference of the account: Monday (the default, written as null), Sunday
   or Saturday. The desktop has the same setting under Settings, Preferences.
+- **When choices** (contract section 22, `WhenChoicesPreferences`; Settings, Input, When choices, and
+  Edit choices in the quick-add When tray) are three synced preferences of the account: the times of
+  day (`when.times`, up to five named times; the quick-add parser reads their names, section 5.6),
+  the day choices in their order (`when.days`, up to six) and the Move by steps (`when.move_by`, up
+  to four). `null` is the default on every device; Reset to defaults writes `null` to all three. The
+  desktop has the same under Settings, General, When choices.
 - **Task templates** (`template.<id>`, contract section 18, `TaskTemplateStore`) and **the order of a
   task's subtasks** (`subtask_order.<taskId>`, section 19, `SubtaskOrderPreferences`) are synced
   preferences of the account: on every device of that person, never shared with others.
