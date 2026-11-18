@@ -94,10 +94,12 @@ private data class BlockTypeButton(
     val type: BlockType,
 )
 
+// The list buttons open the toolbar: they work on whole lines, and on a narrow phone the end of
+// the row is out of view (the desktop's list row under the notes has the same order).
 private val BlockTypeButtons = listOf(
+    BlockTypeButton(Icons.Default.Checklist, "Checklist", BlockType.Todo()),
     BlockTypeButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Bullet list", BlockType.BulletList),
     BlockTypeButton(Icons.Default.FormatListNumbered, "Numbered list", BlockType.NumberedList()),
-    BlockTypeButton(Icons.Default.Checklist, "Checklist", BlockType.Todo()),
 )
 
 @Composable
@@ -139,18 +141,6 @@ internal fun DescriptionEditorToolbar(
                     .padding(start = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FormattingButtons.forEach { button ->
-                    ToolbarButton(
-                        icon = button.icon,
-                        label = button.label,
-                        status = formatting.styleStatusOf(button.style),
-                        enabled = formatting.canFormat,
-                        onClick = { controller.formattingActions.toggleStyle(button.style) },
-                    )
-                }
-
-                ToolbarDivider()
-
                 BlockTypeButtons.forEach { button ->
                     ToolbarButton(
                         icon = button.icon,
@@ -182,11 +172,25 @@ internal fun DescriptionEditorToolbar(
                     onClick = controller.indentationActions::indentForward,
                 )
 
-                // Reordering is for lists: a plain line shows no extra buttons.
+                ToolbarDivider()
+
+                FormattingButtons.forEach { button ->
+                    ToolbarButton(
+                        icon = button.icon,
+                        label = button.label,
+                        status = formatting.styleStatusOf(button.style),
+                        enabled = formatting.canFormat,
+                        onClick = { controller.formattingActions.toggleStyle(button.style) },
+                    )
+                }
+
+                // Reordering is for lists: a plain line shows no extra buttons. They follow the
+                // formatting, so Bold and Italic stay in view on a list line too.
                 if (focusedType.isListLine() && !editorState.state.hasSelection) {
                     val focusedId = editorState.state.focusedBlockId
                     val blocks = editorState.state.blocks
                     val focusedIndex = blocks.indexOfFirst { it.id == focusedId }
+                    ToolbarDivider()
                     ToolbarButton(
                         icon = Icons.Default.ArrowUpward,
                         label = "Move line up",

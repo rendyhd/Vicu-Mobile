@@ -177,7 +177,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * highlight ([resolveEntryFields]).
  *
  * The expand button (or a drag up on the handle) grows the same sheet to full height: the title,
- * the notes, a checklist and a row per property, each opening the same tray content in place.
+ * the notes, the subtasks and a row per property, each opening the same tray content in place.
  * Nothing is saved until Send or Add, and collapsing keeps everything.
  *
  * The sheet rides on the keyboard: the room at its foot follows the keyboard frame by frame
@@ -771,7 +771,7 @@ fun TaskEntrySheet(
                         }
 
                         if (expanded) {
-                            Checklist(
+                            SubtaskList(
                                 items = state.subtasks,
                                 onAdd = viewModel::addSubtask,
                                 onRemove = viewModel::removeSubtask,
@@ -1206,11 +1206,12 @@ private fun TrayPanel(height: Dp, content: @Composable () -> Unit) {
 }
 
 /**
- * The checklist of the full-height sheet: what becomes the task's subtasks when it is added. The
- * field keeps the keyboard up after each item, so a list is typed in one go.
+ * The subtasks of the full-height sheet: they become the task's subtasks when it is added. Named
+ * "Subtasks", not "Checklist", because a checklist is the notes' own list of boxes. The field keeps
+ * the keyboard up after each item, so a list is typed in one go.
  */
 @Composable
-private fun Checklist(items: List<String>, onAdd: (String) -> Unit, onRemove: (Int) -> Unit) {
+private fun SubtaskList(items: List<String>, onAdd: (String) -> Unit, onRemove: (Int) -> Unit) {
     var draft by rememberSaveable { mutableStateOf("") }
     val scheme = MaterialTheme.colorScheme
     Column {
@@ -1238,7 +1239,7 @@ private fun Checklist(items: List<String>, onAdd: (String) -> Unit, onRemove: (I
             TextField(
                 value = draft,
                 onValueChange = { draft = it },
-                placeholder = { Text(if (items.isEmpty()) "Checklist" else "Add an item") },
+                placeholder = { Text(if (items.isEmpty()) "Subtasks" else "Add a subtask") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
