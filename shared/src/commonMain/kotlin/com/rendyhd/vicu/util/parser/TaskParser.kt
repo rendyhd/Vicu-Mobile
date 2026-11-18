@@ -81,6 +81,12 @@ object TaskParser {
                 val found = extractPersonPrefix(rawInput, people, consumed)
                 found.value?.let { result.person = ParsedPerson(it.id, it.mine) }
                 result.tokens.addAll(found.tokens)
+                // `$Jan` anywhere, only when no `Jan:` prefix named someone.
+                if (found.value == null) {
+                    val dollar = extractDollarPerson(rawInput, people, consumed, config.newPeople)
+                    dollar.value?.let { result.person = ParsedPerson(it.id, it.mine, it.name) }
+                    result.tokens.addAll(dollar.tokens)
+                }
             }
             if (TokenType.FLAG !in suppress) {
                 val found = extractFlag(rawInput, consumed)

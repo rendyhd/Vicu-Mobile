@@ -2,6 +2,7 @@ package com.rendyhd.vicu.util.parser
 
 import com.rendyhd.vicu.util.pro.People
 import com.rendyhd.vicu.util.pro.Person
+import com.rendyhd.vicu.util.pro.PersonMatchKind
 
 /**
  * Pro's quick-add phrases (docs/cross-app-semantics-v1.md section 5.5), read only while Pro is on:
@@ -99,6 +100,108 @@ internal fun extractPersonPrefix(
     consumed.add(start until end)
     val person = PersonPrefix(id, mine, start, end)
     return ProExtraction(person, listOf(ParsedToken(TokenType.PERSON, start, end, person, input.substring(start, end).trim())))
+}
+
+/**
+ * The person a `$` phrase names: a known one ([id]) or a new one ([id] null, [name] as written with
+ * quotes removed and spacing collapsed). [start] includes a `for` before it.
+ */
+internal class DollarPerson(val id: Long?, val name: String?, val mine: Boolean, val start: Int, val end: Int)
+
+private fun isDollarNameChar(ch: Char): Boolean = ch.isLetterOrDigit() || ch == '_' || ch == '\'' || ch == '-'
+
+/** A `$` phrase ends at the end, a space or one of `. , ; : ! ? )`. */
+private fun endsDollarPhrase(text: String, at: Int): Boolean =
+    at >= text.length || text[at].isWhitespace() || text[at] in ".,;:!?)"
+
+/** The name ending at [end], with a `:` right after it when there is one: the name and the phrase's end. */
+private fun dollarPhraseEnd(text: String, name: String, end: Int): Pair<String, Int>? = when {
+    end < text.length && text[end] == ':' && endsDollarPhrase(text, end + 1) -> name to end + 1
+    endsDollarPhrase(text, end) -> name to end
+    else -> null
+}
+
+/**
+ * The name after a `$` at [from]: `"Jan de Vries"` (to the first closing quote, on one line), or
+ * `\p{L}[\p{L}\p{N}_'-]*(?:\.[\p{L}\p{N}_'-]+)*` taking the longest form that ends the phrase (the
+ * desktop's `DOLLAR_PERSON` with its backtracking). Returns the name and the phrase's end, or null.
+ */
+private fun readDollarName(text: String, from: Int): Pair<String, Int>? {
+    if (from >= text.length) return null
+    if (text[from] == '"') {
+        val close = text.indexOf('"', from + 1)
+        if (close <= from + 1) return null
+        val inner = text.substring(from + 1, close)
+        if ('\n' in inner) return null
+        return dollarPhraseEnd(text, inner, close + 1)
+    }
+    if (!text[from].isLetter()) return null
+    var i = from + 1
+    while (i < text.length && isDollarNameChar(text[i])) i++
+    val ends = mutableListOf(i)
+    while (i + 1 < text.length && text[i] == '.' && isDollarNameChar(text[i + 1])) {
+        i += 1
+        while (i < text.length && isDollarNameChar(text[i])) i++
+        ends += i
+    }
+    for (end in ends.asReversed()) {
+        dollarPhraseEnd(text, text.substring(from, end), end)?.let { return it }
+    }
+    return null
+}
+
+/**
+ * `$Lalith`, `$"Jan de Vries"` or `for $Priya` anywhere (section 5.5), in both syntax modes: the
+ * first one only (the caller skips this after a `Jan:` prefix). `$` follows the start or a space, so
+ * `US$` stays, and the name starts with a letter or a quote, so `$50` stays. A name that matches
+ * nobody is a new person (only with [newPeople]; otherwise it stays); an ambiguous one stays.
+ */
+internal fun extractDollarPerson(
+    input: String,
+    people: List<Person>,
+    consumed: MutableList<IntRange>,
+    newPeople: Boolean = true,
+): ProExtraction<DollarPerson?> {
+    val none = ProExtraction<DollarPerson?>(null, emptyList())
+    var from = 0
+    while (true) {
+        val dollar = input.indexOf('$', from)
+        if (dollar < 0) return none
+        if (dollar > 0 && !input[dollar - 1].isWhitespace()) {
+            from = dollar + 1
+            continue
+        }
+        val read = readDollarName(input, dollar + 1)
+        if (read == null) {
+            from = dollar + 1
+            continue
+        }
+        // `for` and spaces just before it: your promise to them.
+        var start = dollar
+        var lead = dollar
+        while (lead > 0 && input[lead - 1].isWhitespace()) lead--
+        val mine = lead < dollar && lead >= 3 &&
+            input.regionMatches(lead - 3, "for", 0, 3, ignoreCase = true) &&
+            (lead == 3 || input[lead - 4].isWhitespace())
+        if (mine) start = lead - 3
+        val end = read.second
+        if (overlaps(consumed, start, end)) {
+            from = end
+            continue
+        }
+        val name = People.newPersonTitle(read.first)
+        if (name.isEmpty()) return none
+        val found = People.matchPerson(name, people)
+        if (found.match == PersonMatchKind.AMBIGUOUS) return none
+        if (found.id == null && !newPeople) return none
+        val person = if (found.id != null) {
+            DollarPerson(found.id, null, mine, start, end)
+        } else {
+            DollarPerson(null, name, mine, start, end)
+        }
+        consumed.add(start until end)
+        return ProExtraction(person, listOf(ParsedToken(TokenType.PERSON, start, end, person, input.substring(start, end))))
+    }
 }
 
 private val ESTIMATE_RE = Regex(

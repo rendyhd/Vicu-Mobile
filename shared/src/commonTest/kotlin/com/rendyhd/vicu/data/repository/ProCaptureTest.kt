@@ -1,11 +1,16 @@
 package com.rendyhd.vicu.data.repository
 
+import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.ui.FakeLabelRepository
 import com.rendyhd.vicu.ui.screens.taskdetail.applyTaskEditShortcuts
+import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.parser.ParseResult
 import com.rendyhd.vicu.util.parser.ParserConfig
 import com.rendyhd.vicu.util.parser.TaskParser
 import com.rendyhd.vicu.util.pro.Person
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
@@ -106,5 +111,64 @@ class ProCaptureTest {
         assertEquals(90, on.estimateOf(parse("Write the report ~1h30", on)))
         assertNull(on.estimateOf(parse("Write the report", on)))
         assertNull(ProCapture.OFF.estimateOf(parse("Write the report ~1h30", ProCapture.OFF)))
+    }
+
+    @Test
+    fun `a dollar name that matches nobody is a new person only in quick add`() {
+        val quickAdd = TaskParser.parse(
+            "\$Lalith: call back", on.config(ParserConfig(), makesPeople = true),
+            reference = now, zone = zone, people = on.parserPeople,
+        )
+        assertEquals("call back", quickAdd.title)
+        assertEquals("Lalith", on.newPersonOf(quickAdd))
+        assertNull(on.personLabelOf(quickAdd))
+        assertNull(on.promiseOf(quickAdd))
+
+        // Made: the person's label and promise, as for a known person.
+        val made = on.withPerson(Person(77, "Lalith"))
+        val saved = quickAdd.copy(person = quickAdd.person!!.copy(id = 77, name = null))
+        assertEquals(77L, made.personLabelOf(saved))
+        assertEquals("""{"dir":"theirs","person":77}""", made.promiseOf(saved).toString())
+
+        // Every other path keeps the name in the title; a known person is read everywhere.
+        val elsewhere = parse("\$Lalith: call back", on)
+        assertEquals("\$Lalith: call back", elsewhere.title)
+        assertNull(elsewhere.person)
+        val known = parse("call \$Jan back", on)
+        assertEquals("call back", known.title)
+        assertEquals(31L, on.personLabelOf(known))
+    }
+
+    @Test
+    fun `without the promises layer no person is read`() {
+        val noPromises = ProCapture(on = true, promises = false)
+        val result = TaskParser.parse(
+            "\$Lalith printing !flag", noPromises.config(ParserConfig(), makesPeople = true),
+            reference = now, zone = zone, people = noPromises.parserPeople,
+        )
+        assertEquals("\$Lalith printing", result.title)
+        assertTrue(result.flag)
+        assertNull(result.person)
+        assertNull(noPromises.newPersonOf(result))
+    }
+
+    @Test
+    fun `making a person marks the label with that name or creates one`() = runTest {
+        val labels = FakeLabelRepository(listOf(Label(7, "lalith "), Label(5, "Lalith"), Label(9, "Other")))
+        val prefs = ProPreferences(InMemorySyncedEntries())
+
+        val existing = makePersonLabel("  Lalith ", labels, prefs)
+        assertEquals(5L, (existing as NetworkResult.Success).data.id)
+        assertTrue(labels.created.isEmpty())
+        assertTrue(prefs.snapshot.first().isPerson(5))
+
+        val created = makePersonLabel("Jan  de Vries", labels, prefs) as NetworkResult.Success
+        assertEquals(listOf("Jan de Vries"), labels.created.map { it.title })
+        assertTrue(prefs.snapshot.first().isPerson(created.data.id))
+
+        // It needs the server: nothing is made or marked without it.
+        labels.refreshResult = NetworkResult.Error("Can't reach the server", offline = true)
+        assertTrue(makePersonLabel("Sam", labels, prefs) is NetworkResult.Error)
+        assertEquals(1, labels.created.size)
     }
 }

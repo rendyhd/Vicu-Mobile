@@ -29,6 +29,9 @@ import com.rendyhd.vicu.util.parser.SyntaxPrefixes
 
 private const val MAX_SUGGESTIONS = 8
 
+/** Pro's people (contract 5.5): `$` in both syntax modes. */
+internal const val PERSON_PREFIX = "$"
+
 data class AutocompleteItem(
     val display: String,
     val replacement: String,
@@ -45,12 +48,14 @@ fun NlpAutocompleteDropdown(
     enabled: Boolean,
     onSelect: (newText: String, newCursor: Int) -> Unit,
     anchorSize: IntSize = IntSize.Zero,
+    /** Pro's people offered after `$` (their names); empty while Pro's promises are off. */
+    people: List<String> = emptyList(),
 ) {
     if (!enabled) return
 
-    val suggestions by remember(inputValue, cursorPosition, prefixes, projects, labels) {
+    val suggestions by remember(inputValue, cursorPosition, prefixes, projects, labels, people) {
         derivedStateOf {
-            computeSuggestions(inputValue, cursorPosition, prefixes, projects, labels)
+            computeSuggestions(inputValue, cursorPosition, prefixes, projects, labels, people)
         }
     }
 
@@ -107,12 +112,13 @@ fun NlpAutocompleteDropdown(
     }
 }
 
-private fun computeSuggestions(
+internal fun computeSuggestions(
     input: String,
     cursor: Int,
     prefixes: SyntaxPrefixes,
     projects: List<Project>,
     labels: List<Label>,
+    people: List<String> = emptyList(),
 ): List<AutocompleteItem> {
     if (input.isEmpty() || cursor <= 0) return emptyList()
 
@@ -134,6 +140,35 @@ private fun computeSuggestions(
         // Query should not contain spaces (unless quoted, which we skip for autocomplete)
         if (query.contains(' ')) return null
         return TriggerMatch(prefix, lastIdx, query)
+    }
+
+    // `$Jan`, or `$"Jan de` for a quoted name, which may hold spaces until its closing quote.
+    fun findPersonTrigger(): TriggerMatch? {
+        if (people.isEmpty()) return null
+        val lastIdx = textBefore.lastIndexOf(PERSON_PREFIX)
+        if (lastIdx < 0) return null
+        if (lastIdx > 0 && !textBefore[lastIdx - 1].isWhitespace()) return null
+        val typed = textBefore.substring(lastIdx + PERSON_PREFIX.length)
+        val query = if (typed.startsWith('"')) {
+            typed.substring(1).takeIf { '"' !in it } ?: return null
+        } else {
+            typed.takeIf { ' ' !in it } ?: return null
+        }
+        return TriggerMatch(PERSON_PREFIX, lastIdx, query)
+    }
+
+    // The trigger nearest the cursor wins.
+    val personTrigger = findPersonTrigger()
+    val projectAt = findTrigger(projectPrefix)?.prefixPos ?: -1
+    val labelAt = findTrigger(labelPrefix)?.prefixPos ?: -1
+    if (personTrigger != null && personTrigger.prefixPos > projectAt && personTrigger.prefixPos > labelAt) {
+        return people
+            .filter { it.contains(personTrigger.query, ignoreCase = true) }
+            .take(MAX_SUGGESTIONS)
+            .map { name ->
+                val replacement = if (name.contains(' ')) "$PERSON_PREFIX\"$name\" " else "$PERSON_PREFIX$name "
+                AutocompleteItem(display = name, replacement = replacement, prefix = PERSON_PREFIX)
+            }
     }
 
     // Check project trigger
@@ -179,7 +214,7 @@ private fun computeSuggestions(
     return emptyList()
 }
 
-private fun buildReplacement(
+internal fun buildReplacement(
     input: String,
     cursor: Int,
     item: AutocompleteItem,

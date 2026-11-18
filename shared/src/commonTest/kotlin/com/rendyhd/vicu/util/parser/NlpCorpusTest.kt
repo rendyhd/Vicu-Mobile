@@ -34,7 +34,7 @@ object NlpCorpusFixture {
     data class PlaceRead(val id: String, val trigger: String)
 
     @Serializable
-    data class PersonRead(val id: Long, val mine: Boolean)
+    data class PersonRead(val id: Long?, val mine: Boolean, val name: String? = null)
 
     @Serializable
     data class CorpusPerson(val id: Long, val title: String, val aliases: List<String> = emptyList())
@@ -126,7 +126,7 @@ class NlpCorpusTest {
         if (recurrence != case.recurrence) problems += "recurrence $recurrence, expected ${case.recurrence}"
         val place = result.place?.let { NlpCorpusFixture.PlaceRead(it.place.id, it.trigger.name.lowercase()) }
         if (place != case.place) problems += "place $place, expected ${case.place}"
-        val person = result.person?.let { NlpCorpusFixture.PersonRead(it.id, it.mine) }
+        val person = result.person?.let { NlpCorpusFixture.PersonRead(it.id, it.mine, it.name) }
         if (person != case.person) problems += "person $person, expected ${case.person}"
         val proStart = result.start?.let(::wallOf)
         if (proStart != case.proStart) problems += "start date $proStart, expected ${case.proStart}"
@@ -147,7 +147,7 @@ class NlpCorpusTest {
     @Test
     fun `the corpus is the contract version this parser implements`() {
         assertEquals(1, NlpCorpusFixture.corpus.contractVersion)
-        assertEquals(189, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
+        assertEquals(203, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
     }
 
     @Test

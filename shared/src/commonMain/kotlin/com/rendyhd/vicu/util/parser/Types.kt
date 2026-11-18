@@ -28,8 +28,12 @@ data class ParsedRecurrence(
     val unit: RecurrenceUnit,
 )
 
-/** The person a leading `Jan:` names (their promise to you) or `for Jan:` (yours to them). */
-data class ParsedPerson(val id: Long, val mine: Boolean)
+/**
+ * The person a leading `Jan:` or a `$Jan` names (their promise to you), or `for Jan:` / `for $Jan`
+ * (yours to them). A `$` name that matches nobody is a new person: [id] null and [name] as written
+ * (quotes removed, spacing collapsed), made when the task is saved (section 21.5).
+ */
+data class ParsedPerson(val id: Long?, val mine: Boolean, val name: String? = null)
 
 enum class RecurrenceUnit { DAY, WEEK, MONTH, YEAR }
 
@@ -53,7 +57,10 @@ data class ParseResult(
     /** A saved place the text names with "when I get home", for a location reminder. */
     val place: PlaceMatch? = null,
     // Pro (section 5.5): always present, set only while [ParserConfig.pro] is on.
-    /** `Jan:` at the start: that person's promise to you; `for Jan:`: yours to them. */
+    /**
+     * `Jan:` at the start or `$Jan` anywhere: that person's promise to you; `for Jan:` / `for $Jan`:
+     * yours to them. A `$` name that matches nobody is a new person ([ParsedPerson.id] null).
+     */
     val person: ParsedPerson? = null,
     /** `starts monday`: a start date (local midnight without a time). Null when a block holds the start. */
     val start: LocalDateTime? = null,
@@ -83,6 +90,12 @@ data class ParserConfig(
     val locale: String? = null,
     /** Pro's phrases (section 5.5). Off unless true; with it off the text is read as before. */
     val pro: Boolean = false,
+    /**
+     * Whether a `$` name that matches nobody is read as a new person (section 5.5). The phone's own:
+     * only quick add makes one (section 21.5), so the other paths turn it off and such a name stays
+     * in the title instead of being lost.
+     */
+    val newPeople: Boolean = true,
 )
 
 private val SYNTAX_PREFIXES = mapOf(

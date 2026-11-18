@@ -725,6 +725,8 @@ fun TaskEntrySheet(
                                     viewModel.setTitle(newText)
                                 },
                                 anchorSize = fieldSize,
+                                // Pro's people after `$` (contract 5.5), while its promises are on.
+                                people = state.proCapture.parserPeople.map { it.title },
                             )
                             // The keyboard opens with the sheet: the title is focused as soon as
                             // it is there (the sheet's content is composed once it starts to rise).
@@ -737,6 +739,8 @@ fun TaskEntrySheet(
                         if (promisePerson != null && !editingTemplate) {
                             PromiseCaptureFields(
                                 mine = promisePerson.mine,
+                                // `$Lalith` naming nobody: made a person when the task is saved (21.5).
+                                newPerson = promisePerson.name?.takeIf { promisePerson.id == null },
                                 words = state.promiseWords,
                                 doneWhen = state.promiseDoneWhen,
                                 onWords = viewModel::setPromiseWords,

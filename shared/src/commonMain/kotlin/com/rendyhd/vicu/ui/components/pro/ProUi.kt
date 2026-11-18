@@ -254,7 +254,11 @@ fun ProHiddenSummary(count: Int, onShow: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
-/** The entry sheet's promise fields, shown while the title names a person (contract 21.6). */
+/**
+ * The entry sheet's promise fields, shown while the title names a person (contract 21.6). A
+ * [newPerson] (a `$` name that matches nobody, contract 21.5) is said first: it becomes a person
+ * when the task is saved.
+ */
 @Composable
 fun PromiseCaptureFields(
     mine: Boolean,
@@ -263,8 +267,16 @@ fun PromiseCaptureFields(
     onWords: (String) -> Unit,
     onDoneWhen: (String) -> Unit,
     modifier: Modifier = Modifier,
+    newPerson: String? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (newPerson != null) {
+            Text(
+                "${if (mine) "For" else "From"} $newPerson (new person)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         val wordsLabel = if (mine) "What you said" else "In their words"
         OutlinedTextField(
             value = words,

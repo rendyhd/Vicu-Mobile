@@ -1,11 +1,14 @@
 package com.rendyhd.vicu.data.repository
 
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
+import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.LabelRepository
 import com.rendyhd.vicu.util.DateUtils
+import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.parser.ParseResult
 import com.rendyhd.vicu.util.parser.ParserConfig
+import com.rendyhd.vicu.util.parser.TokenType
 import com.rendyhd.vicu.util.pro.People
 import com.rendyhd.vicu.util.pro.Person
 import com.rendyhd.vicu.util.pro.ProLayer
@@ -13,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -24,13 +28,43 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * What quick add takes from Pro (docs/cross-app-semantics-v1.md sections 5.5 and 21): whether the
- * Pro phrases are read, and the people `Jan:` may name. [OFF] is today's Vicu: the parser reads the
- * text as before and nothing below writes a field.
+ * Pro phrases are read, and the people `Jan:` and `$Jan` may name. [OFF] is today's Vicu: the parser
+ * reads the text as before and nothing below writes a field. Without the promises layer
+ * ([promises] false) no person is read at all, so `$Lalith` stays in the title.
  */
-data class ProCapture(val on: Boolean = false, val people: List<Person> = emptyList()) {
+data class ProCapture(
+    val on: Boolean = false,
+    val people: List<Person> = emptyList(),
+    val promises: Boolean = true,
+) {
 
-    /** [base] with Pro's phrases on while Pro is on; unchanged otherwise. */
-    fun config(base: ParserConfig): ParserConfig = if (on && !base.pro) base.copy(pro = true) else base
+    /**
+     * [base] with Pro's phrases on while Pro is on; unchanged otherwise. [makesPeople] is for quick
+     * add, the one path that makes a person from a `$` name that matches nobody (section 21.5); on
+     * every other path such a name stays in the title.
+     */
+    fun config(base: ParserConfig, makesPeople: Boolean = false): ParserConfig {
+        if (!on) return base
+        var config = base
+        if (!config.pro) config = config.copy(pro = true)
+        if (!makesPeople && config.newPeople) config = config.copy(newPeople = false)
+        if (!promises && TokenType.PERSON !in config.suppressTypes) config = config.copy(suppressTypes = config.suppressTypes + TokenType.PERSON)
+        return config
+    }
+
+    /**
+     * A new person a `$` name asks for (section 21.5): the name, while Pro and its promises are on.
+     * The person is made when the task is saved ([ProCaptureSource.makePerson]).
+     */
+    fun newPersonOf(result: ParseResult?): String? {
+        if (!on || !promises) return null
+        val person = result?.person ?: return null
+        return person.name?.takeIf { person.id == null && it.isNotBlank() }
+    }
+
+    /** This capture with [person] among its people, once quick add has made them. */
+    fun withPerson(person: Person): ProCapture =
+        if (people.any { it.id == person.id }) this else copy(people = people + person)
 
     /** The people the parser may match; none while Pro is off. */
     val parserPeople: List<Person> get() = if (on) people else emptyList()
@@ -115,7 +149,7 @@ class ProCaptureSource(
         .flatMapLatest { switches ->
             when {
                 !switches.on -> flowOf(ProCapture.OFF)
-                !switches.people -> flowOf(ProCapture(on = true))
+                !switches.people -> flowOf(ProCapture(on = true, promises = false))
                 else -> combine(proPreferences.snapshot, labelRepository.getAll(), proLedger.ledger) { prefs, labels, ledger ->
                     ProCapture(
                         on = true,
@@ -125,4 +159,44 @@ class ProCaptureSource(
             }
         }
         .distinctUntilChanged()
+
+    /** Makes [name] a person when quick add saves a task naming them with `$` ([makePersonLabel]). */
+    suspend fun makePerson(name: String): NetworkResult<Person> = makePersonLabel(name, labelRepository, proPreferences)
+}
+
+private const val MAX_PERSON_NAME = 250
+
+/**
+ * Makes [name] a person (section 21.5, `$Lalith` in quick add): the label whose title is the name
+ * (spacing and case ignored, the lowest id) becomes the person, else a label with that title is
+ * created; then `label_kind.<id>` is set to "person". It needs the server: the labels are read from
+ * it first, and a failure is answered as it came (the caller keeps the `$` phrase in the title).
+ * The desktop's `ensurePerson` (`src/main/pro-people.ts`).
+ */
+internal suspend fun makePersonLabel(
+    name: String,
+    labelRepository: LabelRepository,
+    proPreferences: ProPreferences,
+): NetworkResult<Person> {
+    val title = People.newPersonTitle(name)
+    if (title.isEmpty() || title.length > MAX_PERSON_NAME) return NetworkResult.Error("not a name Vicu can use")
+    val refreshed = labelRepository.refreshAll()
+    if (refreshed is NetworkResult.Error) return refreshed
+    val labels = labelRepository.getAll().first().filter { it.id > 0 }
+    val existing = People.labelForNewPerson(labels.map { it.id to it.title }, title)
+    val person = if (existing != null) {
+        Person(existing, labels.first { it.id == existing }.title)
+    } else {
+        when (val made = labelRepository.create(Label(id = 0L, title = title, hexColor = ""))) {
+            is NetworkResult.Success -> {
+                // A label kept on the device for later (no connection) has no id to mark yet.
+                if (made.data.id <= 0) return NetworkResult.Error("Can't reach the server", offline = true)
+                Person(made.data.id, made.data.title)
+            }
+            is NetworkResult.Error -> return made
+            NetworkResult.Loading -> return NetworkResult.Error("Can't reach the server", offline = true)
+        }
+    }
+    proPreferences.setPerson(person.id, true)
+    return NetworkResult.Success(person)
 }

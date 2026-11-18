@@ -289,7 +289,8 @@ class TaskEntryViewModel(
 
     private fun parse(title: String, config: ParserConfig, places: List<SavedPlace>, pro: ProCapture): ParseResult =
         TaskParser.parse(
-            title, pro.config(config), places = places, people = pro.parserPeople,
+            // Quick add is the one path that makes a person from a `$` name that matches nobody (21.5).
+            title, pro.config(config, makesPeople = true), places = places, people = pro.parserPeople,
             weekStart = dayClock.day.value.weekStart,
         )
 
@@ -728,10 +729,12 @@ class TaskEntryViewModel(
         // dismissed the Today chip — DATE is then in suppressTypes). A date picked by hand or typed
         // as a date phrase wins over it; a seeded date does not.
         val typedDate = fields.dueSource == FieldSource.TEXT
+        var bangApplied = false
         if (config.bangToday && TokenType.DATE !in config.suppressTypes && !manualDueDate && !typedDate) {
             val bang = extractBangToday(title)
             if (bang.dueDate != null) {
                 title = bang.title
+                bangApplied = true
                 // The "!" shortcut is today, date-only, in every entry point.
                 dueDate = DueDates.bang(day.date, day.zone).toString()
             }
@@ -757,8 +760,32 @@ class TaskEntryViewModel(
                     resolvedLabelIds += resolveParsedLabels(parseResult.labels, state.allLabels, labelRepository)
                 }
                 // Pro on: `Jan:` adds that person's label, `starts monday` and `!flag` set their fields.
-                val proParsed = parseResult.takeIf { config.enabled }
-                state.proCapture.personLabelOf(proParsed)?.let { resolvedLabelIds += it }
+                var proParsed = parseResult.takeIf { config.enabled }
+                var proCapture = state.proCapture
+                var personNotice = false
+                // `$Lalith` naming nobody yet (contract 21.5): the person is made first; without the
+                // server the phrase goes back into the title and the user is told.
+                proCapture.newPersonOf(proParsed)?.let { name ->
+                    val person = proParsed?.person
+                    val made = proCaptureSource?.makePerson(name) ?: NetworkResult.Error("Pro is off")
+                    if (made is NetworkResult.Success && person != null) {
+                        proCapture = proCapture.withPerson(made.data)
+                        proParsed = proParsed?.copy(person = person.copy(id = made.data.id, name = null))
+                    } else {
+                        val withoutPerson = parse(
+                            state.title,
+                            config.copy(suppressTypes = config.suppressTypes + TokenType.PERSON),
+                            state.places,
+                            proCapture,
+                        )
+                        title = withoutPerson.title
+                        if (bangApplied) title = extractBangToday(title).title
+                        proParsed = proParsed?.copy(person = null, title = title)
+                        appMessages.post(personNotMade(name, (made as? NetworkResult.Error)?.message))
+                        personNotice = true
+                    }
+                }
+                proCapture.personLabelOf(proParsed)?.let { resolvedLabelIds += it }
 
                 val plainTask = Task(
                     id = 0,
@@ -773,7 +800,7 @@ class TaskEntryViewModel(
                     repeatAfter = recurrence.repeatAfter,
                     repeatMode = recurrence.repeatMode,
                 )
-                val task = state.proCapture.applyToNew(plainTask, proParsed, day.zone)
+                val task = proCapture.applyToNew(plainTask, proParsed, day.zone)
 
                 // Synthesize a default reminder when the user set a due date but no
                 // manual reminder (desktop parity).
@@ -800,12 +827,13 @@ class TaskEntryViewModel(
                         // Pro on: `Jan:` makes the task that person's promise, `~45m` gives its estimate.
                         proLedger?.recordCapture(
                             createdTask.id,
-                            state.proCapture.promiseOf(proParsed, state.promiseWords, state.promiseDoneWhen),
-                            state.proCapture.estimateOf(proParsed),
+                            proCapture.promiseOf(proParsed, state.promiseWords, state.promiseDoneWhen),
+                            proCapture.estimateOf(proParsed),
                         )
                         // A newer message replaces the one on screen: what the user must act on or
                         // know about keeps the snackbar instead of the confirmation.
                         var somethingToSay = placeReminder != null && setLocationReminder(createdTask.id, placeReminder)
+                        if (personNotice) somethingToSay = true
                         // The checklist, in its order; one that fails is reported and the rest go on.
                         for (subtask in subtasks) {
                             val made = taskRepository.createSubtask(
@@ -1080,5 +1108,11 @@ class TaskEntryViewModel(
 
     internal companion object {
         const val NEEDS_ALWAYS = "Set location access to Always so Vicu can remind you there"
+
+        /** `$Lalith` could not become a person (contract 21.5): the task was saved with the name in its title. */
+        fun personNotMade(name: String, reason: String?): String {
+            val why = reason?.trim()?.trimEnd('.')?.takeIf { it.isNotEmpty() }?.let { " ($it)" }.orEmpty()
+            return "$name could not be made a person$why, so the name stays in the title"
+        }
     }
 }

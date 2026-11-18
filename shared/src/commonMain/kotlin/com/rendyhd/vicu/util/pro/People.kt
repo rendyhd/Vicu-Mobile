@@ -81,6 +81,20 @@ object People {
         return PersonMatch(null, PersonMatchKind.NONE)
     }
 
+    /**
+     * Section 21.5, making a person from quick add (`$Lalith`): the label whose title is the name
+     * (spacing and case ignored; the lowest id of several) becomes the person, or null when a label
+     * with that title has to be created.
+     */
+    fun labelForNewPerson(labels: List<Pair<Long, String>>, name: String): Long? {
+        val wanted = normalizeName(name)
+        if (wanted.isEmpty()) return null
+        return labels.filter { normalizeName(it.second) == wanted }.minOfOrNull { it.first }
+    }
+
+    /** The title a new person's label gets: the name as written, spacing collapsed. */
+    fun newPersonTitle(name: String): String = name.trim().replace(WHITESPACE, " ")
+
     /** Decision 32: remembering an alias, once, for a person. */
     fun withAlias(aliases: List<String>, alias: String): List<String> {
         val list = aliases.toMutableList()
