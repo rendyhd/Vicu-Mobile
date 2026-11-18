@@ -206,6 +206,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import com.rendyhd.vicu.ui.components.shared.LocalDateFormat
 import com.rendyhd.vicu.ui.components.task.AnimatedCheckbox
 import com.rendyhd.vicu.ui.components.task.DescriptionField
+import com.rendyhd.vicu.ui.components.task.PlainNotesState
 import com.rendyhd.vicu.ui.components.task.clearDescriptionEditorFocusOnHostTap
 import com.rendyhd.vicu.ui.components.task.rememberDescriptionEditorController
 import com.rendyhd.vicu.ui.components.task.NlpAutocompleteDropdown
@@ -264,6 +265,8 @@ fun TaskDetailScreen(
     // The location reminder lives on this device only, apart from the task (PlacesViewModel).
     val placesViewModel: PlacesViewModel = koinViewModel()
     val editorTaskId = state.task?.id ?: taskId
+    // Outside the list: the notes item is disposed when it scrolls away and must come back as it was.
+    val plainNotes = remember(editorTaskId) { PlainNotesState() }
     val locationReminder by remember(editorTaskId) { placesViewModel.reminderFor(editorTaskId) }
         .collectAsStateWithLifecycle(initialValue = null)
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -631,6 +634,7 @@ fun TaskDetailScreen(
                     plain = true,
                     hostedToolbar = true,
                     notesFoldHeight = with(density) { (listHeightPx / 2).toDp() }.coerceAtLeast(MIN_NOTES_FOLD),
+                    plainNotesState = plainNotes,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }

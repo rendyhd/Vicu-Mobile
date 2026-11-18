@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +110,11 @@ internal fun DescriptionField(
     hostedToolbar: Boolean = false,
     /** With [plain]: longer notes stop here, with a fade and Show all. */
     notesFoldHeight: Dp? = null,
+    /**
+     * With [plain] in a lazy list: the notes' fold and height kept by the host, so a field the list
+     * disposed off screen comes back at the size it had (see [PlainNotesState]).
+     */
+    plainNotesState: PlainNotesState? = null,
 ) {
     val (externalHtml, allImageRefs) = remember(value) { ImageTokens.parseValue(value) }
     val latestOnValueChange = rememberUpdatedState(onValueChange)
@@ -251,11 +257,11 @@ internal fun DescriptionField(
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
 
     // Every task starts folded; a tap in the text opens the note, so editing works straight away.
-    var notesOpen by remember(taskId) { mutableStateOf(false) }
-    var notesFolded by remember(taskId) { mutableStateOf(false) }
+    val ownNotesState = remember(taskId) { PlainNotesState() }
+    val notesState = plainNotesState ?: ownNotesState
     val foldPx = notesFoldHeight?.let { with(LocalDensity.current) { it.roundToPx() } }
     LaunchedEffect(session, focused) {
-        if (focused) notesOpen = true
+        if (focused) notesState.open = true
     }
     val imageRefs = allImageRefs.filterIsInstance<ImageTokens.ImageRef.Image>()
 
@@ -321,11 +327,11 @@ internal fun DescriptionField(
                                 .layout { measurable, constraints ->
                                     val inner = measurable.measure(constraints.copy(maxHeight = MAX_PLAIN_NOTES.roundToPx()))
                                     val min = MIN_PLAIN_NOTES.roundToPx()
-                                    // Before the blocks have reported, one frame at the fold.
-                                    val text = (notesMeasure.contentHeight?.plus(NOTES_END_GAP.roundToPx()) ?: foldPx ?: min)
-                                        .coerceAtLeast(min)
-                                    val shown = shownNotesHeight(text, foldPx, FOLD_SLACK.roundToPx(), notesOpen)
-                                    notesFolded = shown < text
+                                    val measured = notesMeasure.contentHeight?.plus(NOTES_END_GAP.roundToPx())
+                                    if (measured != null) notesState.lastContentPx = measured
+                                    val text = notesTextHeight(measured, notesState.lastContentPx, foldPx, min)
+                                    val shown = shownNotesHeight(text, foldPx, FOLD_SLACK.roundToPx(), notesState.open)
+                                    notesState.folded = shown < text
                                     layout(inner.width, shown) { inner.placeRelative(0, 0) }
                                 }
                                 .onPlaced { notesMeasure.editor = it }
@@ -377,7 +383,7 @@ internal fun DescriptionField(
                         },
                 )
             }
-            if (notesFolded) {
+            if (notesState.folded) {
                 val page = MaterialTheme.colorScheme.surface
                 Box(
                     Modifier
@@ -388,8 +394,8 @@ internal fun DescriptionField(
                 )
             }
             }
-            if (notesFolded) {
-                TextButton(onClick = { notesOpen = true }) { Text("Show all") }
+            if (notesState.folded) {
+                TextButton(onClick = { notesState.open = true }) { Text("Show all") }
             }
         }
 
@@ -630,6 +636,32 @@ private val FOLD_FADE = 56.dp
 
 /** Room under the last line, for the text field's own descenders and a tap below it. */
 private val NOTES_END_GAP = 8.dp
+
+/**
+ * What plain notes keep while their field is off screen. A lazy list disposes the field when it
+ * scrolls away; composed again, it knows its text's height only a frame later. Drawn that frame at
+ * the fold, it then shrank, and the list, which keeps the offset into its first item, threw the page
+ * down by the difference each time the notes came back into view. So the field starts at the last
+ * height it measured, and stays open or folded as it was.
+ */
+@Stable
+class PlainNotesState {
+    /** Shown whole after Show all or a tap in the text. */
+    var open by mutableStateOf(false)
+
+    /** Stopped at the fold: the fade and Show all are drawn. */
+    var folded by mutableStateOf(false)
+
+    /** The text's height (px) last measured, for the frame before the blocks report again. */
+    internal var lastContentPx: Int? = null
+}
+
+/**
+ * The notes' text height (px) for a layout pass: [measured] once the blocks have reported, else the
+ * height [remembered] from before, else (the first time) the [fold]; never below [min].
+ */
+internal fun notesTextHeight(measured: Int?, remembered: Int?, fold: Int?, min: Int): Int =
+    (measured ?: remembered ?: fold ?: min).coerceAtLeast(min)
 
 /** How much of notes [full] tall to show, in pixels: all of them, or up to [fold] when they are well past it. */
 internal fun shownNotesHeight(full: Int, fold: Int?, slack: Int, open: Boolean): Int =
