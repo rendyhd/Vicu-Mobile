@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -308,13 +309,7 @@ internal fun LazyListScope.inputParsingSection(
     viewModel: SettingsViewModel,
 ) {
     item(key = "nlp_header") {
-        Text(
-            text = "Input Parsing",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-        )
+        SectionHeader(icon = Icons.Outlined.TextFields, title = "Parsing")
     }
 
     item(key = "nlp_enabled") {
@@ -437,15 +432,6 @@ internal fun LazyListScope.behaviorSection(
                 }
             }
         }
-    }
-
-    item(key = "keep_entry_open") {
-        SwitchRow(
-            label = "Keep add-task open",
-            description = "Stay in the new-task sheet after saving, to add several quickly",
-            checked = state.behaviorPrefs.keepEntryOpen,
-            onCheckedChange = viewModel::setKeepEntryOpen,
-        )
     }
 
     item(key = "fab_align_start") {

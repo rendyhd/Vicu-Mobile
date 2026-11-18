@@ -21,6 +21,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +62,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
@@ -67,6 +70,8 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -76,6 +81,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -148,6 +154,8 @@ import com.rendyhd.vicu.ui.theme.VicuMotion
 import com.rendyhd.vicu.util.DateContext
 import com.rendyhd.vicu.util.DateDisplay
 import com.rendyhd.vicu.util.DateUtils
+import com.rendyhd.vicu.util.EntryChip
+import com.rendyhd.vicu.util.EntryChips
 import com.rendyhd.vicu.util.PlatformFiles
 import com.rendyhd.vicu.util.SystemTimeSource
 import com.rendyhd.vicu.util.TaskTemplate
@@ -167,8 +175,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * The new-task sheet (design concept 3, "one sheet, two heights"), drawn over the screens.
  *
  * Compact, it sits on the keyboard: the title (its parsed words highlighted), a Notes line, and one
- * line of chips for When, Remind and Priority that say their value in words (tags, a project and a
- * repeat join it once they hold something). A chip opens
+ * line of chips that say their value in words: the ones the setting pins ([EntryChips]; Standard is
+ * When, Remind, Priority and Template), and any other once it holds something. Details (the
+ * sliders) shows every chip for this draft, with Customize last. A chip opens
  * its tray where the keyboard was, at the keyboard's height, so the sheet does not move; tapping
  * the title (or the chip again) brings the keyboard back. A chip shows what the parser read from
  * the title unless the user set it in its tray; then the tray wins and the word loses its
@@ -182,6 +191,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * ([SheetLayout]), so it opens with the keyboard, appearing on the navigation bar and going up with
  * it, and its title has the focus from the first frame.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskEntrySheet(
     defaultProjectId: Long?,
@@ -210,6 +220,9 @@ fun TaskEntrySheet(
     var showReminderPicker by remember { mutableStateOf(false) }
     var showRecurrencePicker by remember { mutableStateOf(false) }
     var showCustomTime by remember { mutableStateOf(false) }
+    // Details shows every chip for this draft; the setting decides which are there without it.
+    var detailsOpen by rememberSaveable { mutableStateOf(false) }
+    var customizingChips by rememberSaveable { mutableStateOf(false) }
 
     // Shared text arrives as notes, so they show at once then, and keep showing while the user
     // edits them down to nothing.
@@ -244,6 +257,9 @@ fun TaskEntrySheet(
             } else {
                 viewModel.initWithDefaults(defaultProjectId, defaultDueDate)
             }
+            // "Open at full height" (Settings, Input): read from the store, since the state may not
+            // have caught up with the setting yet when the sheet first opens.
+            if (editTemplateId == null && viewModel.chipLayoutNow().openFull) expanded = true
         }
         initializedBeforeRecreation = true
     }
@@ -425,7 +441,8 @@ fun TaskEntrySheet(
             textFieldValue = TextFieldValue("")
             notesShown = false
             trayName = null
-            expanded = false
+            // The next task opens as the sheet does; Details stays as it was for a batch of tasks.
+            expanded = keepOpen && state.chipLayout.openFull
             if (keepOpen) {
                 // Mass-add: stay open and re-focus for the next task.
                 focusTitle()
@@ -491,6 +508,28 @@ fun TaskEntrySheet(
         DateUtils.formatRecurrence(fields.recurrence.repeatAfter, fields.recurrence.repeatMode)
     } else {
         null
+    }
+
+    // Which chips there are (Template only while the account has a template), and which hold a
+    // value: those are on the row whatever the setting says.
+    val placeFromTitle = state.pickedPlace == null && state.placeMatch != null
+    val availableChips = if (state.templates.isEmpty()) EntryChip.entries.toSet() - EntryChip.TEMPLATE else EntryChip.entries.toSet()
+    val heldChips = buildSet {
+        if (hasDate) add(EntryChip.WHEN)
+        if (remindWords != null || placeFromTitle) add(EntryChip.REMIND)
+        if (priorityWords != null) add(EntryChip.PRIORITY)
+        if (labelWords != null) add(EntryChip.LABELS)
+        if (fields.parsedProjectName != null || state.projectIsManual) add(EntryChip.PROJECT)
+        if (repeatWords != null) add(EntryChip.REPEAT)
+    }
+    val detailsReveals = EntryChips.detailsReveals(state.chipLayout, availableChips, heldChips)
+
+    // Customize (the last chip under Details) opens the setting over the sheet; the draft waits.
+    fun openChipSettings() {
+        trayName = null
+        focusManager.clearFocus()
+        softKeyboard?.hide()
+        customizingChips = true
     }
 
     /** What a tray or row holds; the compact tray and the full-height row show the same. */
@@ -769,7 +808,9 @@ fun TaskEntrySheet(
                                     Triple(EntryTray.TEMPLATE, Icons.Outlined.Description, "Template" to null)
                                         .takeIf { state.templates.isNotEmpty() && !editingTemplate },
                                 )
-                                rows.forEachIndexed { index, (which, icon, words) ->
+                                // In the order of the chips (Settings, Input, Quick add).
+                                val rowOrder = state.chipLayout.order.map(::trayOf)
+                                rows.sortedBy { (which, _, _) -> rowOrder.indexOf(which) }.forEachIndexed { index, (which, icon, words) ->
                                     if (index > 0) PropertyDivider()
                                     EntryRow(
                                         icon = icon,
@@ -781,58 +822,53 @@ fun TaskEntrySheet(
                                 }
                             }
                         } else {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            // One line of chips: When, Remind and Priority. A chip says its value in
-                            // words; the colour of a value read from the title is the colour of its
-                            // highlight. Labels, the project and a repeat live at full height and join
-                            // the line only once they hold something (typed in the title or picked
-                            // there); a line that does not fit scrolls sideways.
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TaskEntryChip(
-                                    label = dateWords ?: "When",
-                                    icon = Icons.Outlined.CalendarMonth,
-                                    onClick = { toggleTray(EntryTray.WHEN) },
-                                    selected = tray == EntryTray.WHEN,
-                                    tint = tint(fields.dueSource, TokenType.DATE),
-                                    clearDescription = if (hasDate) "Clear date" else null,
-                                    onClear = if (hasDate) viewModel::clearDueDate else null,
-                                    tokenRect = { tokenRectOf(TokenType.DATE) },
-                                )
-                                val placeFromTitle = state.pickedPlace == null && state.placeMatch != null
-                                TaskEntryChip(
-                                    label = remindWords ?: "Remind",
-                                    icon = Icons.Outlined.Notifications,
-                                    onClick = { toggleTray(EntryTray.REMIND) },
-                                    selected = tray == EntryTray.REMIND,
-                                    tint = if (placeFromTitle && state.reminders.isEmpty()) tokenChipColor(TokenType.PLACE, isDarkTheme) else null,
-                                    tokenRect = { tokenRectOf(TokenType.PLACE) },
-                                )
-                                TaskEntryChip(
-                                    label = priorityWords ?: "Priority",
-                                    icon = Icons.Outlined.Flag,
-                                    onClick = { toggleTray(EntryTray.PRIORITY) },
-                                    selected = tray == EntryTray.PRIORITY,
-                                    tint = tint(fields.prioritySource, TokenType.PRIORITY),
-                                    tokenRect = { tokenRectOf(TokenType.PRIORITY) },
-                                )
-                                if (labelWords != null) {
-                                    TaskEntryChip(
-                                        label = labelWords,
+                            // The chips the setting pins, any that hold a value (typed in the title or
+                            // picked), or all of them while Details is open; so nothing the task will
+                            // get is out of sight. A chip says its value in words; the colour of a value
+                            // read from the title is the colour of its highlight. One line scrolls
+                            // sideways; with Details open they wrap.
+                            val shownChips = EntryChips.shown(state.chipLayout, availableChips, heldChips, detailsOpen)
+
+                            @Composable
+                            fun Chip(chip: EntryChip) {
+                                when (chip) {
+                                    EntryChip.WHEN -> TaskEntryChip(
+                                        label = dateWords ?: "When",
+                                        icon = Icons.Outlined.CalendarMonth,
+                                        onClick = { toggleTray(EntryTray.WHEN) },
+                                        selected = tray == EntryTray.WHEN,
+                                        tint = tint(fields.dueSource, TokenType.DATE),
+                                        clearDescription = if (hasDate) "Clear date" else null,
+                                        onClear = if (hasDate) viewModel::clearDueDate else null,
+                                        tokenRect = { tokenRectOf(TokenType.DATE) },
+                                    )
+                                    EntryChip.REMIND -> TaskEntryChip(
+                                        label = remindWords ?: "Remind",
+                                        icon = Icons.Outlined.Notifications,
+                                        onClick = { toggleTray(EntryTray.REMIND) },
+                                        selected = tray == EntryTray.REMIND,
+                                        tint = if (placeFromTitle && state.reminders.isEmpty()) tokenChipColor(TokenType.PLACE, isDarkTheme) else null,
+                                        tokenRect = { tokenRectOf(TokenType.PLACE) },
+                                    )
+                                    EntryChip.PRIORITY -> TaskEntryChip(
+                                        label = priorityWords ?: "Priority",
+                                        icon = Icons.Outlined.Flag,
+                                        onClick = { toggleTray(EntryTray.PRIORITY) },
+                                        selected = tray == EntryTray.PRIORITY,
+                                        tint = tint(fields.prioritySource, TokenType.PRIORITY),
+                                        tokenRect = { tokenRectOf(TokenType.PRIORITY) },
+                                    )
+                                    EntryChip.LABELS -> TaskEntryChip(
+                                        label = labelWords ?: "Labels",
                                         icon = Icons.AutoMirrored.Outlined.Label,
                                         onClick = { toggleTray(EntryTray.TAGS) },
                                         selected = tray == EntryTray.TAGS,
                                         tint = if (parsedLabels.isNotEmpty()) tokenChipColor(TokenType.LABEL, isDarkTheme) else null,
                                         tokenRect = { tokenRectOf(TokenType.LABEL) },
                                     )
-                                }
-                                // The project the sheet was opened in goes without saying; one typed
-                                // in the title or picked at full height shows.
-                                if (fields.parsedProjectName != null || state.projectIsManual) {
-                                    TaskEntryChip(
+                                    // Unpinned, the project the sheet was opened in goes without saying;
+                                    // one typed in the title or picked shows.
+                                    EntryChip.PROJECT -> TaskEntryChip(
                                         label = projectWords,
                                         icon = Icons.Outlined.Folder,
                                         onClick = { toggleTray(EntryTray.PROJECT) },
@@ -840,26 +876,48 @@ fun TaskEntrySheet(
                                         tint = if (fields.parsedProjectName != null) tokenChipColor(TokenType.PROJECT, isDarkTheme) else null,
                                         tokenRect = { tokenRectOf(TokenType.PROJECT) },
                                     )
-                                }
-                                if (repeatWords != null) {
-                                    TaskEntryChip(
-                                        label = repeatWords,
+                                    EntryChip.REPEAT -> TaskEntryChip(
+                                        label = repeatWords ?: "Repeat",
                                         icon = Icons.Outlined.Repeat,
                                         onClick = { toggleTray(EntryTray.REPEAT) },
                                         selected = tray == EntryTray.REPEAT,
                                         tint = tint(fields.recurrenceSource, TokenType.RECURRENCE),
                                         tokenRect = { tokenRectOf(TokenType.RECURRENCE) },
                                     )
-                                }
-                                // Last, and only once there is a template to choose (section 18.3).
-                                if (state.templates.isNotEmpty()) {
-                                    TaskEntryChip(
+                                    // Only while there is a template to choose (section 18.3).
+                                    EntryChip.TEMPLATE -> TaskEntryChip(
                                         label = "Template",
                                         icon = Icons.Outlined.Description,
                                         onClick = { toggleTray(EntryTray.TEMPLATE) },
                                         selected = tray == EntryTray.TEMPLATE,
                                         tokenRect = { null },
                                     )
+                                }
+                            }
+
+                            if (detailsOpen) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    shownChips.forEach { chip -> key(chip) { Chip(chip) } }
+                                    TaskEntryChip(
+                                        label = "Customize",
+                                        icon = Icons.Outlined.Tune,
+                                        onClick = ::openChipSettings,
+                                        tokenRect = { null },
+                                    )
+                                }
+                            } else if (shownChips.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    shownChips.forEach { chip -> key(chip) { Chip(chip) } }
                                 }
                             }
                         }
@@ -928,6 +986,19 @@ fun TaskEntrySheet(
                                     modifier = Modifier.heightIn(min = 48.dp),
                                 ) { Text("Undo") }
                             }
+                            // Details: every chip for this draft. Only there while it would show more.
+                            if (detailsReveals || detailsOpen) {
+                                IconToggleButton(
+                                    checked = detailsOpen,
+                                    onCheckedChange = { detailsOpen = it },
+                                    colors = IconButtonDefaults.iconToggleButtonColors(
+                                        checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    ),
+                                ) {
+                                    Icon(Icons.Outlined.Tune, contentDescription = "Details")
+                                }
+                            }
                             FilledTonalIconButton(onClick = ::expand) {
                                 Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Show all details")
                             }
@@ -946,6 +1017,15 @@ fun TaskEntrySheet(
                 }
             }
         }
+    }
+
+    if (customizingChips) {
+        EntryChipsDialog(
+            onDismiss = {
+                customizingChips = false
+                if (!expanded) focusTitle()
+            },
+        )
     }
 
     if (showReminderPicker) {
@@ -981,6 +1061,17 @@ fun TaskEntrySheet(
             onDismiss = { showCustomTime = false },
         )
     }
+}
+
+/** The tray a chip opens; at full height, its row. */
+private fun trayOf(chip: EntryChip): EntryTray = when (chip) {
+    EntryChip.WHEN -> EntryTray.WHEN
+    EntryChip.REMIND -> EntryTray.REMIND
+    EntryChip.PRIORITY -> EntryTray.PRIORITY
+    EntryChip.LABELS -> EntryTray.TAGS
+    EntryChip.PROJECT -> EntryTray.PROJECT
+    EntryChip.REPEAT -> EntryTray.REPEAT
+    EntryChip.TEMPLATE -> EntryTray.TEMPLATE
 }
 
 /** A When tray pick as the due date the task gets; null clears it. */

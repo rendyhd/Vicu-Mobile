@@ -27,10 +27,10 @@ import com.rendyhd.vicu.ui.components.shared.VicuTopAppBar
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Settings: the tabs (General, Projects, Notifications, Gestures, Assistant), their scroll positions and the
+ * Settings: the tabs (General, Projects, Notifications, Input, Assistant), their scroll positions and the
  * one open dialog. Everything that has to survive a rotation lives in saveable state here: the tab,
  * whether the archived projects are open, the open dialog (by id, see [SettingsDialog]) and each
- * tab's scroll. The tabs are in GeneralTab, ProjectsTab, NotificationsTab and GesturesTab; the
+ * tab's scroll. The tabs are in GeneralTab, ProjectsTab, NotificationsTab and InputTab; the
  * dialogs are drawn by [SettingsDialogHost].
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +77,7 @@ fun SettingsScreen(
 
     AssistantMessages(assistantState, assistantViewModel) { snackbarHostState.showSnackbar(it) }
 
-    val tabTitles = listOf("General", "Projects", "Notifications", "Gestures", "Assistant")
+    val tabTitles = listOf("General", "Projects", "Notifications", "Input", "Assistant")
 
     Scaffold(
         topBar = {
@@ -131,11 +131,9 @@ fun SettingsScreen(
                     openDialog = { dialog = it },
                     listState = notificationsListState,
                 )
-                3 -> GesturesTab(
-                    swipeRight = state.behaviorPrefs.swipeRight,
-                    swipeLeft = state.behaviorPrefs.swipeLeft,
-                    onSwipeRightChange = viewModel::setSwipeRight,
-                    onSwipeLeftChange = viewModel::setSwipeLeft,
+                3 -> InputTab(
+                    state = state,
+                    viewModel = viewModel,
                     listState = gesturesListState,
                 )
                 4 -> AssistantTab(

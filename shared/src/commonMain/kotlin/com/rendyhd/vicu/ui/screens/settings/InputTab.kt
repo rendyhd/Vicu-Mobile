@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Gesture
@@ -42,6 +44,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.data.local.SwipeAction
+import com.rendyhd.vicu.ui.components.task.EntryChipsEditor
+import com.rendyhd.vicu.ui.components.task.EntryOpenFullRow
 import com.rendyhd.vicu.ui.components.task.SwipeActions
 
 /** Shown above the two swipe settings. */
@@ -64,16 +68,23 @@ internal const val UNDO_TIP =
     "Tip: A task you complete stays in the list for a few seconds. " +
         "Tap its checkbox again to undo."
 
-// ========== Gestures Tab ==========
+// ========== Input Tab ==========
 
+/**
+ * The Input tab (the Gestures tab of earlier versions): how tasks are entered and handled. Quick add
+ * (its chips, open at full height, keep open), the title's parsing, the swipes and the other
+ * gestures.
+ */
 @Composable
-internal fun GesturesTab(
-    swipeRight: SwipeAction,
-    swipeLeft: SwipeAction,
-    onSwipeRightChange: (SwipeAction) -> Unit,
-    onSwipeLeftChange: (SwipeAction) -> Unit,
+internal fun InputTab(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
     listState: LazyListState,
 ) {
+    val swipeRight = state.behaviorPrefs.swipeRight
+    val swipeLeft = state.behaviorPrefs.swipeLeft
+    val onSwipeRightChange: (SwipeAction) -> Unit = viewModel::setSwipeRight
+    val onSwipeLeftChange: (SwipeAction) -> Unit = viewModel::setSwipeLeft
     // Which swipe is being chosen: true for the right one, false for the left, null for none.
     var choosingRight by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
@@ -81,6 +92,9 @@ internal fun GesturesTab(
         modifier = Modifier.fillMaxSize(),
         state = listState,
     ) {
+        quickAddSection(state, viewModel)
+        inputParsingSection(state, viewModel)
+
         item(key = "swipes_header") {
             SectionHeader(icon = Icons.Outlined.Swipe, title = "Swipes")
         }
@@ -275,5 +289,44 @@ private fun GestureRow(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+    }
+}
+
+/**
+ * Quick add: which chips the sheet always shows and in what order ([EntryChipsEditor], also behind
+ * the sheet's own Customize chip), whether it opens at full height, and whether it stays open
+ * after adding.
+ */
+internal fun LazyListScope.quickAddSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    item(key = "quick_add_header") {
+        SectionHeader(icon = Icons.Outlined.AddTask, title = "Quick add")
+    }
+
+    item(key = "quick_add_chips") {
+        EntryChipsEditor(
+            layout = state.behaviorPrefs.entryChips,
+            onPinned = viewModel::setEntryChipsPinned,
+            onOrder = viewModel::setEntryChipOrder,
+        )
+    }
+
+    item(key = "quick_add_open_full") {
+        EntryOpenFullRow(checked = state.behaviorPrefs.entryChips.openFull, onChange = viewModel::setEntryOpenFull)
+    }
+
+    item(key = "keep_entry_open") {
+        SwitchRow(
+            label = "Keep add-task open",
+            description = "Stay in the new-task sheet after saving, to add several quickly",
+            checked = state.behaviorPrefs.keepEntryOpen,
+            onCheckedChange = viewModel::setKeepEntryOpen,
+        )
+    }
+
+    item(key = "quick_add_divider") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     }
 }

@@ -44,7 +44,6 @@ internal fun GeneralTab(
         widgetSection(state, viewModel)
         routinesSection(state, viewModel)
         logbookSection(state, viewModel, openDialog)
-        inputParsingSection(state, viewModel)
         behaviorSection(state, viewModel, onPickCompletionSound)
         dataSyncSection(state, viewModel, openDialog, backgroundActivity)
         signOutSection(openDialog)

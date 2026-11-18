@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.ui.screens.taskentry
 
 import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.util.EntryChipLayout
 import com.rendyhd.vicu.util.Logger
 import com.rendyhd.vicu.util.randomUuid
 import androidx.lifecycle.ViewModel
@@ -94,6 +95,8 @@ data class TaskEntryUiState(
     val pendingImages: Map<String, String> = emptyMap(),
     /** When true, keep the entry sheet open after saving (mass-add). */
     val keepEntryOpen: Boolean = false,
+    /** Which chips the sheet always shows, and whether it opens at full height (a device setting). */
+    val chipLayout: EntryChipLayout = EntryChipLayout(),
     /** The saved places "when I get home" in the title may name (TokenType.PLACE). */
     val places: List<SavedPlace> = emptyList(),
     /** Pro's phrases and people (contract 5.5); off unless Pro is on here. */
@@ -237,7 +240,7 @@ class TaskEntryViewModel(
         }
         viewModelScope.launch {
             behaviorPrefsStore.getPrefs().collect { prefs ->
-                _uiState.update { it.copy(keepEntryOpen = prefs.keepEntryOpen) }
+                _uiState.update { it.copy(keepEntryOpen = prefs.keepEntryOpen, chipLayout = prefs.entryChips) }
             }
         }
         viewModelScope.launch {
@@ -686,6 +689,7 @@ class TaskEntryViewModel(
                     parserConfig = now.parserConfig.copy(suppressTypes = before.state.parserConfig.suppressTypes),
                     inboxProjectId = now.inboxProjectId,
                     keepEntryOpen = now.keepEntryOpen,
+                    chipLayout = now.chipLayout,
                     isSaving = false,
                     savedTaskId = null,
                     error = null,
@@ -950,6 +954,7 @@ class TaskEntryViewModel(
                 parserConfig = now.parserConfig.copy(suppressTypes = cleared.state.parserConfig.suppressTypes),
                 inboxProjectId = now.inboxProjectId,
                 keepEntryOpen = now.keepEntryOpen,
+                chipLayout = now.chipLayout,
                 isSaving = false,
                 savedTaskId = null,
                 error = null,
@@ -963,6 +968,12 @@ class TaskEntryViewModel(
         clearedDraft = null
         _uiState.update { it.copy(canUndoClear = false) }
     }
+
+    /**
+     * The chip layout as stored, for the sheet's first frame: whether it opens at full height is
+     * decided before the state has caught up with the setting.
+     */
+    suspend fun chipLayoutNow(): EntryChipLayout = behaviorPrefsStore.getPrefs().first().entryChips
 
     fun reset() {
         clearedDraft = null
