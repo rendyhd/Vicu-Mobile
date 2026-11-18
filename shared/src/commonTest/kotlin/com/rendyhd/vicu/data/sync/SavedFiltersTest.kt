@@ -195,7 +195,7 @@ class SavedFiltersTest {
     }
 
     @Test
-    fun `importing again compares and overwrites in place, with Undo`() = runTest {
+    fun `importing again compares and overwrites in place with Undo`() = runTest {
         val apiService = api()
         val (store, lists, _) = imported(apiService)
         val messages = AppMessages()

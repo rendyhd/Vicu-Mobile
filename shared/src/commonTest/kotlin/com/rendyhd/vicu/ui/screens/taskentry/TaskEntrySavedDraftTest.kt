@@ -89,7 +89,7 @@ class TaskEntrySavedDraftTest {
     }
 
     @Test
-    fun `a draft comes back in a new view model, photos and picks included`() = runTest {
+    fun `a draft comes back in a new view model with photos and picks included`() = runTest {
         val authScope = CoroutineScope(SupervisorJob())
         val before = viewModel(authScope)
         before.initWithDefaults(defaultProjectId = 1L)

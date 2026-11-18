@@ -33,7 +33,7 @@ class PersonSuggestionsTest {
     }
 
     @Test
-    fun `no people, money or a closed name offers nothing`() {
+    fun `no people or money or a closed name offers nothing`() {
         assertTrue(suggest("pay \$5").isEmpty())
         assertTrue(suggest("price in US\$").isEmpty())
         assertTrue(suggest("\$\"Jan de Vries\" x").isEmpty())
