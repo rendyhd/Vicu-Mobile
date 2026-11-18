@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -49,6 +50,10 @@ internal fun offlineBannerText(isOffline: Boolean, serverUnreachable: Boolean, p
  * A quiet band: nothing is wrong with the user's work, it waits. The bands sit at the top of the
  * screen, so each pays for the status bar itself; the band above and the screen below take that
  * off through consumed insets (see the banners' place in VicuApp).
+ *
+ * [modifier] goes on a box that stays when the band has closed, so a size read from it comes back
+ * to 0. On the band itself it would keep the last height measured: with animations off that is the
+ * whole band, and the screens under it would lose the status bar's inset (issue 110).
  */
 @Composable
 fun OfflineBanner(
@@ -61,32 +66,33 @@ fun OfflineBanner(
     // The last words stay while the band closes.
     val shown = remember { mutableStateOf("") }
     if (text != null) shown.value = text
-    AnimatedVisibility(
-        visible = text != null,
-        enter = expandVertically(),
-        exit = shrinkVertically(),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Box(modifier) {
+        AnimatedVisibility(
+            visible = text != null,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.CloudOff,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = shown.value,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = shown.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -94,6 +100,8 @@ fun OfflineBanner(
 /**
  * Shown while changes the server refused are waiting. The user can try them again or discard
  * them; discarding asks first, because the changes are lost on this device.
+ *
+ * [modifier] goes on a box that stays when the band has closed, as in [OfflineBanner].
  */
 @Composable
 fun FailedActionsBanner(
@@ -104,30 +112,31 @@ fun FailedActionsBanner(
 ) {
     var confirmingDiscard by remember { mutableStateOf(false) }
 
-    AnimatedVisibility(
-        visible = failedCount > 0,
-        enter = expandVertically(),
-        exit = shrinkVertically(),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.errorContainer)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Box(modifier) {
+        AnimatedVisibility(
+            visible = failedCount > 0,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.ErrorOutline,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            FailedActionsText(failedCount)
-            TextButton(onClick = onRetry) { Text("Retry") }
-            TextButton(onClick = { confirmingDiscard = true }) { Text("Discard") }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ErrorOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                FailedActionsText(failedCount)
+                TextButton(onClick = onRetry) { Text("Retry") }
+                TextButton(onClick = { confirmingDiscard = true }) { Text("Discard") }
+            }
         }
     }
 
