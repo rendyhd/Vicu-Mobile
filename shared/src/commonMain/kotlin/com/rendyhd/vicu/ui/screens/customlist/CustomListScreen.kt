@@ -71,7 +71,7 @@ import com.rendyhd.vicu.ui.components.task.projectMetas
  * 3.7): the list is a copy, and changing it does not change the saved filter on the server.
  */
 @Composable
-private fun ImportedListNotice(filterName: String, onClose: () -> Unit) {
+private fun ImportedListNotice(filterName: String, fromView: Boolean, onClose: () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -90,8 +90,8 @@ private fun ImportedListNotice(filterName: String, onClose: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Imported from your server", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "This list is a copy of the saved filter \"$filterName\". Changes you make here stay in Vicu " +
-                            "and won't update the filter on your server.",
+                        (if (fromView) "This list is a copy of the project view \"$filterName\". " else "This list is a copy of the saved filter \"$filterName\". ") +
+                            "Changes you make here stay in Vicu and won't update it on your server.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -208,6 +208,7 @@ fun CustomListScreen(
                     item(key = "import-notice", contentType = "notice") {
                         ImportedListNotice(
                             filterName = state.customList?.name.orEmpty(),
+                            fromView = state.customList?.projectView != null,
                             onClose = viewModel::closeImportNotice,
                         )
                     }

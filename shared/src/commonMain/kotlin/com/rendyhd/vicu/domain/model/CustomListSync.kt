@@ -71,7 +71,53 @@ data class CustomListWire(
     /** The saved filter the list was imported from (section 3.7); written only when set. */
     @OptIn(ExperimentalSerializationApi::class)
     @SerialName("saved_filter_id") @EncodeDefault(EncodeDefault.Mode.NEVER) val savedFilterId: Long? = null,
+    /** The project view the list was imported from (section 3.9); written only when set. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @SerialName("project_view") @EncodeDefault(EncodeDefault.Mode.NEVER) val projectView: CustomListWireProjectView? = null,
+    /** What the last import took from Vikunja (section 3.7); written only when set. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @SerialName("import_base") @EncodeDefault(EncodeDefault.Mode.NEVER) val importBase: CustomListWireImportBase? = null,
     @SerialName(UNKNOWN_FIELDS_KEY) val unknown: JsonObject = NO_UNKNOWN_FIELDS,
+)
+
+/** `project_view` of a list (section 3.9). */
+@Serializable
+data class CustomListWireProjectView(
+    @SerialName("project_id") val projectId: Long,
+    @SerialName("view_id") val viewId: Long,
+)
+
+/** `import_base` of a list (section 3.7): `rule`, `rule_include_nulls` and `then_by` only when set. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class CustomListWireImportBase(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val updated: String = "",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val name: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val rule: String? = null,
+    @SerialName("rule_include_nulls") @EncodeDefault(EncodeDefault.Mode.NEVER) val ruleIncludeNulls: Boolean? = null,
+    @SerialName("sort_by") @EncodeDefault(EncodeDefault.Mode.ALWAYS) val sortBy: String = "due_date",
+    @SerialName("order_by") @EncodeDefault(EncodeDefault.Mode.ALWAYS) val orderBy: String = "asc",
+    @SerialName("then_by") @EncodeDefault(EncodeDefault.Mode.NEVER) val thenBy: List<CustomListWireSortKey>? = null,
+)
+
+private fun ImportBase.toWire() = CustomListWireImportBase(
+    updated = updated,
+    name = name.trim(),
+    rule = rule?.takeIf { it.isNotBlank() },
+    ruleIncludeNulls = if (ruleIncludeNulls) true else null,
+    sortBy = sortBy,
+    orderBy = if (orderBy == "desc") "desc" else "asc",
+    thenBy = thenBy.takeIf { it.isNotEmpty() }?.map { CustomListWireSortKey(it.sortBy, if (it.orderBy == "desc") "desc" else "asc") },
+)
+
+private fun CustomListWireImportBase.toDomain() = ImportBase(
+    updated = updated,
+    name = name.trim(),
+    rule = rule?.takeIf { it.isNotBlank() },
+    ruleIncludeNulls = ruleIncludeNulls == true,
+    sortBy = sortBy,
+    orderBy = if (orderBy == "desc") "desc" else "asc",
+    thenBy = thenBy.orEmpty().map { ListSortKey(it.sortBy, if (it.orderBy == "desc") "desc" else "asc") },
 )
 
 /**
@@ -211,6 +257,8 @@ fun CustomList.toWire(preserving: CustomListWire? = null): CustomListWire = Cust
         unknown = withProKeys(preserving?.filter?.unknown ?: NO_UNKNOWN_FIELDS, filter.pro),
     ),
     savedFilterId = savedFilterId,
+    projectView = projectView?.let { CustomListWireProjectView(it.projectId, it.viewId) },
+    importBase = importBase?.toWire(),
     unknown = preserving?.unknown ?: NO_UNKNOWN_FIELDS,
 )
 
@@ -240,4 +288,6 @@ fun CustomListWire.toDomain(): CustomList = CustomList(
         pro = ProListFilter.read(filter.unknown),
     ),
     savedFilterId = savedFilterId,
+    projectView = projectView?.let { ProjectViewRef(it.projectId, it.viewId) },
+    importBase = importBase?.toDomain(),
 )

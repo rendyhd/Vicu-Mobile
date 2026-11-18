@@ -147,7 +147,7 @@ val repositoryModule = module {
         )
     }
     single { ProjectRefresher(projectDao = get(), pendingActionDao = get(), api = get(), projectMapper = get(), savedFilters = get(), accountEpoch = get()) }
-    single { SavedFilterImporter(api = get(), store = get(), customLists = get(), messages = get()) }
+    single { SavedFilterImporter(api = get(), store = get(), customLists = get(), messages = get(), appScope = get()) }
 
     single {
         val taskDao = get<TaskDao>()

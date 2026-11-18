@@ -8,6 +8,7 @@ import com.rendyhd.vicu.domain.model.CustomListSyncDocumentV1
 import com.rendyhd.vicu.domain.model.CustomListSyncOrder
 import com.rendyhd.vicu.domain.model.CustomListWire
 import com.rendyhd.vicu.domain.model.CustomListWireFilter
+import com.rendyhd.vicu.domain.model.CustomListWireProjectView
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.model.TaskReminder
@@ -92,7 +93,7 @@ class CustomListRuleFixtureTest {
     )
 
     @Serializable
-    data class DuplicateList(val id: String, val savedFilterId: Long? = null)
+    data class DuplicateList(val id: String, val savedFilterId: Long? = null, val projectViewId: Long? = null)
 
     @Serializable
     data class DuplicateVector(val name: String, val lists: List<DuplicateList>, val kept: List<String>)
@@ -256,7 +257,12 @@ class CustomListRuleFixtureTest {
     @Test
     fun `duplicate imports keep the first id`() {
         for (vector in blocks.savedFilterImport.duplicates) {
-            val lists = vector.lists.map { CustomListWire(it.id, it.id, filter = CustomListWireFilter(), savedFilterId = it.savedFilterId) }
+            val lists = vector.lists.map {
+                CustomListWire(
+                    it.id, it.id, filter = CustomListWireFilter(), savedFilterId = it.savedFilterId,
+                    projectView = it.projectViewId?.let { view -> CustomListWireProjectView(1, view) },
+                )
+            }
             val document = CustomListEnvelope.fromLists(lists, "device", 1_000L)
             assertEquals(vector.kept, CustomListEnvelope.activeLists(document).map { it.id }, vector.name)
 

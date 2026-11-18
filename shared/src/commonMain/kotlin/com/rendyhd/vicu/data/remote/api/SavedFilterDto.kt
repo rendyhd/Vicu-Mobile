@@ -10,6 +10,8 @@ data class SavedFilterDto(
     val title: String = "",
     val description: String = "",
     val filters: SavedFilterQueryDto = SavedFilterQueryDto(),
+    /** When the filter last changed, as the server wrote it (the import base's `updated`). */
+    val updated: String = "",
 )
 
 /** The task query a saved filter wraps (`TaskCollection` in the API). */

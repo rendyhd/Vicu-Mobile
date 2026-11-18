@@ -163,14 +163,20 @@ class CustomListRepositoryImpl(
         val state = ensureState()
         var document = CustomListEnvelope.normalize(state.document)
         for (list in lists) {
-            val value = list.toWire()
+            // A list that is there already is rewritten in place (importing again, section 3.7):
+            // it keeps its place and the fields this version does not know.
+            val previous = document.lists[list.id]
+            val value = list.toWire(preserving = previous?.value)
+            val revision = CustomListEnvelope.nextRevision(document, state.deviceId, now())
             document = document.copy(
-                lists = document.lists + (value.id to CustomListSyncRecord(value, CustomListEnvelope.nextRevision(document, state.deviceId, now()))),
+                lists = document.lists + (value.id to (previous?.copy(value = value, revision = revision) ?: CustomListSyncRecord(value, revision))),
             )
-            document = document.copy(order = document.order.copy(
-                ids = document.order.ids.filterNot { it == value.id } + value.id,
-                revision = CustomListEnvelope.nextRevision(document, state.deviceId, now()),
-            ))
+            if (value.id !in document.order.ids) {
+                document = document.copy(order = document.order.copy(
+                    ids = document.order.ids + value.id,
+                    revision = CustomListEnvelope.nextRevision(document, state.deviceId, now()),
+                ))
+            }
         }
         document = document.copy(
             importedSavedFilters = CustomListEnvelope.unionImported(document.importedSavedFilters, filterIds.toList()),

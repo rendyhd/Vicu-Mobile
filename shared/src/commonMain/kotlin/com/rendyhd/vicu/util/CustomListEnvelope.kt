@@ -72,15 +72,19 @@ object CustomListEnvelope {
     }
 
     /**
-     * [lists] without the lists that repeat another list's saved filter: per `saved_filter_id`,
-     * the list whose id sorts first stays (section 3.7).
+     * [lists] without the lists that repeat another list's source: per `saved_filter_id`, and per
+     * `project_view.view_id`, the list whose id sorts first stays (sections 3.7 and 3.9).
      */
     fun withoutDuplicateImports(lists: List<CustomListWire>): List<CustomListWire> {
-        val winners = lists.filter { it.savedFilterId != null }
-            .groupBy { it.savedFilterId }
-            .mapValues { (_, same) -> same.minOf { it.id } }
-        return lists.filter { list -> list.savedFilterId == null || winners[list.savedFilterId] == list.id }
+        val winners = lists.mapNotNull { list -> importSourceKey(list)?.let { it to list.id } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, ids) -> ids.min() }
+        return lists.filter { list -> importSourceKey(list)?.let { winners[it] == list.id } ?: true }
     }
+
+    /** What a list was imported from, as one key; null for a list made in Vicu. */
+    private fun importSourceKey(list: CustomListWire): String? =
+        list.savedFilterId?.let { "filter:$it" } ?: list.projectView?.let { "view:${it.viewId}" }
 
     /** The lists [activeLists] hides as duplicate imports, which the next write turns into tombstones. */
     fun duplicateImports(document: CustomListSyncDocumentV1): List<String> {

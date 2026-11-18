@@ -19,7 +19,10 @@ interface CustomListRepository {
     /** The ids of the saved filters any device imported (cross-app semantics 3.7). */
     val importedSavedFilters: Flow<Set<Long>> get() = flowOf(emptySet())
 
-    /** Adds [lists] made from saved filters and records [filterIds] as imported, in one change. */
+    /**
+     * Writes [lists] made from saved filters and project views and records [filterIds] as imported,
+     * in one change. A list whose id is there already is rewritten in place (importing again).
+     */
     suspend fun importLists(lists: List<CustomList>, filterIds: Collection<Long>) {
         lists.forEach { upsert(it) }
     }

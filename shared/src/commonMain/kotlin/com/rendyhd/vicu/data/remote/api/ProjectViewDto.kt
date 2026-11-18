@@ -10,4 +10,7 @@ data class ProjectViewDto(
     val title: String = "",
     @SerialName("view_kind") val viewKind: String = "",
     val position: Double = 0.0,
+    /** The view's own task query (cross-app semantics 3.9); null when it has none. */
+    val filter: SavedFilterQueryDto? = null,
+    val updated: String = "",
 )

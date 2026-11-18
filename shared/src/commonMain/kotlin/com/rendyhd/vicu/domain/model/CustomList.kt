@@ -11,6 +11,29 @@ data class CustomList(
     val filter: CustomListFilter,
     /** The Vikunja saved filter this list was imported from (cross-app semantics 3.7), or null. */
     val savedFilterId: Long? = null,
+    /** The Vikunja project view this list was imported from (cross-app semantics 3.9), or null. */
+    val projectView: ProjectViewRef? = null,
+    /** What the last import took from Vikunja (cross-app semantics 3.7); null for an older import. */
+    val importBase: ImportBase? = null,
+)
+
+/** A project view a list was imported from (cross-app semantics 3.9). */
+@Serializable
+data class ProjectViewRef(val projectId: Long, val viewId: Long)
+
+/**
+ * The parts of a list an import took from Vikunja, and the source's `updated` at that moment
+ * (cross-app semantics 3.7, "The import base").
+ */
+@Serializable
+data class ImportBase(
+    val updated: String = "",
+    val name: String,
+    val rule: String? = null,
+    val ruleIncludeNulls: Boolean = false,
+    val sortBy: String = "due_date",
+    val orderBy: String = "asc",
+    val thenBy: List<ListSortKey> = emptyList(),
 )
 
 /** One further sort key of a list (cross-app semantics 3.6). */

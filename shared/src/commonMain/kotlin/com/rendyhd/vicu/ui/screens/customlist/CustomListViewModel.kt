@@ -182,7 +182,7 @@ class CustomListViewModel(
         savedFilters?.let { importer ->
             viewModelScope.launch {
                 combine(customListRepository.lists.map { lists -> lists.find { it.id == listId } }, importer.noticeClosed) { list, closed ->
-                    list?.savedFilterId != null && listId !in closed
+                    (list?.savedFilterId != null || list?.projectView != null) && listId !in closed
                 }.distinctUntilChanged().collect { show -> _uiState.update { it.copy(showImportNotice = show) } }
             }
         }

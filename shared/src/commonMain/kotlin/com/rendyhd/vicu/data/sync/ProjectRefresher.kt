@@ -30,7 +30,7 @@ class ProjectRefresher(
         val write: suspend () -> Unit = {
             projectDao.replaceAll(server, keepIds = pendingActionDao.getProjectIdsWithPendingActions().toSet())
             savedFilters?.setKnown(
-                pseudo.mapNotNull { dto -> SavedFilterImport.filterIdOf(dto.id)?.let { SavedFilterRef(it, dto.title) } },
+                pseudo.mapNotNull { dto -> SavedFilterImport.filterIdOf(dto.id)?.let { SavedFilterRef(it, dto.title, dto.updated) } },
             )
         }
         if (accountEpoch != null && epoch != null) accountEpoch.write(epoch, write) else write()

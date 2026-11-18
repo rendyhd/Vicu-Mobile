@@ -229,8 +229,8 @@ fun CustomListDialog(
         title = { Text(if (isEdit) "Edit List" else "New List") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                if (customList?.savedFilterId != null) {
-                    ImportedListNote()
+                if (customList?.savedFilterId != null || customList?.projectView != null) {
+                    ImportedListNote(fromView = customList.projectView != null)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 OutlinedTextField(
@@ -668,6 +668,8 @@ fun CustomListDialog(
                                     else listOf(ListSortKey(thenBy, thenOrder)) + customList?.filter?.thenBy.orEmpty().drop(1),
                                 ),
                                 savedFilterId = customList?.savedFilterId,
+                                projectView = customList?.projectView,
+                                importBase = customList?.importBase,
                             )
                         )
                     }
@@ -687,7 +689,7 @@ fun CustomListDialog(
 
 /** The note at the top of an imported list's editor (cross-app semantics 3.7). */
 @Composable
-private fun ImportedListNote() {
+private fun ImportedListNote(fromView: Boolean) {
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -701,7 +703,8 @@ private fun ImportedListNote() {
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                "Imported from a Vikunja saved filter. Changes here stay in Vicu and won't update the saved filter on your server.",
+                if (fromView) "Imported from a Vikunja project view. Changes here stay in Vicu and won't update the view on your server."
+                else "Imported from a Vikunja saved filter. Changes here stay in Vicu and won't update the saved filter on your server.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
