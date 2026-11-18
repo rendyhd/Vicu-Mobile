@@ -80,6 +80,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -131,6 +132,7 @@ import com.rendyhd.vicu.ui.components.shared.LocalClockDay
 import com.rendyhd.vicu.ui.components.shared.LocalDateFormat
 import com.rendyhd.vicu.ui.components.shared.VicuDragHandle
 import com.rendyhd.vicu.ui.keyboardTargetHeight
+import com.rendyhd.vicu.ui.rememberCameraCapture
 import com.rendyhd.vicu.ui.rememberImagePicker
 import com.rendyhd.vicu.ui.screens.taskdetail.PropertyDivider
 import com.rendyhd.vicu.ui.screens.taskdetail.PropertyGroup
@@ -202,6 +204,23 @@ fun TaskEntrySheet(
     val descriptionEditorController = rememberDescriptionEditorController()
     val notificationPermission = koinInject<NotificationPermissionCoordinator>()
     val isDarkTheme = isSystemInDarkTheme()
+
+    // The draft goes into the saved instance state when the activity saves it, so it comes back if
+    // the system ends the app while the camera is open (Take photo) or the app is in the background.
+    // Restored during composition, before any effect: a photo the camera took meanwhile is handed
+    // over when its launcher registers below, and lands on top of the restored draft. A view model
+    // that survived (rotation) keeps its own draft.
+    val savedDraft = rememberSaveable(
+        saver = Saver<SavedEntryDraft, String>(
+            save = { viewModel.currentDraftJson() },
+            restore = { SavedEntryDraft(it) },
+        ),
+    ) { SavedEntryDraft(null) }
+    remember(savedDraft) { if (!viewModel.isInitialized) viewModel.restoreDraft(savedDraft.restored) }
+    // Out here rather than in the notes, so they register on the first frame after the app was
+    // recreated, when the camera's answer is waiting for them.
+    val entryImagePickerLauncher = rememberImagePicker(viewModel::stagePendingImage)
+    val entryCameraLauncher = rememberCameraCapture(viewModel::stagePendingImage)
 
     var expanded by rememberSaveable { mutableStateOf(false) }
     // The chip whose tray replaces the keyboard (compact), or the row that is open (full height).
@@ -729,13 +748,13 @@ fun TaskEntrySheet(
                         // Notes can be written before the task exists: the Notes button on the keyboard
                         // row opens them under the title. At full height they are always there.
                         if (showNotes) {
-                            val entryImagePickerLauncher = rememberImagePicker(viewModel::stagePendingImage)
                             DescriptionField(
                                 value = state.description,
                                 onValueChange = viewModel::setDescription,
                                 taskId = 0L,
                                 isUploadingImage = false,
                                 onAddImageClick = entryImagePickerLauncher,
+                                onTakePhotoClick = entryCameraLauncher,
                                 onRemoveImageAttachment = {},
                                 onImagePasted = viewModel::stagePendingImage,
                                 pendingImages = state.pendingImages,
@@ -1307,3 +1326,6 @@ private const val GROW_DRAG_DP = 40
 
 /** The scrim over the screens, as a Material bottom sheet draws it. */
 private const val SCRIM_ALPHA = 0.32f
+
+/** Carries quick add's draft through process death (see [TaskEntryViewModel.currentDraftJson]). */
+private class SavedEntryDraft(val restored: String?)

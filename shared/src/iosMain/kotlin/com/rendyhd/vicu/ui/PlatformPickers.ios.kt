@@ -4,9 +4,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import com.rendyhd.vicu.util.AppMessages
+import com.rendyhd.vicu.util.CameraPhotos
 import com.rendyhd.vicu.util.IosPaths
 import com.rendyhd.vicu.util.IosPlatformFiles
 import com.rendyhd.vicu.util.Logger
+import com.rendyhd.vicu.util.TimeSource
+import org.koin.compose.koinInject
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSize
 import platform.Foundation.NSNumber
@@ -26,7 +30,25 @@ import platform.UniformTypeIdentifiers.UTTypeAudio
 import platform.UniformTypeIdentifiers.UTTypeCalendarEvent
 import platform.UniformTypeIdentifiers.UTTypeImage
 import platform.UniformTypeIdentifiers.UTTypeItem
+import platform.AVFoundation.AVAuthorizationStatusDenied
+import platform.AVFoundation.AVAuthorizationStatusNotDetermined
+import platform.AVFoundation.AVAuthorizationStatusRestricted
+import platform.AVFoundation.AVCaptureDevice
+import platform.AVFoundation.AVMediaTypeVideo
+import platform.AVFoundation.authorizationStatusForMediaType
+import platform.AVFoundation.requestAccessForMediaType
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationOpenSettingsURLString
+import platform.UIKit.UIImage
+import platform.UIKit.UIImageJPEGRepresentation
+import platform.UIKit.UIImagePickerController
+import platform.UIKit.UIImagePickerControllerDelegateProtocol
+import platform.UIKit.UIImagePickerControllerOriginalImage
+import platform.UIKit.UIImagePickerControllerSourceType
+import platform.UIKit.UINavigationControllerDelegateProtocol
+import platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT
 import platform.darwin.NSObject
+import platform.darwin.dispatch_get_global_queue
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
@@ -50,6 +72,50 @@ actual fun rememberImagePicker(onImagePicked: (String) -> Unit): () -> Unit {
         picker.delegate = delegate
         topViewController()?.presentViewController(picker, animated = true, completion = null)
     }
+}
+
+/**
+ * The system camera, through UIImagePickerController (its camera mode is the system's camera
+ * screen; only its library mode was replaced by PHPicker). The photo is encoded here and staged
+ * like a picked one: it never reaches the photo library and carries no location. iOS asks for
+ * camera access the first time; once refused, the snackbar offers the app's page in Settings.
+ * The simulator has no camera, so it gets null.
+ */
+@Composable
+actual fun rememberCameraCapture(onCaptured: (String) -> Unit): (() -> Unit)? {
+    val available = remember {
+        UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera)
+    }
+    val callback = rememberUpdatedState(onCaptured)
+    val timeSource = koinInject<TimeSource>()
+    val messages = koinInject<AppMessages>()
+    val delegate = remember { CameraDelegate(callback) { CameraPhotos.fileName(timeSource.now(), timeSource.zone()) } }
+    if (!available) return null
+    return { openCamera(delegate, messages) }
+}
+
+private fun openCamera(delegate: CameraDelegate, messages: AppMessages) {
+    val video = AVMediaTypeVideo ?: return
+    when (AVCaptureDevice.authorizationStatusForMediaType(video)) {
+        AVAuthorizationStatusDenied, AVAuthorizationStatusRestricted ->
+            messages.post("Camera access is off for Vicu.", actionLabel = "Settings") {
+                NSURL.URLWithString(UIApplicationOpenSettingsURLString)?.let { url ->
+                    UIApplication.sharedApplication.openURL(url, options = emptyMap<Any?, Any?>(), completionHandler = null)
+                }
+            }
+        AVAuthorizationStatusNotDetermined ->
+            AVCaptureDevice.requestAccessForMediaType(video) { granted ->
+                if (granted) dispatch_async(dispatch_get_main_queue()) { presentCamera(delegate) }
+            }
+        else -> presentCamera(delegate)
+    }
+}
+
+private fun presentCamera(delegate: CameraDelegate) {
+    val picker = UIImagePickerController()
+    picker.sourceType = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
+    picker.delegate = delegate
+    topViewController()?.presentViewController(picker, animated = true, completion = null)
 }
 
 /** Any file, through the Files picker. */
@@ -160,3 +226,31 @@ private class ImagePickerDelegate(
         }
     }
 }
+
+private class CameraDelegate(
+    private val callback: State<(String) -> Unit>,
+    private val fileName: () -> String,
+) : NSObject(), UIImagePickerControllerDelegateProtocol, UINavigationControllerDelegateProtocol {
+
+    override fun imagePickerController(picker: UIImagePickerController, didFinishPickingMediaWithInfo: Map<Any?, *>) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+        val image = didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage] as? UIImage ?: return
+        val name = fileName()
+        // Encoding a full-size photo takes a moment: off the main thread, then back for the callback.
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT.toLong(), 0u)) {
+            val path = UIImageJPEGRepresentation(image, PHOTO_QUALITY)?.let { IosPlatformFiles.stage(it, name) }
+            if (path == null) {
+                Logger.w(TAG, "Could not keep the photo from the camera")
+                return@dispatch_async
+            }
+            dispatch_async(dispatch_get_main_queue()) { callback.value(path) }
+        }
+    }
+
+    override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+    }
+}
+
+/** JPEG quality for a camera photo: close to the camera's own, at about half the size of 1.0. */
+private const val PHOTO_QUALITY = 0.85

@@ -924,6 +924,86 @@ class TaskEntryViewModel(
         }
     }
 
+    /**
+     * The draft for the instance state (see [TaskEntrySavedDraft]), or null when there is nothing
+     * to keep: no draft, a template being edited (it is opened again from the template), or a save
+     * already under way.
+     */
+    fun currentDraftJson(): String? {
+        val state = _uiState.value
+        if (!isInitialized || !state.hasDraft || state.editingTemplate != null || state.isSaving) return null
+        return TaskEntrySavedDraftCodec.encode(
+            TaskEntrySavedDraft(
+                title = state.title,
+                description = state.description,
+                pendingImages = state.pendingImages,
+                pendingAttachmentUris = state.pendingAttachmentUris,
+                pendingAttachmentMimeType = state.pendingAttachmentMimeType,
+                dueDate = state.dueDate,
+                dueDateIsManual = state.dueDateIsManual,
+                priority = state.priority,
+                priorityIsManual = state.priorityIsManual,
+                projectId = state.projectId,
+                projectIsManual = state.projectIsManual,
+                labelIds = state.selectedLabelIds.toList(),
+                reminders = state.reminders,
+                repeatAfter = state.manualRecurrence?.repeatAfter,
+                repeatMode = state.manualRecurrence?.repeatMode,
+                subtasks = state.subtasks,
+                promiseWords = state.promiseWords,
+                promiseDoneWhen = state.promiseDoneWhen,
+                suppressedTypes = state.suppressedTypes.map { it.name },
+                pinnedTypes = pinnedTypes.map { it.name },
+                suppressedRawTexts = suppressedRawTexts.mapKeys { it.key.name },
+                entryProjectId = entryProjectId,
+                seedDueDate = seedDueDate,
+            ),
+        )
+    }
+
+    /**
+     * Puts back a draft from the instance state after process death and marks the view model
+     * initialised, so the sheet does not start a new draft over it. Returns false (and changes
+     * nothing) when there is none or it does not read.
+     */
+    fun restoreDraft(json: String?): Boolean {
+        val draft = TaskEntrySavedDraftCodec.decode(json) ?: return false
+        fun types(names: List<String>) = names.mapNotNull { name -> TokenType.entries.firstOrNull { it.name == name } }.toSet()
+        isInitialized = true
+        entryProjectId = draft.entryProjectId
+        seedDueDate = draft.seedDueDate
+        pinnedTypes = types(draft.pinnedTypes)
+        suppressedRawTexts = draft.suppressedRawTexts.mapNotNull { (name, texts) ->
+            TokenType.entries.firstOrNull { it.name == name }?.let { it to texts }
+        }.toMap()
+        val suppressed = types(draft.suppressedTypes)
+        _uiState.update {
+            it.copy(
+                description = draft.description,
+                pendingImages = draft.pendingImages,
+                pendingAttachmentUris = draft.pendingAttachmentUris,
+                pendingAttachmentMimeType = draft.pendingAttachmentMimeType,
+                dueDate = draft.dueDate,
+                dueDateIsManual = draft.dueDateIsManual,
+                priority = draft.priority,
+                priorityIsManual = draft.priorityIsManual,
+                projectId = draft.projectId,
+                projectIsManual = draft.projectIsManual,
+                selectedLabelIds = draft.labelIds.toSet(),
+                reminders = draft.reminders,
+                manualRecurrence = draft.repeatAfter?.let { after -> RecurrenceValue(after, draft.repeatMode ?: 0) },
+                subtasks = draft.subtasks,
+                promiseWords = draft.promiseWords,
+                promiseDoneWhen = draft.promiseDoneWhen,
+                suppressedTypes = suppressed,
+                parserConfig = it.parserConfig.copy(suppressTypes = suppressed),
+            )
+        }
+        // The title last: it is parsed again with the suppressions in place.
+        setTitle(draft.title)
+        return true
+    }
+
     /** The draft's clear button: everything goes, as after a save, and Undo can bring it back. */
     fun clearDraft() {
         val before = _uiState.value

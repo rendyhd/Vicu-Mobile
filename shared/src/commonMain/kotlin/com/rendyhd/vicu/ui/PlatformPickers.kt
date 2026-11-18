@@ -9,6 +9,15 @@ expect fun rememberImagePicker(onImagePicked: (String) -> Unit): () -> Unit
 expect fun rememberFilePicker(onFilePicked: (String) -> Unit): () -> Unit
 
 /**
+ * Opens the phone's own camera for one photo; the callback gets the photo the way
+ * [rememberImagePicker] hands a picked one over (a content URI on Android, a staged path on iOS).
+ * The photo is kept only inside the app, never in the photo library, and without its location.
+ * Null on a device without a camera, where callers offer the photo picker alone.
+ */
+@Composable
+expect fun rememberCameraCapture(onCaptured: (String) -> Unit): (() -> Unit)?
+
+/**
  * Picks a sound file for the completion sound and keeps access to it across restarts. The result
  * is a string the platform's sound player understands (a content URI on Android).
  */

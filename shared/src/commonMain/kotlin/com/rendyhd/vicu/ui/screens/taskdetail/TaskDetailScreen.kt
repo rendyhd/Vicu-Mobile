@@ -57,6 +57,7 @@ import com.rendyhd.vicu.util.WhenLogic
 import com.rendyhd.vicu.util.WhenQuickChoice
 import com.rendyhd.vicu.util.detectRecurrencePreset
 import com.rendyhd.vicu.util.recurrenceForPreset
+import com.rendyhd.vicu.ui.rememberCameraCapture
 import com.rendyhd.vicu.ui.rememberImagePicker
 import com.rendyhd.vicu.ui.rememberFilePicker
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -334,6 +335,7 @@ fun TaskDetailScreen(
 
     val filePickerLauncher = rememberFilePicker(viewModel::uploadAttachment)
     val imagePickerLauncher = rememberImagePicker(viewModel::addImageAttachment)
+    val cameraLauncher = rememberCameraCapture(viewModel::addImageAttachment)
 
     LaunchedEffect(state.task?.title) {
         val title = state.task?.title ?: return@LaunchedEffect
@@ -628,6 +630,7 @@ fun TaskDetailScreen(
                     taskId = task.id,
                     isUploadingImage = state.isUploadingImage,
                     onAddImageClick = imagePickerLauncher,
+                    onTakePhotoClick = cameraLauncher,
                     onRemoveImageAttachment = viewModel::deleteAttachment,
                     onImagePasted = viewModel::addImageAttachment,
                     editorController = descriptionEditorController,

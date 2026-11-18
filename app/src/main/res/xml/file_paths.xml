@@ -4,4 +4,8 @@
     <cache-path
         name="attachments"
         path="attachments/" />
+    <!-- Photos the camera app writes for Take photo (rememberCameraCapture), until they are uploaded. -->
+    <cache-path
+        name="camera"
+        path="camera/" />
 </paths>

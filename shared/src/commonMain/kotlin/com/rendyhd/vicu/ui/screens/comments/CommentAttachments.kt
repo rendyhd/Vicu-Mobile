@@ -50,6 +50,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.rendyhd.vicu.domain.model.Attachment
+import com.rendyhd.vicu.ui.components.task.ImageSourceMenu
+import com.rendyhd.vicu.ui.rememberCameraCapture
 import com.rendyhd.vicu.ui.rememberFilePicker
 import com.rendyhd.vicu.ui.rememberImagePicker
 import com.rendyhd.vicu.util.CommentSegment
@@ -198,25 +200,18 @@ internal fun CommentFile(
     }
 }
 
-/** The composer's paperclip: a photo or any file. */
+/** The composer's paperclip: a new photo (on a phone with a camera), a photo or any file. */
 @Composable
 internal fun AttachButton(onPicked: (String) -> Unit) {
     val pickImage = rememberImagePicker(onPicked)
     val pickFile = rememberFilePicker(onPicked)
+    val takePhoto = rememberCameraCapture(onPicked)
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.Outlined.AttachFile, contentDescription = "Attach a photo or file")
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Photo") },
-                leadingIcon = { Icon(Icons.Outlined.Image, contentDescription = null) },
-                onClick = {
-                    open = false
-                    pickImage()
-                },
-            )
+        val fileItem: @Composable () -> Unit = {
             DropdownMenuItem(
                 text = { Text("File") },
                 leadingIcon = { Icon(Icons.Outlined.AttachFile, contentDescription = null) },
@@ -225,6 +220,27 @@ internal fun AttachButton(onPicked: (String) -> Unit) {
                     pickFile()
                 },
             )
+        }
+        if (takePhoto != null) {
+            ImageSourceMenu(
+                expanded = open,
+                onDismiss = { open = false },
+                onTakePhoto = takePhoto,
+                onChoosePhoto = pickImage,
+                more = fileItem,
+            )
+        } else {
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(
+                    text = { Text("Choose photo") },
+                    leadingIcon = { Icon(Icons.Outlined.Image, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        pickImage()
+                    },
+                )
+                fileItem()
+            }
         }
     }
 }

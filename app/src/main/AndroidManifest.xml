@@ -29,6 +29,11 @@
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
+        <!-- Take photo: whether a camera app can take one. The app declares no CAMERA permission on purpose:
+             with it declared, the camera app would be refused until it was granted. -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
         <!-- The device voice that reads Talk's answers aloud (TextToSpeech binds to the engine). -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />

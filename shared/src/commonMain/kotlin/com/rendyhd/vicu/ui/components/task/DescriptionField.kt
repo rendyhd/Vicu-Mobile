@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
@@ -98,6 +96,8 @@ internal fun DescriptionField(
     taskId: Long,
     isUploadingImage: Boolean,
     onAddImageClick: () -> Unit,
+    /** Opens the camera; null on a phone without one, where "Add image" picks a photo at once. */
+    onTakePhotoClick: (() -> Unit)?,
     onRemoveImageAttachment: (attachmentId: Long) -> Unit,
     onImagePasted: (String) -> Unit,
     editorController: DescriptionEditorController,
@@ -464,20 +464,11 @@ internal fun DescriptionField(
             }
         }
 
-        TextButton(
-            onClick = {
-                editorController.flush()
-                onAddImageClick()
-            },
-        ) {
-            Icon(
-                Icons.Default.AddPhotoAlternate,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Add image")
-        }
+        AddImageButton(
+            onChoosePhoto = onAddImageClick,
+            onTakePhoto = onTakePhotoClick,
+            beforeOpen = editorController::flush,
+        )
 
         if (isUploadingImage) {
             Row(

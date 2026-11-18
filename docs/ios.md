@@ -124,7 +124,7 @@ and every call names that UDID. Taps and typing are done by hand or with the iOS
 | HTTP | Ktor Darwin, with NSURLSession's own cookie handling off (the app sends the refresh cookie itself) |
 | `NetworkMonitor` | `IosNetworkMonitor` (NWPathMonitor) |
 | `PlatformFiles` | `IosPlatformFiles` (staged copies, streamed uploads, Quick Look, share sheet) |
-| Pickers | PHPicker (photos, no permission needed), UIDocumentPicker (files, completion sound) |
+| Pickers | PHPicker (photos, no permission needed), UIDocumentPicker (files, completion sound), UIImagePickerController in camera mode for Take photo (`NSCameraUsageDescription`, asked on first use; the simulator has no camera, so Add image picks a photo at once there) |
 | `PlatformRepositoryHooks` | `IosRepositoryHooks`: sync requests, notifications planned again, widgets written |
 | `PlatformSettingsHooks` | `IosSettingsHooks` (test notification, background activity log, quick-add hint) |
 | `PlatformAuthHooks` | `IosAuthHooks` (background refresh keeps the session alive) |

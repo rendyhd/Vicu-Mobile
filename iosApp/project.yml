@@ -70,6 +70,8 @@ targets:
         # Location reminders. No location background mode: CLMonitor relaunches the app for an event.
         NSLocationWhenInUseUsageDescription: Vicu uses your location to remind you when you arrive at or leave a place you chose. It stays on this device.
         NSLocationAlwaysAndWhenInUseUsageDescription: Vicu uses your location to remind you when you arrive at or leave a place you chose, also when the app is closed. It stays on this device.
+        # Take photo under a task's notes and in comments: asked the first time the camera opens.
+        NSCameraUsageDescription: Vicu uses the camera to take a photo for a task. The photo is kept with the task, not in your photo library.
         # Holding + to say a task: asked on the first hold, never at start (docs/voice-input.md).
         NSMicrophoneUsageDescription: Vicu listens while you hold the + button or turn its microphone on, to add what you say as tasks and to answer your questions in Ask.
         NSSpeechRecognitionUsageDescription: Vicu turns what you say into text for your tasks and for Ask. Apple processes the speech, on the device where it can; with a speech model downloaded in Settings, Assistant, it stays on the device.
