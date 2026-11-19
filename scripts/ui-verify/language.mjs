@@ -71,6 +71,8 @@ try {
 
   // ---- E. The Language row ------------------------------------------------------------------------
   await n.drawer('Settings')
+  // Settings keeps its scroll position (a relaunch restores it): start from the top.
+  await n.listToTop()
   const row = await n.scrollFind((node) => node.text === 'Taal', 'the Language row').catch(() => null)
   const onScreen = texts()
   check('Settings has the Language row, named in Dutch', row !== null && onScreen.includes('Taal'))
