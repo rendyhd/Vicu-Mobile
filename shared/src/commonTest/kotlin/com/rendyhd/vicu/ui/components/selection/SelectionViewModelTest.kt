@@ -2,6 +2,8 @@ package com.rendyhd.vicu.ui.components.selection
 
 import com.rendyhd.vicu.data.repository.TaskDuplicator
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.ui.screens.shared.COMPLETION_UNDO
+import com.rendyhd.vicu.ui.screens.shared.completionText
 import com.rendyhd.vicu.ui.FakeCollaborationRepository
 import com.rendyhd.vicu.ui.FakeLabelRepository
 import com.rendyhd.vicu.ui.FakeProjectRepository
@@ -146,8 +148,8 @@ class SelectionViewModelTest {
         assertTrue(listOf(1L, 2L, 3L).all { rig.tasks.current(it)!!.done })
         assertEquals(emptySet(), rig.vm.selectedIds.value)
         // The rows join the one app-wide toast; the snackbar shows the newest message.
-        assertEquals("3 completed", rig.received.last().text)
-        assertTrue(rig.received.all { it.actionLabel == "Undo" })
+        assertEquals("3 completed", rig.received.last().completionText())
+        assertTrue(rig.received.all { it.action == COMPLETION_UNDO })
     }
 
     @Test
@@ -191,12 +193,12 @@ class SelectionViewModelTest {
 
         rig.vm.bulkComplete(hold)
         runCurrent()
-        assertEquals(listOf("Completed"), rig.received.map { it.text }, "the unheld row is announced now")
+        assertEquals(listOf("Completed"), rig.received.map { it.completionText() }, "the unheld row is announced now")
 
         advanceTimeBy(CompletionHold.HOLD_MILLIS + 1)
         runCurrent()
-        assertEquals("3 completed", rig.received.last().text, "the held rows join when their hold ends")
-        assertTrue(rig.received.none { it.text.contains("tasks completed") }, "no second kind of message")
+        assertEquals("3 completed", rig.received.last().completionText(), "the held rows join when their hold ends")
+        assertTrue(rig.received.none { it.completionText().contains("tasks completed") }, "no second kind of message")
 
         rig.received.last().onAction?.invoke()
         runCurrent()

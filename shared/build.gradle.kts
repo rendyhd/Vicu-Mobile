@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
@@ -21,6 +22,12 @@ kotlin {
 
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
+
+        // The strings in src/commonMain/composeResources reach the APK as Android assets; this
+        // library plugin packages none unless asked.
+        androidResources {
+            enable = true
         }
 
         // The unit tests of this module (androidHostTest and commonTest) run on the JVM.
@@ -66,6 +73,7 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
+            implementation(libs.compose.components.resources)
             implementation(libs.navigationevent.compose)
             implementation(libs.compose.material.icons.extended)
             implementation(libs.cascade.editor)
@@ -113,6 +121,7 @@ kotlin {
         getByName("androidHostTest").dependencies {
             implementation(libs.junit)
             implementation(libs.sqlite.jdbc)
+            implementation(libs.icu4j)
         }
 
         commonTest.dependencies {
@@ -125,6 +134,16 @@ kotlin {
             implementation(libs.koin.test)
         }
     }
+}
+
+// The app's text (docs/translating.md): src/commonMain/composeResources/values/strings.xml is the
+// English source and values-<language>/strings.xml a translation. The plugin generates
+// com.rendyhd.vicu.resources.Res with one typed accessor per string, so a key that does not exist
+// does not compile; :app reads it too (notifications, widgets).
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.rendyhd.vicu.resources"
+    generateResClass = always
 }
 
 ksp {
@@ -196,6 +215,12 @@ val generateAiContract by tasks.registering {
     }
 }
 kotlin.sourceSets.matching { it.name == "commonMain" }.configureEach { kotlin.srcDir(generateAiContract) }
+
+// `-Pi18nBaseline` makes HardcodedTextTest write its baseline again instead of comparing with it
+// (after text moved into composeResources; docs/translating.md, CLAUDE.md "Translations").
+tasks.withType<Test>().configureEach {
+    systemProperty("vicu.i18n.updateBaseline", providers.gradleProperty("i18nBaseline").isPresent.toString())
+}
 
 // The Kotlin Multiplatform library plugin has no `test` task (only testAndroidHostTest and
 // allTests, which also lists the iOS targets), so `./gradlew test` would skip this module's tests.

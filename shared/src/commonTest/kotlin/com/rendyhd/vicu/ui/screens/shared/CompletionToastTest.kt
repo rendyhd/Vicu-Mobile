@@ -58,8 +58,8 @@ class CompletionToastTest {
         advanceTimeBy(1)
         runCurrent()
         val message = rig.received.single()
-        assertEquals("Completed", message.text)
-        assertEquals("Undo", message.actionLabel)
+        assertEquals("Completed", message.completionText())
+        assertEquals(COMPLETION_UNDO, message.action)
         assertEquals(6_000L, message.durationMillis)
     }
 
@@ -74,7 +74,7 @@ class CompletionToastTest {
         rig.toast.collapsed(3)
         runCurrent()
 
-        assertEquals(listOf("Completed", "2 completed", "3 completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "2 completed", "3 completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -86,7 +86,7 @@ class CompletionToastTest {
         rig.toast.collapsed(2)
         runCurrent()
 
-        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -132,7 +132,7 @@ class CompletionToastTest {
         rig.toast.collapsed(1)
         runCurrent()
 
-        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -144,7 +144,7 @@ class CompletionToastTest {
         rig.toast.collapsed(1)
         runCurrent()
 
-        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -159,7 +159,7 @@ class CompletionToastTest {
         rig.toast.collapsed(1)
         runCurrent()
 
-        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "Completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -173,7 +173,7 @@ class CompletionToastTest {
         hold.releaseAll()
         runCurrent()
 
-        assertEquals(listOf("Completed", "2 completed"), rig.received.map { it.text })
+        assertEquals(listOf("Completed", "2 completed"), rig.received.map { it.completionText() })
     }
 
     @Test
@@ -190,7 +190,7 @@ class CompletionToastTest {
         advanceTimeBy(CompletionHold.HOLD_MILLIS + 1)
         runCurrent()
 
-        assertEquals(listOf("Completed"), rig.received.map { it.text }, "only row 3 completed and stayed")
+        assertEquals(listOf("Completed"), rig.received.map { it.completionText() }, "only row 3 completed and stayed")
         assertNull(hold.state.value[3])
     }
 }

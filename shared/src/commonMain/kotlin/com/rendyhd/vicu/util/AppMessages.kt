@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.util
 
+import com.rendyhd.vicu.i18n.UiText
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -11,16 +12,34 @@ import kotlinx.coroutines.flow.receiveAsFlow
  * [durationMillis] stays that long (longer when an accessibility service asks for more time)
  * instead of the snackbar's long default; a newer message replaces it. With [openTaskId], for a
  * message about one new task, the snackbar also offers Open, which opens that task's editor.
+ *
+ * [content] and [action] are what is shown: a string of the catalog, which the snackbar reads in
+ * the reader's language, or plain text ([UiText.Raw]) from a poster that is not translated yet.
  */
 class AppMessage(
-    val text: String,
-    val actionLabel: String? = null,
+    val content: UiText,
+    val action: UiText? = null,
     val onAction: (() -> Unit)? = null,
     val durationMillis: Long? = null,
     val openTaskId: Long? = null,
-    /** With [actionLabel], the action opens this custom list. */
+    /** With [action], the action opens this custom list. */
     val openCustomListId: String? = null,
-)
+) {
+    constructor(
+        text: String,
+        actionLabel: String? = null,
+        onAction: (() -> Unit)? = null,
+        durationMillis: Long? = null,
+        openTaskId: Long? = null,
+        openCustomListId: String? = null,
+    ) : this(UiText.Raw(text), actionLabel?.let(UiText::Raw), onAction, durationMillis, openTaskId, openCustomListId)
+
+    /** The text as it was posted, or the name of its string in the catalog ([UiText.name]). */
+    val text: String get() = content.name
+
+    /** The action's label as it was posted, or the name of its string in the catalog. */
+    val actionLabel: String? get() = action?.name
+}
 
 /**
  * App-wide one-shot messages for outcomes nobody is looking at when they arrive, such as an
@@ -53,6 +72,14 @@ class AppMessages {
         onAction: () -> Unit,
     ) {
         if (message.isNotBlank()) channel.trySend(AppMessage(message, actionLabel, onAction, durationMillis, openTaskId))
+    }
+
+    /**
+     * Posts a message from the catalog with an action from the catalog (the completion toast's
+     * "Completed" and "Undo"), for [durationMillis] when given.
+     */
+    fun post(message: UiText, action: UiText, durationMillis: Long? = null, onAction: () -> Unit) {
+        channel.trySend(AppMessage(message, action, onAction, durationMillis))
     }
 
     /** Posts [message] with Open, which opens the custom list [listId]. */

@@ -154,6 +154,7 @@ Found a bug or have an idea? [Open an issue](https://github.com/rendyhd/Vicu-Mob
 - **[vicutodo.app](https://vicutodo.app/)**: the tour, with screenshots of mobile and desktop
 - **[Vicu](https://github.com/rendyhd/Vicu)**: the desktop app for Windows, macOS and Linux, with Quick Entry, Quick View, voice input, Obsidian and browser links
 - **[Vikunja](https://vikunja.io/)**: the open-source backend that powers Vicu
+- **[Translating Vicu](docs/translating.md)**: add your language or improve one
 - **[Privacy policy](docs/privacy-policy.md)**: Vicu collects nothing; your data goes only to your own Vikunja server
 
 ## Support Vicu

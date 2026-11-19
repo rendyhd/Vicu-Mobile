@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_name">Nederlands</string>
+
+    <string name="nav_inbox">Inbox</string>
+    <string name="nav_today">Vandaag</string>
+    <string name="nav_plan">Planning</string>
+    <string name="nav_upcoming">Binnenkort</string>
+    <string name="nav_anytime">Wanneer dan ook</string>
+    <string name="nav_logbook">Logboek</string>
+    <string name="nav_routines">Routines</string>
+    <string name="nav_review">Review</string>
+
+    <plurals name="completion_toast">
+        <item quantity="one">Voltooid</item>
+        <item quantity="other">%1$d voltooid</item>
+    </plurals>
+    <string name="completion_undo">Ongedaan maken</string>
+
+    <string name="settings_language">Taal</string>
+    <string name="settings_language_per_app">Opent de systeeminstellingen, waar je de taal voor Vicu kiest. Tekst die nog niet is vertaald, staat in het Engels.</string>
+    <string name="settings_language_device">Vicu volgt de taal van je apparaat. Tekst die nog niet is vertaald, staat in het Engels.</string>
+</resources>

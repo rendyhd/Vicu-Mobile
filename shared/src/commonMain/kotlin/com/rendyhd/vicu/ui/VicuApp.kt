@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui
 
+import com.rendyhd.vicu.i18n.load
 import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
 import com.rendyhd.vicu.ui.components.shared.VicuSnackbar
 import com.rendyhd.vicu.ui.components.shared.snackbarColors
@@ -483,9 +484,12 @@ fun VicuApp(
     LaunchedEffect(appMessages) {
         appMessages.messages.collectLatest { message ->
             val millis = message.durationMillis
+            // Read here, in the language in use now (a message can wait while the app is in the background).
+            val text = message.content.load()
+            val actionLabel = message.action?.load()
             val result = if (millis == null) {
                 snackbarHostState.showSnackbar(
-                    AppSnackbarVisuals(message.text, message.actionLabel, SnackbarDuration.Long, message.openTaskId),
+                    AppSnackbarVisuals(text, actionLabel, SnackbarDuration.Long, message.openTaskId),
                 )
             } else {
                 // A message with its own time (the completion toast): the time runs out here, and an
@@ -494,11 +498,11 @@ fun VicuApp(
                     originalTimeoutMillis = millis,
                     containsIcons = false,
                     containsText = true,
-                    containsControls = message.actionLabel != null,
+                    containsControls = actionLabel != null,
                 ) ?: millis
                 withTimeoutOrNull(timeout) {
                     snackbarHostState.showSnackbar(
-                        AppSnackbarVisuals(message.text, message.actionLabel, SnackbarDuration.Indefinite, message.openTaskId),
+                        AppSnackbarVisuals(text, actionLabel, SnackbarDuration.Indefinite, message.openTaskId),
                     )
                 } ?: SnackbarResult.Dismissed
             }

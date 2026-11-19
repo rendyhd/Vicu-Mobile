@@ -407,6 +407,10 @@ internal fun LazyListScope.behaviorSection(
         WeekStartSetting()
     }
 
+    item(key = "language") {
+        LanguageSetting()
+    }
+
     item(key = "subtask_display_mode") {
         Column(
             modifier = Modifier

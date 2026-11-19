@@ -57,6 +57,8 @@ compose-foundation = { group = "org.jetbrains.compose.foundation", name = "found
 compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "compose-material3" }
 # NavigationBackHandler for Android and iOS (the androidx artifact has no iOS variants).
 navigationevent-compose = { group = "org.jetbrains.androidx.navigationevent", name = "navigationevent-compose", version.ref = "navigationEvent" }
+# Strings and other resources of the shared module (shared/src/commonMain/composeResources, docs/translating.md).
+compose-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "compose-multiplatform" }
 # The last release of the multiplatform icon set. JetBrains stopped publishing it, and the AndroidX
 # artifact (1.7.8) has no iOS variants, so the shared module cannot move to it.
 compose-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version = "1.7.3" }
@@ -112,6 +114,8 @@ kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime",
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 # Runs the Room migrations against a real SQLite in the JVM unit tests (already in the Gradle cache through Room).
 sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version = "3.41.2.2" }
+# The plural forms each language has (CLDR), for the translation checks in :shared androidHostTest only.
+icu4j = { group = "com.ibm.icu", name = "icu4j", version = "76.1" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 
@@ -128,6 +132,8 @@ koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin"
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# Compose Multiplatform: generates the Res class for composeResources (the UI libraries use direct coordinates).
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 

@@ -80,6 +80,16 @@ import com.rendyhd.vicu.util.ProjectCategory
 import com.rendyhd.vicu.util.ProjectProgress
 import com.rendyhd.vicu.util.moveIdBy
 import com.rendyhd.vicu.util.parseHexColor
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.nav_anytime
+import com.rendyhd.vicu.resources.nav_inbox
+import com.rendyhd.vicu.resources.nav_logbook
+import com.rendyhd.vicu.resources.nav_plan
+import com.rendyhd.vicu.resources.nav_review
+import com.rendyhd.vicu.resources.nav_routines
+import com.rendyhd.vicu.resources.nav_today
+import com.rendyhd.vicu.resources.nav_upcoming
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.flow.distinctUntilChanged
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState
@@ -603,49 +613,49 @@ private fun DrawerViewItem(view: DrawerView, state: DrawerUiState, currentRoute:
     val identity = LocalVicuColors.current.identity
     when (view) {
         DrawerView.INBOX -> SmartListItem(
-            label = "Inbox",
+            label = stringResource(Res.string.nav_inbox),
             icon = SmartListIdentity.INBOX.icon,
             iconTint = SmartListIdentity.INBOX.color(identity),
             selected = currentRoute == "InboxRoute",
             onClick = { onNavigate(InboxRoute) },
         )
         DrawerView.TODAY -> SmartListItem(
-            label = "Today",
+            label = stringResource(Res.string.nav_today),
             icon = SmartListIdentity.TODAY.icon,
             iconTint = SmartListIdentity.TODAY.color(identity),
             selected = currentRoute == "TodayRoute",
             onClick = { onNavigate(TodayRoute) },
         )
         DrawerView.PLAN -> SmartListItem(
-            label = "Plan",
+            label = stringResource(Res.string.nav_plan),
             icon = SmartListIdentity.PLAN.icon,
             iconTint = SmartListIdentity.PLAN.color(identity),
             selected = currentRoute == "PlanRoute",
             onClick = { onNavigate(PlanRoute) },
         )
         DrawerView.UPCOMING -> SmartListItem(
-            label = "Upcoming",
+            label = stringResource(Res.string.nav_upcoming),
             icon = SmartListIdentity.UPCOMING.icon,
             iconTint = SmartListIdentity.UPCOMING.color(identity),
             selected = currentRoute == "UpcomingRoute",
             onClick = { onNavigate(UpcomingRoute) },
         )
         DrawerView.ANYTIME -> SmartListItem(
-            label = "Anytime",
+            label = stringResource(Res.string.nav_anytime),
             icon = SmartListIdentity.ANYTIME.icon,
             iconTint = SmartListIdentity.ANYTIME.color(identity),
             selected = currentRoute == "AnytimeRoute",
             onClick = { onNavigate(AnytimeRoute) },
         )
         DrawerView.LOGBOOK -> SmartListItem(
-            label = "Logbook",
+            label = stringResource(Res.string.nav_logbook),
             icon = SmartListIdentity.LOGBOOK.icon,
             iconTint = SmartListIdentity.LOGBOOK.color(identity),
             selected = currentRoute == "LogbookRoute",
             onClick = { onNavigate(LogbookRoute) },
         )
         DrawerView.ROUTINES -> SmartListItem(
-            label = "Routines",
+            label = stringResource(Res.string.nav_routines),
             icon = SmartListIdentity.ROUTINES.icon,
             iconTint = SmartListIdentity.ROUTINES.color(identity),
             selected = currentRoute == "RoutinesRoute",
@@ -653,7 +663,7 @@ private fun DrawerViewItem(view: DrawerView, state: DrawerUiState, currentRoute:
         )
         // With the overdue badge.
         DrawerView.REVIEW -> NavigationDrawerItem(
-            label = { Text("Review") },
+            label = { Text(stringResource(Res.string.nav_review)) },
             icon = {
                 Icon(
                     SmartListIdentity.REVIEW.icon,

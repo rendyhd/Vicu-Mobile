@@ -1,6 +1,10 @@
 package com.rendyhd.vicu.ui.screens.shared
 
 import com.rendyhd.vicu.domain.repository.TaskRepository
+import com.rendyhd.vicu.i18n.UiText
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.completion_toast
+import com.rendyhd.vicu.resources.completion_undo
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.TimeSource
@@ -45,9 +49,15 @@ class CompletionToastCenter(
         // was reopened somewhere else since (the machine cannot see that) and completed again.
         machine.forget(taskId, at)
         machine.collapseNow(taskId, at)
-        val text = machine.snapshot(at).toast ?: return
+        if (machine.snapshot(at).toast == null) return
         val ids = machine.toastIds()
-        messages.post(text, CompletionHold.TOAST_ACTION, CompletionHold.TOAST_MILLIS) { undo(ids) }
+        // The machine's own text is the contract's English (cross-app semantics section 7); what is
+        // shown is the same sentence from the catalog, in the reader's language.
+        messages.post(
+            UiText.Plural(Res.plurals.completion_toast, ids.size),
+            UiText.Res(Res.string.completion_undo),
+            CompletionHold.TOAST_MILLIS,
+        ) { undo(ids) }
     }
 
     /** Undo on the message that named [ids]: they are open again, so the machine forgets them too. */

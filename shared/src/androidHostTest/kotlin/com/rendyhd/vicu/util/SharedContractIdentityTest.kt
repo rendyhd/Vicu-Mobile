@@ -33,6 +33,8 @@ class SharedContractIdentityTest {
         same("docs/description-format-v1.md"),
         same("docs/design-system-v1.md"),
         same("docs/ai-assistant-v1.md"),
+        // The translators' guide covers both apps.
+        same("docs/translating.md"),
         // The local speech engine's C API over whisper.cpp (docs/ai-assistant-v1.md section 3), the
         // same sources in both apps; the JNI glue is Android's own.
         same("native/speech/vicu_speech.h"),

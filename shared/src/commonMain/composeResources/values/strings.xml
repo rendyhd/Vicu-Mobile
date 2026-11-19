@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The English source of the app's text, for Android and iOS (docs/translating.md).
+
+  A translation is values-<language>/strings.xml with the same names (values-nl, values-pt-rBR).
+  A string left out there shows in English. A comment above a string is for translators.
+  Names are lower_snake_case and start with the part of the app they belong to.
+-->
+<resources>
+    <!-- The name of the language of this file, in that language: "Nederlands", "Deutsch", "Français". Settings shows it as the language in use. -->
+    <string name="language_name">English</string>
+
+    <!-- The built-in lists, as the drawer names them. -->
+    <string name="nav_inbox">Inbox</string>
+    <string name="nav_today">Today</string>
+    <string name="nav_plan">Plan</string>
+    <string name="nav_upcoming">Upcoming</string>
+    <string name="nav_anytime">Anytime</string>
+    <string name="nav_logbook">Logbook</string>
+    <string name="nav_routines">Routines</string>
+    <string name="nav_review">Review</string>
+
+    <!-- The message after tasks were completed. %1$d is how many. -->
+    <plurals name="completion_toast">
+        <item quantity="one">Completed</item>
+        <item quantity="other">%1$d completed</item>
+    </plurals>
+    <!-- The button on that message; it makes the tasks open again. -->
+    <string name="completion_undo">Undo</string>
+
+    <!-- Settings, General, Preferences: the row that leads to the language choice. -->
+    <string name="settings_language">Language</string>
+    <!-- Under that row where the system has a language setting per app (Android 13 and later, iOS). -->
+    <string name="settings_language_per_app">Opens the system settings, where you choose the language for Vicu. Text that is not translated yet shows in English.</string>
+    <!-- Under that row where the system has no language setting per app. -->
+    <string name="settings_language_device">Vicu follows the language of your device. Text that is not translated yet shows in English.</string>
+</resources>
