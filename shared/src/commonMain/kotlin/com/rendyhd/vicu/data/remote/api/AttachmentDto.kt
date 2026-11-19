@@ -11,3 +11,19 @@ data class AttachmentDto(
     val created: String = "",
     @SerialName("created_by") val createdBy: UserDto? = null,
 )
+
+/**
+ * The answer to an upload (`AttachmentUploadResult`): the attachments it created, and the files
+ * the server refused, which do not fail the request (it is still a 201).
+ */
+@Serializable
+data class AttachmentUploadResultDto(
+    val success: List<AttachmentDto>? = null,
+    val errors: List<AttachmentUploadErrorDto>? = null,
+)
+
+@Serializable
+data class AttachmentUploadErrorDto(
+    val code: Long? = null,
+    val message: String = "",
+)

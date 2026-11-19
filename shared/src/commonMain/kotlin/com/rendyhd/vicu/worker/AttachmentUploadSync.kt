@@ -10,6 +10,7 @@ import com.rendyhd.vicu.data.local.entity.PendingActionEntity
 import com.rendyhd.vicu.data.mapper.AttachmentMapper
 import com.rendyhd.vicu.data.remote.api.VikunjaApiException
 import com.rendyhd.vicu.data.remote.api.VikunjaApiService
+import com.rendyhd.vicu.data.repository.uploadAndStore
 import com.rendyhd.vicu.util.DateUtils
 import com.rendyhd.vicu.util.ImageTokens
 import com.rendyhd.vicu.util.Logger
@@ -56,11 +57,9 @@ class AttachmentUploadSync(
                 if (!files.exists(upload.file)) {
                     throw IllegalStateException("the copy kept on this device is gone")
                 }
-                val before = api.getAttachments(taskId).map { it.id }.toSet()
-                api.uploadAttachment(taskId, upload.name, upload.size) { files.readChannel(upload.file) }
-                val after = api.getAttachments(taskId)
-                attachmentDao.replaceForTask(taskId, after.map { with(attachmentMapper) { it.toEntity(taskId) } })
-                val made = after.filter { it.id !in before }.maxByOrNull { it.id }?.id
+                val made = uploadAndStore(api, attachmentDao, attachmentMapper, taskId, upload.name, upload.size) {
+                    files.readChannel(upload.file)
+                }?.id
                 upload = upload.copy(uploaded = true, attachmentId = made, error = null)
                 pendingActionDao.updatePayload(action.id, AttachmentQueue.encode(upload))
                 files.delete(upload.file)

@@ -124,10 +124,12 @@ class OfflineAttachmentsTest {
     fun `offline a picked file is copied onto the device and queued without asking the server`() = runTest {
         val rig = Rig(online = false)
 
-        val result = rig.repository.attachPicked(5, "content://pick/photo", intoNotes = true)
+        var heard = false
+        val result = rig.repository.attachPicked(5, "content://pick/photo", intoNotes = true) { _, _ -> heard = true }
 
         assertEquals(AttachResult.Queued("IMG_2031.jpg"), result)
         assertTrue(rig.requests.isEmpty())
+        assertTrue(!heard, "nothing is uploading: the editor shows the waiting row instead")
         val action = rig.uploads().single()
         assertEquals(5L, action.entityId)
         assertEquals(AttachmentQueue.UPLOAD, action.actionType)
@@ -265,6 +267,28 @@ class OfflineAttachmentsTest {
         assertFalse(store.exists(file))
         assertTrue(rig.bodies.single().contains(ImageTokens.imageToken(9)))
         assertTrue(rig.tasks.getByIdSync(5)!!.description.endsWith(ImageTokens.imageToken(9)))
+    }
+
+    @Test
+    fun `an upload the server took is not sent again when reading the list afterwards fails`() = runTest {
+        val rig = Rig(handler = { request ->
+            when {
+                request.method == HttpMethod.Post ->
+                    json("""{"success":[${attachmentJson(9, "IMG_2031.jpg")}],"errors":null}""", HttpStatusCode.Created)
+                request.url.encodedPath == "/tasks/5/attachments" -> respond("", HttpStatusCode.InternalServerError)
+                else -> error("Unexpected ${request.method.value} ${request.url.encodedPath}")
+            }
+        })
+        val file = storedPhoto()
+        val action = queued(rig, QueuedUpload(file = file, name = "IMG_2031.jpg", size = 4))
+
+        rig.sync.process(action, emptyMap())
+
+        val after = AttachmentQueue.decode(rig.queue.getById(action.id)!!)!!
+        assertTrue(after.uploaded)
+        assertEquals(9L, after.attachmentId)
+        assertEquals(listOf(9L), rig.attachments.snapshot().map { it.id })
+        assertFalse(store.exists(file))
     }
 
     @Test

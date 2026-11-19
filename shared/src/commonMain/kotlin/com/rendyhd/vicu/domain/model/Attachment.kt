@@ -40,6 +40,31 @@ data class WaitingUpload(
 }
 
 /**
+ * A file the editor is sending to the server right now, shown at the end of the task's attachments
+ * until the attachment it makes is in the list. [previewUri] is the picked file, drawn for an image.
+ */
+data class UploadingFile(
+    val key: Long,
+    val taskId: Long,
+    val fileName: String,
+    val fileSize: Long,
+    val previewUri: String?,
+    /** The attachments the task had when the upload started: a new one with this name is this file. */
+    internal val knownIds: Set<Long> = emptySet(),
+    /** The attachment the upload made, once the server answered. */
+    internal val attachmentId: Long? = null,
+) {
+    val isImage: Boolean
+        get() = fileName.substringAfterLast('.', "").trim().lowercase() in VIEWABLE_IMAGE_EXTENSIONS
+
+    /** True once [attachments] holds the attachment this upload made (the row takes its place). */
+    fun landedIn(attachments: List<Attachment>): Boolean =
+        attachments.any { a ->
+            a.id == attachmentId || (a.id !in knownIds && a.fileName == fileName)
+        }
+}
+
+/**
  * Whether the in-app viewer shows this file: the image types every platform can draw. Another image
  * type (HEIC, TIFF) opens in another app, whatever the name says; without an image type from the
  * server the extension decides.

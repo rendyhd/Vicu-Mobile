@@ -40,6 +40,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -159,6 +161,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import com.rendyhd.vicu.ui.components.task.UploadingFileRow
 import com.rendyhd.vicu.ui.components.task.WaitingUploadRow
 import com.rendyhd.vicu.domain.model.Attachment
 import com.rendyhd.vicu.domain.model.isViewableImage
@@ -915,8 +918,8 @@ fun TaskDetailScreen(
                             },
                         )
                     },
-                    EditorEntry("attachments", set = state.attachments.isNotEmpty() || state.waitingUploads.isNotEmpty(), addLabel = "File", addIcon = Icons.Outlined.AttachFile, onAdd = filePickerLauncher) {
-                        val count = state.attachments.size + state.waitingUploads.size
+                    EditorEntry("attachments", set = state.attachments.isNotEmpty() || state.waitingUploads.isNotEmpty() || state.uploadingFiles.isNotEmpty(), addLabel = "File", addIcon = Icons.Outlined.AttachFile, onAdd = filePickerLauncher) {
+                        val count = state.attachments.size + state.waitingUploads.size + state.uploadingFiles.size
                         PropertyRow(
                             icon = Icons.Outlined.AttachFile,
                             name = "Attachments",
@@ -1151,10 +1154,19 @@ fun TaskDetailScreen(
                     }
                 }
             }
-            if (visibleAttachments.isNotEmpty() || state.waitingUploads.isNotEmpty()) {
+            if (visibleAttachments.isNotEmpty() || state.waitingUploads.isNotEmpty() || state.uploadingFiles.isNotEmpty()) {
                 item(key = "divider_attachments") {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text("Attachments", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // "plan.pdf attached" for a screen reader, while the upload row turns into the file's own.
+                    state.uploadNotice?.let { notice ->
+                        Box(
+                            modifier = Modifier.size(1.dp).semantics {
+                                contentDescription = notice
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
@@ -1239,6 +1251,10 @@ fun TaskDetailScreen(
                             )
                         }
                     }
+                }
+                // Files on their way now, where their own rows will be once they are listed.
+                items(state.uploadingFiles, key = { "up_${it.key}" }, contentType = { "uploading_file" }) { file ->
+                    UploadingFileRow(file = file)
                 }
                 // Files attached while the server could not be reached, after the uploaded ones.
                 items(state.waitingUploads, key = { "wait_${it.id}" }, contentType = { "waiting_upload" }) { upload ->

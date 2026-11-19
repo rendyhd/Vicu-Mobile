@@ -18,6 +18,12 @@ object WaitingUploadText {
         else -> "Waiting to upload · ${formatByteSize(upload.fileSize)}"
     }
 
+    /** The line under the name of a file being sent now. */
+    fun uploading(size: Long): String = "Uploading · ${formatByteSize(size)}"
+
+    /** What a screen reader says for a file being sent now. */
+    fun uploadingDescription(fileName: String): String = "Uploading $fileName"
+
     /** What a screen reader says for the row. */
     fun description(upload: WaitingUpload): String =
         if (upload.failed) "${upload.fileName}, not uploaded" else "${upload.fileName}, waiting to upload"

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,11 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.rendyhd.vicu.domain.model.UploadingFile
 import com.rendyhd.vicu.domain.model.WaitingUpload
 import com.rendyhd.vicu.util.WaitingUploadText
 
@@ -61,52 +65,17 @@ fun WaitingUploadRow(
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        var thumbnailFailed by remember(upload.id) { mutableStateOf(false) }
-        val showsImage = upload.isImage && upload.localPath != null && !thumbnailFailed
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .semantics(mergeDescendants = true) { contentDescription = WaitingUploadText.description(upload) },
+        UploadTile(
+            imageModel = upload.localPath?.takeIf { upload.isImage },
+            imageKey = upload.id,
+            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = WaitingUploadText.description(upload) },
         ) {
-            if (showsImage) {
-                AsyncImage(
-                    model = upload.localPath,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onError = { thumbnailFailed = true },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .alpha(0.55f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.surfaceContainer),
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.surfaceContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Default.AttachFile, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 4.dp, y = 4.dp)
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(colors.surface),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    if (upload.failed) Icons.Outlined.ErrorOutline else Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = if (upload.failed) colors.error else colors.primary,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+            Icon(
+                if (upload.failed) Icons.Outlined.ErrorOutline else Icons.Outlined.Schedule,
+                contentDescription = null,
+                tint = if (upload.failed) colors.error else colors.primary,
+                modifier = Modifier.size(16.dp),
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -129,6 +98,99 @@ fun WaitingUploadRow(
         }
         IconButton(onClick = onRemove) {
             Icon(Icons.Outlined.Close, contentDescription = "Remove ${upload.fileName}", modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+/**
+ * A file being sent to the server right now, at the end of the task's attachments: the waiting
+ * row's shape with a spinner in the badge and "Uploading · 2.4 MB". It has no buttons; once the
+ * attachment it makes is listed, that row takes its place.
+ */
+@Composable
+fun UploadingFileRow(
+    file: UploadingFile,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = WaitingUploadText.uploadingDescription(file.fileName)
+                liveRegion = LiveRegionMode.Polite
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UploadTile(imageModel = file.previewUri?.takeIf { file.isImage }, imageKey = file.key) {
+            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = colors.primary)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = file.fileName,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = WaitingUploadText.uploading(file.fileSize),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * The 48 dp tile of a file that is not on the server yet: the picture dimmed when [imageModel]
+ * draws, else a file icon, with [badge] in a small circle at the bottom corner.
+ */
+@Composable
+private fun UploadTile(
+    imageModel: String?,
+    imageKey: Long,
+    modifier: Modifier = Modifier,
+    badge: @Composable () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    var thumbnailFailed by remember(imageKey) { mutableStateOf(false) }
+    Box(modifier = modifier.size(48.dp)) {
+        if (imageModel != null && !thumbnailFailed) {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { thumbnailFailed = true },
+                modifier = Modifier
+                    .size(48.dp)
+                    .alpha(0.55f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceContainer),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.AttachFile, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 4.dp, y = 4.dp)
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(colors.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            badge()
         }
     }
 }

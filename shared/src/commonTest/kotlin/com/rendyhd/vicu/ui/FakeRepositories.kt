@@ -441,12 +441,22 @@ class FakeAttachmentRepository : AttachmentRepository {
     val removedWaiting = mutableListOf<Long>()
     val retriedWaiting = mutableListOf<Long>()
 
-    override suspend fun attachPicked(taskId: Long, uriString: String, intoNotes: Boolean): AttachResult {
+    /** Runs while an attach is "on the wire", after [attachPicked] said it is uploading. */
+    var duringUpload: suspend () -> Unit = {}
+
+    override suspend fun attachPicked(
+        taskId: Long,
+        uriString: String,
+        intoNotes: Boolean,
+        onUploading: (fileName: String, size: Long) -> Unit,
+    ): AttachResult {
         if (waitsForServer(taskId)) {
             queued += Triple(taskId, uriString, intoNotes)
             return AttachResult.Queued(uriString.substringAfterLast('/'))
         }
         uploads += taskId to uriString
+        onUploading(uriString.substringAfterLast('/'), 2_400_000)
+        duringUpload()
         return when (val result = uploadResult(taskId, uriString)) {
             is NetworkResult.Success -> AttachResult.Uploaded(result.data)
             is NetworkResult.Error -> AttachResult.Refused(result.message)

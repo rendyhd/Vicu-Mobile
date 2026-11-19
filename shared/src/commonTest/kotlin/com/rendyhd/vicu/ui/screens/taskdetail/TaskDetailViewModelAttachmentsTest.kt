@@ -28,6 +28,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -238,7 +239,7 @@ class TaskDetailViewModelAttachmentsTest {
 
         assertEquals(listOf(42L to "content://pick/1"), rig.attachments.uploads)
         assertEquals(listOf("\"big.bin\" is 25 MB, but the server accepts files up to 20 MB"), rig.received)
-        assertEquals(false, rig.viewModel.uiState.value.isUploadingAttachment)
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty(), "its uploading row is gone")
         rig.close()
     }
 
@@ -261,6 +262,76 @@ class TaskDetailViewModelAttachmentsTest {
         runCurrent()
         assertEquals(listOf(7L), rig.attachments.removedWaiting)
         assertTrue(rig.viewModel.uiState.value.waitingUploads.isEmpty())
+        rig.close()
+    }
+
+    @Test
+    fun `a file shows as uploading while it is sent and its attachment takes its place`() = runTest {
+        val rig = opened()
+        val gate = CompletableDeferred<Unit>()
+        val made = Attachment(id = 10, taskId = 42, fileName = "report.pdf", fileSize = 2_400_000)
+        rig.attachments.duringUpload = { gate.await() }
+        rig.attachments.uploadResult = { _, _ -> NetworkResult.Success(made) }
+
+        rig.viewModel.uploadAttachment("content://pick/report.pdf")
+        runCurrent()
+        val uploading = rig.viewModel.uiState.value.uploadingFiles.single()
+        assertEquals("report.pdf", uploading.fileName)
+        assertEquals(2_400_000, uploading.fileSize)
+        assertEquals("content://pick/report.pdf", uploading.previewUri)
+        assertEquals(listOf(pdf), rig.viewModel.uiState.value.attachments)
+
+        // The upload stored its row before the call returned (it still reads the list): one row, not two.
+        rig.attachments.attachments.value = listOf(pdf, made)
+        runCurrent()
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty())
+        assertEquals(listOf(pdf, made), rig.viewModel.uiState.value.attachments)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty())
+        assertEquals("report.pdf attached", rig.viewModel.uiState.value.uploadNotice)
+        assertTrue(rig.received.isEmpty(), "no snackbar for a file that went through")
+
+        advanceTimeBy(TaskDetailViewModel.UPLOAD_NOTICE_MS + 1)
+        assertEquals(null, rig.viewModel.uiState.value.uploadNotice)
+        rig.close()
+    }
+
+    @Test
+    fun `an upload that answers before its attachment is listed leaves no uploading row behind`() = runTest {
+        val rig = opened()
+        val made = Attachment(id = 10, taskId = 42, fileName = "plan.pdf", fileSize = 3_000)
+        rig.attachments.uploadResult = { _, _ -> NetworkResult.Success(made) }
+
+        rig.viewModel.uploadAttachment("content://pick/plan.pdf")
+        runCurrent()
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty(), "the answer named the attachment")
+
+        // A file of the same name that was there before does not count: the new id does.
+        rig.attachments.attachments.value = listOf(pdf, made)
+        runCurrent()
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty())
+        assertEquals(listOf(pdf, made), rig.viewModel.uiState.value.attachments)
+        rig.close()
+    }
+
+    @Test
+    fun `a refused upload shows as uploading until the server answers and then the snackbar says why`() = runTest {
+        val rig = opened()
+        val gate = CompletableDeferred<Unit>()
+        rig.attachments.duringUpload = { gate.await() }
+        rig.attachments.uploadResult = { _, _ -> NetworkResult.Error("The file is too big.") }
+
+        rig.viewModel.uploadAttachment("content://pick/big.bin")
+        runCurrent()
+        assertEquals(listOf("big.bin"), rig.viewModel.uiState.value.uploadingFiles.map { it.fileName })
+
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(rig.viewModel.uiState.value.uploadingFiles.isEmpty())
+        assertEquals(listOf("The file is too big."), rig.received)
+        assertEquals(null, rig.viewModel.uiState.value.uploadNotice)
         rig.close()
     }
 }

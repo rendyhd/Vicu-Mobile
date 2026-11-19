@@ -40,8 +40,16 @@ interface AttachmentRepository {
      * otherwise copied onto the device and queued (also for a task created offline, which has no
      * server id yet). [intoNotes] puts the image at the end of the notes once it is uploaded; an
      * upload that went through at once leaves that to the caller, as before.
+     *
+     * [onUploading] is called with the file's name and size just before it is sent to the server
+     * (not when it is refused before that, or kept for later), so the editor can show it uploading.
      */
-    suspend fun attachPicked(taskId: Long, uriString: String, intoNotes: Boolean = false): AttachResult
+    suspend fun attachPicked(
+        taskId: Long,
+        uriString: String,
+        intoNotes: Boolean = false,
+        onUploading: (fileName: String, size: Long) -> Unit = { _, _ -> },
+    ): AttachResult
 
     /** True when a file added to [taskId] now would wait for the server (offline, or a task created offline). */
     fun waitsForServer(taskId: Long): Boolean

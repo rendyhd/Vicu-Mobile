@@ -7,11 +7,14 @@ import com.rendyhd.vicu.data.local.entity.AttachmentEntity
 import com.rendyhd.vicu.data.mapper.AttachmentMapper
 import com.rendyhd.vicu.data.remote.api.VikunjaApiService
 import com.rendyhd.vicu.domain.model.Attachment
+import com.rendyhd.vicu.domain.repository.AttachResult
 import com.rendyhd.vicu.util.FakePlatformFiles
 import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.PickedFile
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.plugins.HttpTimeoutCapability
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
@@ -104,15 +107,18 @@ class AttachmentRepositoryImplTest {
 
     private fun info(maxFileSize: String) = """{"version":"v1","max_file_size":"$maxFileSize"}"""
 
+    /** The answer Vikunja 2.4 gives to an upload: the attachments it made. */
+    private fun uploadAnswer(vararg made: String) = """{"success":[${made.joinToString(",")}],"errors":null}"""
+
     /** A server that has no attachments, then one with id 9 once something was posted. */
-    private fun uploadServer(maxFileSize: String = "20MB"): Harness {
+    private fun uploadServer(maxFileSize: String = "20MB", answer: String = uploadAnswer(attachmentJson(9, "x.txt", 11))): Harness {
         var posted = false
         return Harness { request, _ ->
             when {
                 request.url.encodedPath == "/info" -> json(info(maxFileSize))
                 request.method == HttpMethod.Post -> {
                     posted = true
-                    json("{}", HttpStatusCode.Created)
+                    json(answer, HttpStatusCode.Created)
                 }
                 request.method == HttpMethod.Get && request.url.encodedPath == "/tasks/5/attachments" ->
                     json(if (posted) page(attachmentJson(9, "x.txt", 11)) else page())
@@ -162,6 +168,106 @@ class AttachmentRepositoryImplTest {
         assertEquals(1, h.files.channelsOpened, "the file is read once, as a stream")
         assertEquals(listOf(9L), h.dao.snapshot().map { it.id })
         assertEquals(h.files.sourcesOpened, h.files.sourcesClosed, "the source is closed afterwards")
+    }
+
+    @Test
+    fun `the attachment named in the upload answer shows at once even when reading the list fails`() = runTest {
+        // The task already has a file; the second is uploaded and then the list cannot be read.
+        val h = Harness { request, _ ->
+            when {
+                request.url.encodedPath == "/info" -> json(info("20MB"))
+                request.method == HttpMethod.Post -> json(uploadAnswer(attachmentJson(9, "second.txt")), HttpStatusCode.Created)
+                request.method == HttpMethod.Get && request.url.encodedPath == "/tasks/5/attachments" ->
+                    respond("", HttpStatusCode.InternalServerError)
+                else -> error("Unexpected ${request.method.value} ${request.url.encodedPath}")
+            }
+        }
+        h.dao.upsert(AttachmentEntity(id = 8, taskId = 5, fileName = "first.txt"))
+        h.files.files["content://pick/1"] = PickedFile("second.txt", "hello".encodeToByteArray())
+
+        val result = h.repository.attachPicked(5, "content://pick/1")
+
+        assertTrue(result is AttachResult.Uploaded, "$result")
+        assertEquals(9L, result.attachment.id)
+        assertEquals(listOf(8L, 9L), h.dao.getByTaskId(5).first().map { it.id }.sorted())
+        assertEquals(1, h.count(HttpMethod.Post, "/tasks/5/attachments"), "the file is sent once")
+    }
+
+    @Test
+    fun `a list that does not have the new file yet does not take it away again`() = runTest {
+        val h = Harness { request, _ ->
+            when {
+                request.url.encodedPath == "/info" -> json(info("20MB"))
+                request.method == HttpMethod.Post -> json(uploadAnswer(attachmentJson(9, "second.txt")), HttpStatusCode.Created)
+                request.method == HttpMethod.Get && request.url.encodedPath == "/tasks/5/attachments" ->
+                    json(page(attachmentJson(8, "first.txt")))
+                else -> error("Unexpected ${request.method.value} ${request.url.encodedPath}")
+            }
+        }
+        h.dao.upsert(AttachmentEntity(id = 7, taskId = 5, fileName = "deleted elsewhere.txt"))
+        h.files.files["content://pick/1"] = PickedFile("second.txt", "hello".encodeToByteArray())
+
+        assertTrue(h.repository.attachPicked(5, "content://pick/1") is AttachResult.Uploaded)
+
+        assertEquals(listOf(8L, 9L), h.dao.getByTaskId(5).first().map { it.id }.sorted())
+    }
+
+    @Test
+    fun `a file the server refuses in its answer is refused with the server's reason`() = runTest {
+        val h = uploadServer(answer = """{"success":null,"errors":[{"code":4013,"message":"The file is too big."}]}""")
+        h.files.files["content://pick/1"] = PickedFile("x.txt", "hello".encodeToByteArray())
+
+        val result = h.repository.attachPicked(5, "content://pick/1")
+
+        assertEquals(AttachResult.Refused("The file is too big."), result)
+        assertTrue(h.dao.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `an upload gets time by its size and not the engine's cutoff for a quiet socket`() = runTest {
+        var timeout: HttpTimeoutConfig? = null
+        val h = Harness { request, _ ->
+            when {
+                request.url.encodedPath == "/info" -> json(info("20MB"))
+                request.method == HttpMethod.Post -> {
+                    timeout = request.getCapabilityOrNull(HttpTimeoutCapability)
+                    json(uploadAnswer(attachmentJson(9, "x.txt")), HttpStatusCode.Created)
+                }
+                else -> json(page(attachmentJson(9, "x.txt")))
+            }
+        }
+        h.files.files["content://pick/1"] = PickedFile("x.txt", ByteArray(2_400_000))
+
+        h.repository.attachPicked(5, "content://pick/1")
+
+        assertEquals(97_000L, timeout?.requestTimeoutMillis)
+        assertEquals(97_000L, timeout?.socketTimeoutMillis)
+    }
+
+    @Test
+    fun `the editor hears a file's name and size just before it is sent`() = runTest {
+        val h = uploadServer()
+        h.files.files["content://pick/1"] = PickedFile("x.txt", "hello".encodeToByteArray())
+        val heard = mutableListOf<Pair<String, Long>>()
+
+        h.repository.attachPicked(5, "content://pick/1") { name, size ->
+            heard += name to size
+            assertEquals(0, h.count(HttpMethod.Post, "/tasks/5/attachments"), "before the file goes out")
+        }
+
+        assertEquals(listOf("x.txt" to 5L), heard)
+    }
+
+    @Test
+    fun `an answer without the attachment falls back to the task's list`() = runTest {
+        val h = uploadServer(answer = "{}")
+        h.files.files["content://pick/1"] = PickedFile("x.txt", "hello".encodeToByteArray())
+
+        val result = h.repository.attachPicked(5, "content://pick/1")
+
+        assertTrue(result is AttachResult.Uploaded, "$result")
+        assertEquals(9L, result.attachment.id)
+        assertEquals(listOf(9L), h.dao.snapshot().map { it.id })
     }
 
     @Test

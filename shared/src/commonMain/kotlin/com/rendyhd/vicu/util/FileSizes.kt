@@ -43,3 +43,20 @@ fun formatByteSize(bytes: Long): String {
     val text = if (rounded == rounded.toLong().toDouble()) rounded.toLong().toString() else rounded.toString()
     return "$text ${units[index]}"
 }
+
+private const val MIN_UPLOAD_TIMEOUT_MS = 60_000L
+private const val MAX_UPLOAD_TIMEOUT_MS = 30 * 60_000L
+private const val ASSUMED_SLOWEST_BYTES_PER_SECOND = 64 * 1024L
+
+/**
+ * How long an upload of [bytes] may take, the desktop's `uploadTimeoutMs`: a minute covers a small
+ * file, larger ones get a second per 64 KB on top, capped at 30 minutes; an unknown size gets the
+ * cap. The whole upload gets this time, also for a quiet stretch: when the network holds the
+ * file's last part in its buffers, the server answers only once it has it all, and a shorter
+ * cutoff there gave up on uploads the server then took (and the queue sent them a second time).
+ */
+fun uploadTimeoutMillis(bytes: Long?): Long {
+    if (bytes == null) return MAX_UPLOAD_TIMEOUT_MS
+    val extra = (bytes.coerceAtLeast(0) + ASSUMED_SLOWEST_BYTES_PER_SECOND - 1) / ASSUMED_SLOWEST_BYTES_PER_SECOND * 1000
+    return minOf(MAX_UPLOAD_TIMEOUT_MS, MIN_UPLOAD_TIMEOUT_MS + extra)
+}

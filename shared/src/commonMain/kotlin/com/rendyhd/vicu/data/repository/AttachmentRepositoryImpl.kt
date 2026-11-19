@@ -118,19 +118,19 @@ class AttachmentRepositoryImpl(
         }
     }
 
-    /** Uploads [source], stores the task's new list and returns the attachment it made. */
+    /** Uploads [source], stores the attachment it made (and the task's list) and returns it. */
     private suspend fun upload(taskId: Long, source: UploadSource): Attachment {
-        val beforeIds = api.getAttachments(taskId).map { it.id }.toSet()
-        api.uploadAttachment(taskId, source.fileName, source.size, source::channel)
-        val afterDtos = api.getAttachments(taskId)
-        val newDto = afterDtos.filter { it.id !in beforeIds }.maxByOrNull { it.id }
+        val made = uploadAndStore(api, attachmentDao, attachmentMapper, taskId, source.fileName, source.size, source::channel)
             ?: throw IllegalStateException("Upload succeeded but new attachment not found")
-        attachmentDao.replaceForTask(taskId, afterDtos.map { with(attachmentMapper) { it.toEntity(taskId) } })
-        val newEntity = with(attachmentMapper) { newDto.toEntity(taskId) }
-        return with(attachmentMapper) { newEntity.toDomain() }
+        return with(attachmentMapper) { made.toDomain() }
     }
 
-    override suspend fun attachPicked(taskId: Long, uriString: String, intoNotes: Boolean): AttachResult {
+    override suspend fun attachPicked(
+        taskId: Long,
+        uriString: String,
+        intoNotes: Boolean,
+        onUploading: (fileName: String, size: Long) -> Unit,
+    ): AttachResult {
         val limit = maxUploadBytes()
         val (source, problem) = open(uriString, limit)
         if (source == null) return AttachResult.Refused(problem ?: "Could not read the file")
@@ -138,6 +138,7 @@ class AttachmentRepositoryImpl(
             // A task created offline has no server id yet; offline, a request would only fail.
             if (!waitsForServer(taskId)) {
                 try {
+                    onUploading(source.fileName, source.size)
                     return AttachResult.Uploaded(upload(taskId, source))
                 } catch (e: CancellationException) {
                     throw e

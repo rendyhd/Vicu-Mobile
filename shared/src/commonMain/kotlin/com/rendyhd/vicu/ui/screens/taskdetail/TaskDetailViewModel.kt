@@ -14,6 +14,7 @@ import com.rendyhd.vicu.data.repository.TaskTemplateStore
 import com.rendyhd.vicu.data.repository.ProCapture
 import com.rendyhd.vicu.data.repository.ProCaptureSource
 import com.rendyhd.vicu.domain.model.Attachment
+import com.rendyhd.vicu.domain.model.UploadingFile
 import com.rendyhd.vicu.domain.model.WaitingUpload
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
@@ -57,6 +58,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -85,7 +87,10 @@ data class TaskDetailUiState(
     val isDeleted: Boolean = false,
     val inboxProjectId: Long = 0L,
     val isUploadingImage: Boolean = false,
-    val isUploadingAttachment: Boolean = false,
+    /** Files being sent to the server now, after the attachments, until the attachment they made is listed. */
+    val uploadingFiles: List<UploadingFile> = emptyList(),
+    /** "plan.pdf attached", for a screen reader, for a few seconds after an upload lands. */
+    val uploadNotice: String? = null,
     /** Attachments being deleted: hidden until the server answers, back again if it refuses. */
     val deletingAttachmentIds: Set<Long> = emptySet(),
     /** Attachments being downloaded to open or share. */
@@ -122,6 +127,9 @@ class TaskDetailViewModel(
 
         /** How long the editor must be idle before its changes are saved on their own. */
         internal const val AUTOSAVE_DELAY_MS = 1_000L
+
+        /** How long "plan.pdf attached" is there for a screen reader. */
+        internal const val UPLOAD_NOTICE_MS = 5_000L
     }
 
     private val _uiState = MutableStateFlow(TaskDetailUiState())
@@ -130,6 +138,10 @@ class TaskDetailViewModel(
     /** Collectors started by loadTask; cancelled when a different task is loaded so a
      *  previously opened task's Room emissions can't overwrite the current task's state. */
     private val loadJobs = mutableListOf<Job>()
+
+    /** Uploads under way from this editor, of any task it showed (each knows its task). */
+    private val uploadsInFlight = MutableStateFlow<List<UploadingFile>>(emptyList())
+    private var uploadKeys = 0L
 
     /** Preserved link HTML stripped from description for display, re-appended on save. */
     private var preservedLinkHtml = ""
@@ -354,8 +366,14 @@ class TaskDetailViewModel(
 
     private fun collectAttachments(taskId: Long) {
         loadJobs += viewModelScope.launch {
-            attachmentRepository.getByTaskId(taskId).collect { attachments ->
-                _uiState.update { it.copy(attachments = attachments) }
+            combine(attachmentRepository.getByTaskId(taskId), uploadsInFlight) { attachments, flights ->
+                attachments to flights.filter { it.taskId == taskId }
+            }.collect { (attachments, flights) ->
+                // An upload's row goes once its attachment is listed, so the file stays in one place.
+                val shown = flights.filter { it.attachmentId == null && !it.landedIn(attachments) }
+                _uiState.update { it.copy(attachments = attachments, uploadingFiles = shown) }
+                val done = flights.filter { it.attachmentId != null && it.landedIn(attachments) }.map { it.key }.toSet()
+                if (done.isNotEmpty()) uploadsInFlight.update { list -> list.filterNot { it.key in done } }
             }
         }
         loadJobs += viewModelScope.launch {
@@ -766,16 +784,41 @@ class TaskDetailViewModel(
 
     fun uploadAttachment(uriString: String) {
         val task = _uiState.value.task ?: return
+        val key = ++uploadKeys
         viewModelScope.launch {
-            _uiState.update { it.copy(isUploadingAttachment = true) }
-            val result = attachmentRepository.attachPicked(task.id, uriString)
-            _uiState.update { it.copy(isUploadingAttachment = false) }
+            val result = try {
+                attachmentRepository.attachPicked(task.id, uriString) { fileName, size ->
+                    val known = _uiState.value.attachments.mapTo(HashSet()) { it.id }
+                    uploadsInFlight.update { it + UploadingFile(key, task.id, fileName, size, uriString, known) }
+                }.also { if (it is AttachResult.Uploaded) landed(key, it.attachment.id) }
+            } finally {
+                // A finished upload stays (hidden) until its attachment is listed; anything else goes now.
+                uploadsInFlight.update { list -> list.filterNot { it.key == key && it.attachmentId == null } }
+            }
             // Posted to the app-wide snackbar: the editor may have been closed by now.
             when (result) {
                 is AttachResult.Refused -> appMessages.post(result.message)
                 is AttachResult.Queued -> appMessages.post(WaitingUploadText.queued(result.fileName))
-                is AttachResult.Uploaded -> Unit
+                is AttachResult.Uploaded -> announceAttached(result.attachment.fileName)
             }
+        }
+    }
+
+    /**
+     * Notes the attachment an upload made; the collector keeps the upload's row out of sight from
+     * now on and lets it go once the attachment is listed.
+     */
+    private fun landed(key: Long, attachmentId: Long) {
+        uploadsInFlight.update { list -> list.map { if (it.key == key) it.copy(attachmentId = attachmentId) else it } }
+    }
+
+    /** Tells a screen reader that [fileName] is attached, for a few seconds. */
+    private fun announceAttached(fileName: String) {
+        val notice = "$fileName attached"
+        _uiState.update { it.copy(uploadNotice = notice) }
+        viewModelScope.launch {
+            delay(UPLOAD_NOTICE_MS)
+            _uiState.update { if (it.uploadNotice == notice) it.copy(uploadNotice = null) else it }
         }
     }
 

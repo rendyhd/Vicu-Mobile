@@ -28,6 +28,8 @@ import com.rendyhd.vicu.data.remote.ApiTokenPermission
 import com.rendyhd.vicu.data.remote.NotApiResponse
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.contentDispositionFileParameter
+import com.rendyhd.vicu.util.uploadTimeoutMillis
+import io.ktor.client.plugins.timeout
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -265,9 +267,19 @@ class VikunjaApiService(
      * Uploads a file by streaming it: [content] is asked for the bytes when the request is sent
      * (and again if it has to be sent again), so the file is never held in memory. [size] lets
      * the request state its length up front.
+     *
+     * The answer names the attachments made and the files refused. It is read leniently: once the
+     * server said 201 the file is stored, whatever the body holds, so an answer that cannot be read
+     * is an empty result rather than a failure (which would send the file again).
      */
-    suspend fun uploadAttachment(taskId: Long, fileName: String, size: Long?, content: () -> ByteReadChannel) {
-        client.post("tasks/$taskId/attachments") {
+    suspend fun uploadAttachment(taskId: Long, fileName: String, size: Long?, content: () -> ByteReadChannel): AttachmentUploadResultDto {
+        val response = client.post("tasks/$taskId/attachments") {
+            // Time by the file's size, as on the desktop, instead of the engine's cutoff for a quiet socket.
+            timeout {
+                val millis = uploadTimeoutMillis(size)
+                requestTimeoutMillis = millis
+                socketTimeoutMillis = millis
+            }
             setBody(
                 MultiPartFormDataContent(
                     formData {
@@ -282,7 +294,20 @@ class VikunjaApiService(
                     },
                 ),
             )
-        }.requireStatus(HttpStatusCode.Created)
+        }
+        response.ensureSuccess(HttpStatusCode.Created)
+        val text = try {
+            response.bodyAsText()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return AttachmentUploadResultDto()
+        }
+        return try {
+            json.decodeFromString(AttachmentUploadResultDto.serializer(), text)
+        } catch (e: Exception) {
+            AttachmentUploadResultDto()
+        }
     }
 
     /** Streams an attachment to [consume] as it arrives; the body is never collected in memory. */
