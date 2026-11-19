@@ -6,6 +6,8 @@ import com.rendyhd.vicu.voice.AndroidSpeechInput
 import com.rendyhd.vicu.voice.SpeechInput
 import com.rendyhd.vicu.ai.AiKeyStore
 import com.rendyhd.vicu.ai.AndroidAiKeyStore
+import com.rendyhd.vicu.ai.notes.AndroidNotesFiles
+import com.rendyhd.vicu.ai.notes.NotesFiles
 import com.rendyhd.vicu.speech.AndroidAudioRecorder
 import com.rendyhd.vicu.speech.AndroidSpeechEngineNative
 import com.rendyhd.vicu.speech.AndroidSpeechOutput
@@ -110,6 +112,7 @@ val appModule = module {
     single<SpeechOutput> { AndroidSpeechOutput(androidContext()) }
     single<SpeechStorage> { AndroidSpeechStorage(androidContext()) }
     single<AiKeyStore> { AndroidAiKeyStore(androidContext()) }
+    single<NotesFiles> { AndroidNotesFiles(androidContext()) }
     single<PlatformGeofencer> { AndroidGeofencer(androidContext()) }
     single<DeviceLocation> { AndroidDeviceLocation(androidContext()) }
     single<LocationNotifier> { AndroidLocationNotifier(androidContext()) }

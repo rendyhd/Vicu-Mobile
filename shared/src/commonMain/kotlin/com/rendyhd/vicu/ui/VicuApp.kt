@@ -181,6 +181,12 @@ import com.rendyhd.vicu.ai.AiSettingsStore
 import com.rendyhd.vicu.ai.ask.AskList
 import com.rendyhd.vicu.ai.dictation.DictationController
 import com.rendyhd.vicu.ai.dictation.DictationMic
+import com.rendyhd.vicu.ai.notes.NotesController
+import com.rendyhd.vicu.ai.notes.NotesShare
+import com.rendyhd.vicu.ui.screens.notes.NotesSheet
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.notes_share_notes
+import org.jetbrains.compose.resources.stringResource
 import com.rendyhd.vicu.ui.screens.dictation.DictationSheet
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.DateDisplayFormat
@@ -362,6 +368,7 @@ fun VicuApp(
     val aiSettingsStore: AiSettingsStore = koinInject()
     val aiSettings by aiSettingsStore.settings.collectAsStateWithLifecycle(initialValue = AiSettings())
     val dictationController: DictationController = koinInject()
+    val notesController: NotesController = koinInject()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -585,7 +592,8 @@ fun VicuApp(
     var shareChoice by rememberSaveable(stateSaver = SharedContentSaver) { mutableStateOf<SharedContent?>(null) }
     LaunchedEffect(sharedContentValue, authState) {
         if (sharedContentValue != null && authState == AuthState.Authenticated) {
-            if (aiSettings.dictationReady && !sharedContentValue.hasFiles && !sharedContentValue.text.isNullOrBlank()) {
+            // Pictures, PDFs and text files can also become notes (4.9).
+            if (aiSettings.dictationReady && (NotesShare.offers(sharedContentValue) || (!sharedContentValue.hasFiles && !sharedContentValue.text.isNullOrBlank()))) {
                 shareChoice = sharedContentValue
             } else {
                 pendingSharedContent = sharedContentValue
@@ -711,7 +719,13 @@ fun VicuApp(
     val fabHost = remember { AppFabHost() }
     val holdToTalk: HoldToTalk = koinInject()
     // A dictation the model could not turn into tasks comes back after a restart (docs/ai-assistant-v1.md, 4.6).
-    LaunchedEffect(authState) { if (authState == AuthState.Authenticated) dictationController.restoreKept() }
+    LaunchedEffect(authState) {
+        if (authState == AuthState.Authenticated) {
+            dictationController.restoreKept()
+            // Notes not added yet come back too (docs/ai-assistant-v1.md, 4.9.11).
+            notesController.restore()
+        }
+    }
     val fabHint: FabHint = koinInject()
     val fabController = remember(holdToTalk, fabHint) { FabController(holdToTalk, fabHint) }
     fabController.format = dateFormat
@@ -836,6 +850,11 @@ fun VicuApp(
             CompositionLocalProvider(*appLocals) {
                 DrawerContent(
                     showAsk = aiSettings.askReady,
+                    showNotes = aiSettings.dictationReady,
+                    onOpenNotes = {
+                        scope.launch { drawerState.close() }
+                        notesController.open(fabHost.specOf(navController.currentBackStackEntry?.id)?.taskDefaults ?: TaskDefaults())
+                    },
                     state = drawerUiState,
                     currentRoute = currentRoute,
                     onNavigate = { route ->
@@ -1091,17 +1110,28 @@ fun VicuApp(
 
         // Smart dictation's draft cards, over the screens and the editor.
         DictationSheet()
+        // Make tasks from notes (docs/ai-assistant-v1.md, 4.9), over the screens.
+        NotesSheet(onOpenSettings = { navController.navigateTopLevel(SettingsRoute) })
         shareChoice?.let { shared ->
             AlertDialog(
                 onDismissRequest = { shareChoice = null },
                 title = { Text("Add what you shared") },
                 text = { Text("Make separate tasks from it with the assistant, or add it as one task.") },
                 confirmButton = {
-                    TextButton(onClick = {
-                        shareChoice = null
-                        val text = listOfNotNull(shared.subject, shared.text).joinToString("\n\n")
-                        dictationController.start(text, TaskDefaults(listName = "Inbox"))
-                    }) { Text("Make tasks") }
+                    Row {
+                        if (!shared.hasFiles) {
+                            TextButton(onClick = {
+                                shareChoice = null
+                                val text = listOfNotNull(shared.subject, shared.text).joinToString("\n\n")
+                                dictationController.start(text, TaskDefaults(listName = "Inbox"))
+                            }) { Text("Make tasks") }
+                        }
+                        // Pictures, PDFs and text become pages of notes (4.9).
+                        TextButton(onClick = {
+                            shareChoice = null
+                            notesController.openWith(TaskDefaults(listName = "Inbox"), shared.fileUris, NotesShare.text(shared))
+                        }) { Text(stringResource(Res.string.notes_share_notes)) }
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = {

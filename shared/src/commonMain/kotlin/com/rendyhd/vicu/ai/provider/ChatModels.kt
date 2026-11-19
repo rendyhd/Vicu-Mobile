@@ -20,9 +20,10 @@ data class ProviderConnection(
 /** One message of a conversation, in the app's own shape; each protocol writes it its own way. */
 @Serializable
 sealed interface ChatMessage {
+    /** [images] (section 4.9.2): pictures sent before the text. */
     @Serializable
     @SerialName("user")
-    data class User(val text: String) : ChatMessage
+    data class User(val text: String, val images: List<ChatImage> = emptyList()) : ChatMessage
 
     /**
      * [raw] is the provider's own content as it came (Anthropic's blocks, with any thinking blocks
@@ -41,6 +42,10 @@ sealed interface ChatMessage {
     @SerialName("tools")
     data class ToolResults(val results: List<ToolResult>) : ChatMessage
 }
+
+/** A picture in a user message (section 4.9.2): `image/jpeg` or `image/png`, [data] base64 without a `data:` prefix. */
+@Serializable
+data class ChatImage(val mediaType: String, val data: String)
 
 @Serializable
 data class ToolCall(val id: String, val name: String, val arguments: String)

@@ -23,6 +23,11 @@ data class AiSettings(
     val address: String = "",
     val dictationModel: String = "",
     val askModel: String = "",
+    /**
+     * The model that reads pictures of notes (section 4.9.1), picked only when neither the dictation
+     * nor Ask's model reads images; empty otherwise.
+     */
+    val readModel: String = "",
     val dictationOn: Boolean = false,
     val askOn: Boolean = false,
     val talkOn: Boolean = false,
@@ -64,7 +69,7 @@ data class AiSettings(
     fun savingAddress(): AiSettings {
         val id = providerId ?: return this
         if (address.isBlank()) return this
-        val entry = ProviderSetup(address, dictationModel, askModel)
+        val entry = ProviderSetup(address, dictationModel, askModel, readModel)
         val rest = saved().filterNot { sameAddress(it.address, address) }
         return copy(savedAddresses = savedAddresses + (id to (listOf(entry) + rest).take(AiContract.limits.savedAddressesMax)))
     }
@@ -76,7 +81,7 @@ data class AiSettings(
         if (list.none { sameAddress(it.address, address) }) return this
         return copy(
             savedAddresses = savedAddresses + (id to list.map {
-                if (sameAddress(it.address, address)) it.copy(dictationModel = dictationModel, askModel = askModel) else it
+                if (sameAddress(it.address, address)) it.copy(dictationModel = dictationModel, askModel = askModel, readModel = readModel) else it
             }),
         )
     }
@@ -84,7 +89,7 @@ data class AiSettings(
     /** Another preset: what this one was set to is remembered, and the other's comes back (section 7.2). */
     fun choosingProvider(preset: ProviderPreset): AiSettings {
         if (providerId == preset.id) return this
-        val kept = providerId?.let { remembered + (it to ProviderSetup(address, dictationModel, askModel)) } ?: remembered
+        val kept = providerId?.let { remembered + (it to ProviderSetup(address, dictationModel, askModel, readModel)) } ?: remembered
         val back = kept[preset.id]
         // One model to start with: the quicker suggestion, for Ask too (Ask's own is a choice).
         val model = preset.suggestedDictation ?: preset.suggestedAsk ?: ""
@@ -94,6 +99,7 @@ data class AiSettings(
             address = if (preset.addressEditable) back?.address?.ifBlank { null } ?: fixed else fixed,
             dictationModel = back?.dictationModel?.ifBlank { null } ?: model,
             askModel = back?.askModel?.ifBlank { null } ?: model,
+            readModel = back?.readModel.orEmpty(),
             dictationOn = false,
             askOn = false,
             talkOn = false,
@@ -112,6 +118,37 @@ data class AiSettings(
 
     /** Whether the user agreed to send data here, or the address is a model on this device or network. */
     fun hasConsent(): Boolean = consentKey() in consented || isLocalAddress(address)
+
+    /** The agreement to send pictures of pages (sections 4.9 and 7.1): `<provider>|<address>|images`. */
+    fun imagesConsentKey(): String = consentKey() + "|images"
+
+    fun hasImagesConsent(): Boolean = isLocalAddress(address) || (hasConsent() && imagesConsentKey() in consented)
+
+    /** The dictation and Ask models, once each. */
+    fun modelsInUse(): List<String> = listOf(dictationModel, askModel).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    /**
+     * The model that reads pictures of pages (section 4.9.1): the one picked for it, else the
+     * dictation model when it reads images, else Ask's when it does. [ReadingModel.untested] lists
+     * the models, in that order, never asked whether they read images (ask them before deciding);
+     * a null model with none of them means the person picks one.
+     */
+    fun readingModel(): ReadingModel {
+        val picked = readModel.trim()
+        if (picked.isNotEmpty()) {
+            val vision = capabilities(picked)?.vision
+            return ReadingModel(if (vision == false) null else picked, if (vision == null) listOf(picked) else emptyList())
+        }
+        val untested = mutableListOf<String>()
+        for (model in modelsInUse()) {
+            when (capabilities(model)?.vision) {
+                true -> return ReadingModel(model, untested)
+                null -> untested += model
+                false -> Unit
+            }
+        }
+        return ReadingModel(null, untested)
+    }
 
     /** Dictation can run: set up, switched on, a model that gave a structured answer, consent. */
     val dictationReady: Boolean
@@ -177,7 +214,11 @@ data class ProviderSetup(
     val address: String = "",
     val dictationModel: String = "",
     val askModel: String = "",
+    val readModel: String = "",
 )
+
+/** The model that reads pictures of pages, and the models still to be asked (section 4.9.1). */
+data class ReadingModel(val model: String?, val untested: List<String>)
 
 @Serializable
 data class ModelCapabilities(
@@ -185,6 +226,8 @@ data class ModelCapabilities(
     val structured: String? = null,
     /** The model called the probe tool. */
     val tools: Boolean = false,
+    /** The model read the probe image (section 2.4); null: never asked. */
+    val vision: Boolean? = null,
 )
 
 class AiSettingsStore(private val dataStore: DataStore<Preferences>) {

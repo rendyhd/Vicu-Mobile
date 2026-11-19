@@ -43,6 +43,9 @@ object AiContract {
     /** The brain dump's answer: the dictation answer with new projects (section 4.8.2). */
     val brainDumpAnswerSchema: JsonObject get() = root.obj("brainDump").obj("answerSchema")
 
+    /** The answer of a notes request (section 4.9.5). */
+    val notesAnswerSchema: JsonObject get() = root.obj("notes").obj("answerSchema")
+
     /** The answer schema of a guided session's suggestions (section 9.2). */
     val organizeAnswerSchema: JsonObject get() = root.obj("organize").obj("answerSchema")
 
@@ -142,6 +145,15 @@ class AiLimits(private val o: JsonObject) {
     val planDayMinutesMax get() = n("plan_day_minutes_max")
     val planDayMaxTokens get() = n("plan_day_max_tokens")
     val savedAddressesMax get() = n("saved_addresses_max")
+    val notesPagesMax get() = n("notes_pages_max")
+    val notesTasksMax get() = n("notes_tasks_max")
+    val notesBatchChars get() = n("notes_batch_chars")
+    val notesReadMaxTokens get() = n("notes_read_max_tokens")
+    val notesReadParallel get() = n("notes_read_parallel")
+    val notesImageLongEdge get() = n("notes_image_long_edge")
+    val notesFileMaxMb get() = n("notes_file_max_mb")
+    val notesOwnerMaxChars get() = n("notes_owner_max_chars")
+    val notesFromMaxChars get() = n("notes_from_max_chars")
 }
 
 /** A provider preset (section 2.1). */

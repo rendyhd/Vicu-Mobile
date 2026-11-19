@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.data.local
 
 import com.rendyhd.vicu.ai.ask.ConversationStore
+import com.rendyhd.vicu.ai.notes.NotesSessionStore
 import com.rendyhd.vicu.ai.dictation.KeptTranscriptStore
 import com.rendyhd.vicu.data.local.dao.LocalDataDao
 import com.rendyhd.vicu.data.repository.ListPositioner
@@ -60,6 +61,8 @@ class LocalDataWiper(
      */
     private val assistantConversations: ConversationStore? = null,
     private val keptTranscript: KeptTranscriptStore? = null,
+    /** Notes not added yet (docs/ai-assistant-v1.md, 4.9): their pages and plan go with the account. */
+    private val notesSession: NotesSessionStore? = null,
     /** What this device knows of the account's saved filters (cross-app semantics 3.7). */
     private val savedFilters: SavedFilterStore? = null,
     /** Copies of files waiting to upload; they go with the queue that names them. */
@@ -163,6 +166,7 @@ class LocalDataWiper(
         locationReminders?.clear()
         assistantConversations?.clear()
         keptTranscript?.clear()
+        notesSession?.forget()
         savedFilters?.clear()
     }
 }

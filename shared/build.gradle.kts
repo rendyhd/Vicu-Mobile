@@ -104,6 +104,8 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             implementation(libs.tink.android)
             implementation(libs.ktor.client.okhttp)
+            // Scanning pages of notes (docs/ai-assistant-v1.md, 4.9): Play services' document scanner.
+            implementation(libs.play.services.mlkit.document.scanner)
         }
 
         iosMain.dependencies {

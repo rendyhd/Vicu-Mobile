@@ -42,12 +42,15 @@ object DictationChecks {
     /**
      * [answer] matches `dictation.answerSchema` (the caller checked it). A brain dump (section 4.8.3)
      * allows [draftsMax] drafts and reads each task's `project_ref` through [resolveProjectRef].
+     * Notes (section 4.9) read fields of their own from each task that becomes a draft: [onDraft]
+     * gets those tasks as answered, in the drafts' order.
      */
     fun check(
         answer: JsonObject,
         context: DictationContext,
         draftsMax: Int = limits.draftsMax,
         resolveProjectRef: ((String) -> ProjectTarget?)? = null,
+        onDraft: ((JsonObject) -> Unit)? = null,
     ): CheckResult {
         val fields = AiContract.dictationFields
         val dropped = mutableListOf<DroppedField>()
@@ -203,6 +206,7 @@ object DictationChecks {
                 subtasks = subtasks,
                 guessed = fields.filter { it in guessed },
             )
+            onDraft?.invoke(task)
         }
         val unclear = answer["unclear"]?.jsonArray.orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull }
         return CheckResult(drafts, dropped, unclear)

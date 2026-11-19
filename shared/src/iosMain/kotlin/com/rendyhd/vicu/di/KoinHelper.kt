@@ -7,6 +7,8 @@ import com.rendyhd.vicu.voice.IosSpeechInput
 import com.rendyhd.vicu.voice.SpeechInput
 import com.rendyhd.vicu.ai.AiKeyStore
 import com.rendyhd.vicu.ai.IosAiKeyStore
+import com.rendyhd.vicu.ai.notes.IosNotesFiles
+import com.rendyhd.vicu.ai.notes.NotesFiles
 import com.rendyhd.vicu.speech.AudioRecorder
 import com.rendyhd.vicu.speech.IosAudioRecorder
 import com.rendyhd.vicu.speech.IosSpeechEngineNative
@@ -189,6 +191,7 @@ val iosModule = module {
     single<SpeechOutput> { IosSpeechOutput() }
     single<SpeechStorage> { IosSpeechStorage() }
     single<AiKeyStore> { IosAiKeyStore() }
+    single<NotesFiles> { IosNotesFiles() }
     single { IosLocationPermissionPlatform(get()) }
     single<LocationPermissionPlatform> { get<IosLocationPermissionPlatform>() }
     single<PlatformGeofencer> { IosGeofencer(get()) }

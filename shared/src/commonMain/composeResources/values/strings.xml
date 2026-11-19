@@ -34,4 +34,152 @@
     <string name="settings_language_per_app">Opens the system settings, where you choose the language for Vicu. Text that is not translated yet shows in English.</string>
     <!-- Under that row where the system has no language setting per app. -->
     <string name="settings_language_device">Vicu follows the language of your device. Text that is not translated yet shows in English.</string>
+
+    <!-- Make tasks from notes (docs/ai-assistant-v1.md, section 4.9). -->
+    <!-- Notes to tasks (the assistant): the screen's title, and the entry in the menu and in Settings. -->
+    <string name="notes_title">Make tasks from notes</string>
+    <string name="notes_intro">Add typed notes, PDFs, photos or scans of pages. Nothing is sent until you read the pictures or choose Organize, and nothing is added until you choose Add.</string>
+    <!-- The notes’ own title, for example the meeting’s name. -->
+    <string name="notes_notes_title">Title</string>
+    <string name="notes_notes_title_placeholder">Offsite Q4</string>
+    <string name="notes_date">Date of the notes</string>
+    <string name="notes_date_help">Dates in the notes, like “Friday”, are read from this day.</string>
+    <!-- The button next to the notes’ date. -->
+    <string name="notes_change_date">Change</string>
+    <string name="notes_add_files">Add files</string>
+    <!-- Opens the camera’s document scanner. -->
+    <string name="notes_scan">Scan pages</string>
+    <string name="notes_add_text">Add text</string>
+    <string name="notes_text_label">Notes to add as a page</string>
+    <string name="notes_text_placeholder">Type or paste notes</string>
+    <string name="notes_add_this_text">Add as a page</string>
+    <string name="notes_empty">No pages yet.</string>
+    <!-- %1$d is the page’s number. -->
+    <string name="notes_page">Page %1$d</string>
+    <!-- What a page is. -->
+    <string name="notes_kind_text">Text</string>
+    <string name="notes_kind_pdf">PDF text</string>
+    <string name="notes_kind_pdf_image">PDF page</string>
+    <string name="notes_kind_image">Picture</string>
+    <string name="notes_typed_text">Typed text</string>
+    <string name="notes_read_as_image">Read as image</string>
+    <string name="notes_use_text_layer">Use the PDF’s text</string>
+    <string name="notes_move_up">Move page %1$d up</string>
+    <string name="notes_move_down">Move page %1$d down</string>
+    <string name="notes_remove_page">Remove page %1$d</string>
+    <string name="notes_page_text">Text of page %1$d</string>
+    <string name="notes_unread">Not read yet</string>
+    <string name="notes_reading">Reading…</string>
+    <!-- %1$s is why. -->
+    <string name="notes_failed">Could not be read: %1$s</string>
+    <string name="notes_retry">Retry</string>
+    <string name="notes_reading_progress">Reading %1$d of %2$d…</string>
+    <!-- %1$s is a model’s name. -->
+    <string name="notes_read_by">Pictures are read by %1$s.</string>
+    <string name="notes_no_reader">Neither of your models can read pictures. Choose one under Settings, Assistant, then try again.</string>
+    <string name="notes_testing_reader">Checking whether %1$s can read pictures…</string>
+    <string name="notes_organize">Organize</string>
+    <string name="notes_organizing">Organizing part %1$d of %2$d…</string>
+    <string name="notes_organize_failed">Part %1$d of %2$d could not be organized: %3$s</string>
+    <string name="notes_nothing">The model found nothing to do in these notes.</string>
+    <string name="notes_read_first">Read the pictures first, or remove them.</string>
+    <string name="notes_discard">Discard</string>
+    <string name="notes_discard_title">Discard these notes?</string>
+    <string name="notes_discard_text">The pages and the plan made from them are gone.</string>
+    <string name="notes_keep">Keep</string>
+    <string name="notes_close">Close</string>
+    <string name="notes_too_many_pages">At most %1$d pages: the rest were left out.</string>
+    <!-- %1$s is a file’s name. -->
+    <string name="notes_more_pdf_pages">%1$s: only the first pages were added.</string>
+    <string name="notes_file_type">%1$s: this kind of file cannot be read.</string>
+    <string name="notes_file_size">%1$s: larger than %2$d MB.</string>
+    <string name="notes_file_unreadable">%1$s: could not be opened.</string>
+    <string name="notes_file_password">%1$s: the PDF has a password.</string>
+    <string name="notes_file_image">%1$s: the picture could not be read.</string>
+    <!-- %1$s is the provider’s name. -->
+    <string name="notes_consent_title">Send pictures of pages to %1$s?</string>
+    <string name="notes_consent_text">To read a photo or a scan, Vicu sends a picture of each page to %1$s, made smaller and without its location or other details. Typed text and PDFs with text are sent as text.</string>
+    <string name="notes_consent_agree">Agree and read</string>
+    <string name="notes_consent_cancel">Not now</string>
+    <string name="notes_still_open">Notes not added yet: %1$s</string>
+    <string name="notes_still_open_untitled">Notes not added yet</string>
+    <string name="notes_open">Open</string>
+    <string name="notes_not_ready">Turn on Smart dictation under Settings, Assistant to make tasks from notes.</string>
+    <!-- A choice when something is shared to Vicu: make tasks from it as notes. -->
+    <string name="notes_share_notes">Tasks from notes</string>
+    <!-- Before the filter that ticks the cards to add. -->
+    <string name="notes_plan_show">Tick</string>
+    <string name="notes_plan_filter_mine">Mine only</string>
+    <string name="notes_plan_filter_known">Mine and people I know</string>
+    <string name="notes_plan_filter_all">Everything</string>
+    <string name="notes_plan_agreed">Agreed in the meeting</string>
+    <string name="notes_plan_agreed_help">On: items for people in Pro become their promises, not tasks to confirm with them.</string>
+    <!-- The tick of a card; %1$s is the task’s title. -->
+    <string name="notes_plan_include">Add “%1$s”</string>
+    <string name="notes_plan_owner">Who it is for</string>
+    <string name="notes_plan_mine">Me</string>
+    <string name="notes_plan_assign">Assign to %1$s</string>
+    <string name="notes_plan_promise">Promise from %1$s</string>
+    <string name="notes_plan_confirm">Confirm with %1$s</string>
+    <string name="notes_plan_named">%1$s, in the title</string>
+    <!-- %2$s is the line of the page the task comes from. -->
+    <string name="notes_plan_from">Page %1$d: %2$s</string>
+    <string name="notes_plan_decisions">Decisions</string>
+    <string name="notes_plan_questions">Open questions</string>
+    <string name="notes_plan_copy">Copy</string>
+    <string name="notes_plan_copied">Copied</string>
+    <string name="notes_plan_to_log">Keep in Pro’s log</string>
+    <string name="notes_plan_back_to_pages">Back to the pages</string>
+    <string name="notes_plan_ticked">%1$d of %2$d ticked</string>
+    <string name="notes_plan_over_limit">More than %1$d tasks: the rest were left out.</string>
+    <string name="notes_plan_update_off">Change the cards by hand: Update works on notes of one part with at most %1$d tasks.</string>
+    <string name="notes_plan_update">Update</string>
+    <!-- The field for a change to the whole plan, sent with Update. -->
+    <string name="notes_plan_change">Type a change</string>
+    <string name="notes_plan_nothing_ticked">Tick the tasks to add.</string>
+    <string name="notes_plan_assign_failed">“%1$s” could not be assigned.</string>
+    <string name="notes_plan_adding">Adding…</string>
+    <string name="notes_undo">Undo</string>
+    <!-- Settings, Assistant: under Make tasks from notes. -->
+    <string name="settings_assistant_notes_how">Typed notes, PDFs, photos and scans of pages, from the menu or by sharing them to Vicu. Pictures need a model that reads them.</string>
+    <string name="settings_assistant_read_model">Model for reading pictures</string>
+    <string name="settings_assistant_read_help">Neither model above reads pictures, so pictures of notes are read by this one.</string>
+    <string name="settings_assistant_read_used">Pictures of notes are read by %1$s.</string>
+    <string name="settings_assistant_read_none">Pictures of notes need a model that reads them.</string>
+    <!-- A line of Test connection’s result. -->
+    <string name="settings_assistant_result_vision">Reads pictures: notes can be photos and scans</string>
+    <string name="settings_assistant_result_no_vision">Does not read pictures: photos and scans of notes need another model</string>
+    <!-- Settings, Assistant: the agreement before a provider is used, a line of what is sent. -->
+    <string name="settings_assistant_consent_notes">Notes: the text of the notes you add, their title and date, and the same names as dictation plus people you share projects with. Pictures of pages only after you agree to that separately.</string>
+    <!-- How many pages the notes have. -->
+    <plurals name="notes_pages">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <!-- The button that has the model read the pictures of the pages. -->
+    <plurals name="notes_read">
+        <item quantity="one">Read %1$d picture</item>
+        <item quantity="other">Read %1$d pictures</item>
+    </plurals>
+    <plurals name="notes_review_so_far">
+        <item quantity="one">Review the %1$d task so far</item>
+        <item quantity="other">Review the %1$d tasks so far</item>
+    </plurals>
+    <plurals name="notes_plan_add">
+        <item quantity="one">Add %1$d task</item>
+        <item quantity="other">Add %1$d tasks</item>
+    </plurals>
+    <plurals name="notes_plan_repeated">
+        <item quantity="one">%1$d repeated item was left out.</item>
+        <item quantity="other">%1$d repeated items were left out.</item>
+    </plurals>
+    <plurals name="notes_plan_ready">
+        <item quantity="one">%1$d task to check</item>
+        <item quantity="other">%1$d tasks to check</item>
+    </plurals>
+    <!-- After Add; Undo is offered with it. -->
+    <plurals name="notes_added">
+        <item quantity="one">Added %1$d task</item>
+        <item quantity="other">Added %1$d tasks</item>
+    </plurals>
 </resources>

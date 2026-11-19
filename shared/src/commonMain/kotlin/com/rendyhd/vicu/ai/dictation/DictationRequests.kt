@@ -87,7 +87,7 @@ object DictationRequests {
         putJsonArray("tasks") { drafts.forEach { add(draftJson(it, context, withProjectRef = false)) } }
     }.toString()
 
-    private fun draftJson(d: CheckedDraft, context: DictationContext, withProjectRef: Boolean): JsonObject =
+    internal fun draftJson(d: CheckedDraft, context: DictationContext, withProjectRef: Boolean): JsonObject =
         buildJsonObject {
             put("ref", d.ref)
             put("title", d.title)

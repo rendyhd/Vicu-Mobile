@@ -163,8 +163,12 @@ class LlmClient(
         }
     }
 
-    private fun sends(body: JsonObject, field: String): Boolean =
-        if (field == "effort") (body["output_config"] as? JsonObject)?.containsKey("effort") == true else field in body
+    internal fun sends(body: JsonObject, field: String): Boolean = when (field) {
+        "effort" -> (body["output_config"] as? JsonObject)?.containsKey("effort") == true
+        // A picture's `detail` (section 4.9.2) sits in the messages' parts.
+        "detail" -> body["messages"].toString().contains("\"detail\":\"high\"")
+        else -> field in body
+    }
 
     private fun HttpRequestBuilder.authorize(connection: ProviderConnection) {
         val preset = connection.preset
@@ -232,6 +236,7 @@ class LlmClient(
             "temperature" to listOf("temperature"),
             "reasoning_effort" to listOf("reasoning_effort", "reasoning effort", "reasoning"),
             "effort" to listOf("effort"),
+            "detail" to listOf("detail"),
         )
     }
 }

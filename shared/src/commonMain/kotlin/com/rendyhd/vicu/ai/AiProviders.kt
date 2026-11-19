@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ai
 
+import com.rendyhd.vicu.ai.provider.ChatImage
 import com.rendyhd.vicu.ai.provider.ChatMessage
 import com.rendyhd.vicu.ai.provider.ChatRequest
 import com.rendyhd.vicu.ai.provider.LlmClient
@@ -12,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 /** What Test connection found (`docs/ai-assistant-v1.md`, section 2.4). */
@@ -24,6 +26,8 @@ data class ConnectionTest(
     val tools: Boolean,
     /** Why a step failed, for the settings screen. */
     val problems: List<String>,
+    /** The model read the probe image (section 2.4); null when it was not asked (no structured answer). */
+    val vision: Boolean? = null,
 ) {
     val canDictate: Boolean get() = structured != null
     val canAsk: Boolean get() = structured != null && tools
@@ -174,8 +178,74 @@ class AiProviders(
             hint = hint || lacksVersionPath(e, connection)
             false
         }
+        // Reading images (section 2.4) is never needed to switch a feature on.
+        val vision = structuredMode?.let { mode ->
+            val (ok, problem) = probeVision(connection, model, mode)
+            if (problem != null) problems += problem
+            ok
+        }
         if (hint) problems += AiContract.message("addressVersionHint")
-        return ConnectionTest(models, structuredMode, tools, problems)
+        return ConnectionTest(models, structuredMode, tools, problems, vision)
+    }
+
+    /**
+     * Whether [model] reads the probe image (section 2.4), in its structured [mode]: the word equal
+     * ignoring case and spaces at either end, the number equal. A problem in words when it does not.
+     */
+    suspend fun probeVision(connection: ProviderConnection, model: String, mode: StructuredMode): Pair<Boolean, String?> {
+        val vision = AiContract.probe.obj("vision")
+        val image = vision.obj("image")
+        val expect = vision.obj("expect")
+        return try {
+            val answer = structured.request(
+                connection,
+                ChatRequest(
+                    model = model,
+                    system = "",
+                    messages = listOf(ChatMessage.User(vision.str("user"), listOf(ChatImage(image.str("media_type"), image.str("data"))))),
+                    schema = vision.obj("schema"),
+                    structuredMode = mode,
+                    deterministic = true,
+                    idleTimeoutSeconds = AiContract.limits.askIdleTimeoutSeconds,
+                    maxTokens = PROBE_MAX_TOKENS,
+                ),
+            )
+            val word = (answer["word"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            val number = (answer["number"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toDoubleOrNull()
+            val ok = word != null && word.trim().equals(expect.str("word").trim(), ignoreCase = true) &&
+                number == expect.str("number").toDoubleOrNull()
+            ok to if (ok) null else "Pictures: the answer was $answer."
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LlmException) {
+            false to "Pictures: ${e.message}"
+        }
+    }
+
+    /**
+     * Asks a model tested before the image check whether it reads images (section 4.9.1), and keeps
+     * the answer. A model without a structured result is tested whole first.
+     */
+    suspend fun testVision(model: String): Boolean {
+        val settings = settingsStore.current()
+        val caps = settings.capabilities(model)
+        val mode = caps?.structured?.let { StructuredMode.of(it) }
+        val vision = if (mode == null) {
+            val result = test(settings, model)
+            settingsStore.update { s ->
+                s.copy(tested = s.tested + (s.modelKey(model) to ModelCapabilities(result.structured?.wire, result.tools, result.vision)))
+            }
+            result.vision == true
+        } else {
+            val connection = connection(settings) ?: return false
+            val (ok, _) = probeVision(connection, model, mode)
+            settingsStore.update { s ->
+                val known = s.tested[s.modelKey(model)] ?: return@update s
+                s.copy(tested = s.tested + (s.modelKey(model) to known.copy(vision = ok)))
+            }
+            ok
+        }
+        return vision
     }
 
     /** Numbers compare by value (5 and 5.0 are the same answer). */

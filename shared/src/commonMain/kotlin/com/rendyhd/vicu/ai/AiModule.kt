@@ -12,6 +12,9 @@ import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.ai.dictation.DraftWriter
 import com.rendyhd.vicu.ai.dictation.KeptTranscriptStore
 import com.rendyhd.vicu.ai.dictation.PlanWriter
+import com.rendyhd.vicu.ai.notes.NotesController
+import com.rendyhd.vicu.ai.notes.NotesService
+import com.rendyhd.vicu.ai.notes.NotesSessionStore
 import com.rendyhd.vicu.ai.organize.OrganizeService
 import com.rendyhd.vicu.ai.organize.OrganizeSuggester
 import com.rendyhd.vicu.ai.organize.PlanDayService
@@ -79,7 +82,8 @@ class RepositoryAskBackend(
 }
 
 /**
- * The assistant's shared definitions. The platform modules bind [AiKeyStore] and the speech seams
+ * The assistant's shared definitions. The platform modules bind [AiKeyStore], the notes' files
+ * ([com.rendyhd.vicu.ai.notes.NotesFiles]) and the speech seams
  * (`SpeechEngineNative`, `AudioRecorder`, `SpeechOutput`, `SpeechStorage`).
  */
 val aiModule = module {
@@ -127,6 +131,34 @@ val aiModule = module {
             speech = get<SelectingSpeechInput>(),
             settingsStore = get(),
             messages = get(),
+            scope = get(),
+        )
+    }
+    single { NotesSessionStore(createDataStore(get(), "ai_notes_session")) }
+    single {
+        NotesService(
+            providers = get(),
+            settings = get(),
+            dictation = get(),
+            collaboration = get(),
+            behaviorPrefs = get(),
+            proWorld = getOrNull(),
+        )
+    }
+    single {
+        NotesController(
+            service = get(),
+            providers = get(),
+            settings = get(),
+            files = get(),
+            store = get(),
+            planWriter = get(),
+            tasks = get(),
+            collaboration = get(),
+            proLedger = getOrNull(),
+            proWorld = getOrNull(),
+            messages = get(),
+            dayClock = get(),
             scope = get(),
         )
     }

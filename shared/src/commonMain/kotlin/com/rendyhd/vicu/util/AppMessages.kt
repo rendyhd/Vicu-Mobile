@@ -82,6 +82,11 @@ class AppMessages {
         channel.trySend(AppMessage(message, action, onAction, durationMillis))
     }
 
+    /** Posts a message from the catalog. */
+    fun post(message: UiText) {
+        channel.trySend(AppMessage(message))
+    }
+
     /** Posts [message] with Open, which opens the custom list [listId]. */
     fun postOpeningList(message: String, listId: String) {
         if (message.isNotBlank()) channel.trySend(AppMessage(message, actionLabel = "Open", openCustomListId = listId))

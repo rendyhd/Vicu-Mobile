@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.ai
 
 import com.rendyhd.vicu.ai.provider.ChatEvent
+import com.rendyhd.vicu.ai.provider.ChatImage
 import com.rendyhd.vicu.ai.provider.ChatMessage
 import com.rendyhd.vicu.ai.provider.ChatRequest
 import com.rendyhd.vicu.ai.provider.LlmClient
@@ -222,5 +223,39 @@ class AiProviderTest {
         assertTrue(AiSettings.isInsecureRemote("http://example.com/v1"))
         assertFalse(AiSettings.isInsecureRemote("http://10.0.0.5/v1"))
         assertNull(AiSettings.hostOf("not a url"))
+    }
+
+    /** Section 4.9.2: a picture's `detail` is an optional field, left out for that model after a 400 that names it. */
+    @Test
+    fun aRefusedPictureDetailIsLeftOutAndRemembered() = runTest {
+        val (client, connection) = openai(
+            engine(
+                HttpStatusCode.BadRequest to """{"error":{"message":"Unrecognized request argument supplied: detail"}}""",
+                HttpStatusCode.OK to "data: {\"choices\":[{\"delta\":{\"content\":\"Page text\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+            ),
+        )
+        val message = ChatMessage.User("<page>1 of 1</page>", listOf(ChatImage("image/jpeg", "AAEC")))
+        val answer = client.complete(connection, request(message))
+        assertEquals("Page text", answer.message.text)
+        val sent = requests.map { it.second.getValue("messages").jsonArray[1].toString() }
+        assertTrue(sent[0].contains("\"detail\":\"high\""))
+        assertFalse(sent[1].contains("detail"))
+    }
+
+    /** Section 4.9.1: the reading model is the one picked, else the first model in use that reads images. */
+    @Test
+    fun theReadingModelIsPickedOrTheFirstThatReadsPictures() {
+        val base = AiSettings(providerId = "openai", address = "https://api.openai.com/v1", dictationModel = "d", askModel = "a")
+        fun caps(vararg pairs: Pair<String, Boolean?>) = pairs.associate { (model, vision) -> base.modelKey(model) to ModelCapabilities("json_schema", true, vision) }
+        assertEquals(ReadingModel(null, listOf("d", "a")), base.readingModel())
+        assertEquals(ReadingModel("a", emptyList()), base.copy(tested = caps("d" to false, "a" to true)).readingModel())
+        assertEquals(ReadingModel("a", listOf("d")), base.copy(tested = caps("a" to true)).readingModel())
+        assertEquals(ReadingModel(null, emptyList()), base.copy(tested = caps("d" to false, "a" to false)).readingModel())
+        assertEquals(ReadingModel("r", listOf("r")), base.copy(readModel = "r").readingModel())
+        assertEquals(ReadingModel(null, emptyList()), base.copy(readModel = "r", tested = caps("r" to false)).readingModel())
+        // Pictures need an agreement of their own, after the provider's.
+        assertFalse(base.copy(consented = setOf(base.consentKey())).hasImagesConsent())
+        assertTrue(base.copy(consented = setOf(base.consentKey(), base.imagesConsentKey())).hasImagesConsent())
+        assertEquals("openai|https://api.openai.com/v1|images", base.imagesConsentKey())
     }
 }

@@ -10,6 +10,10 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 
+/** A new project an earlier batch of notes made (section 4.9.3), named by its ref in `<projects_so_far>`. */
+@kotlinx.serialization.Serializable
+data class KnownProject(val ref: String, val title: String, val path: String)
+
 /** Where a brain dump's project ref leads: a new project of the plan, or a project that exists. */
 sealed interface ProjectTarget {
     data class New(val ref: String) : ProjectTarget
@@ -24,9 +28,21 @@ sealed interface ProjectTarget {
  * Vectors: `brainDump.checks` of `ai-tools-v1.json`.
  */
 object BrainDumpChecks {
-    /** [answer] matches `brainDump.answerSchema` (the caller checked it). */
-    fun check(answer: JsonObject, context: DictationContext): CheckResult {
+    /**
+     * [answer] matches `brainDump.answerSchema` (the caller checked it). Notes (section 4.9.6) pass
+     * the new projects of earlier batches ([known]: a `parent_ref` or `project_ref` may name one, and
+     * a project with the same path merges into it), number every kept project from
+     * [firstProjectNumber] whatever its ref was, and read their own fields of each kept task ([onDraft]).
+     */
+    fun check(
+        answer: JsonObject,
+        context: DictationContext,
+        known: List<KnownProject> = emptyList(),
+        firstProjectNumber: Int? = null,
+        onDraft: ((JsonObject) -> Unit)? = null,
+    ): CheckResult {
         val limits = AiContract.limits
+        val knownByRef = known.associateBy { it.ref }
         val dropped = mutableListOf<DroppedField>()
         val all = answer["projects"].orEmpty().map { it.jsonObject }
 
@@ -46,7 +62,11 @@ object BrainDumpChecks {
         val paths = LinkedHashMap<String, String>()
         val kept = mutableListOf<CheckedProject>()
         given.forEachIndexed { index, project ->
-            val ref = if (renumber) "p${index + 1}" else refs[index]
+            val ref = when {
+                firstProjectNumber != null -> "p${firstProjectNumber + kept.size}"
+                renumber -> "p${index + 1}"
+                else -> refs[index]
+            }
 
             // 2. Title.
             var title = DictationChecks.oneLine(project.str("title").orEmpty()).trim()
@@ -65,7 +85,12 @@ object BrainDumpChecks {
             var parent: ProjectTarget? = null
             if (parentRef != null) {
                 val at = firstWithRef[parentRef]
-                parent = if (at != null && at < index) outcomes[at] else null
+                parent = when {
+                    at != null && at < index -> outcomes[at]
+                    // A new project of an earlier batch of notes (section 4.9.3).
+                    at == null -> knownByRef[parentRef]?.let { ProjectTarget.New(it.ref) }
+                    else -> null
+                }
                 if (parent == null) dropped += DroppedField(ref, "parent", project.getValue("parent_ref"))
             } else if (parentId != null) {
                 val id = if (parentId.isString) null else parentId.longOrNull
@@ -76,15 +101,17 @@ object BrainDumpChecks {
             // 4. The same project twice: a context project or an earlier new one with this path.
             val parentPath = when (parent) {
                 is ProjectTarget.Existing -> contextById.getValue(parent.id).path
-                is ProjectTarget.New -> paths.getValue(parent.ref)
+                is ProjectTarget.New -> paths[parent.ref] ?: knownByRef.getValue(parent.ref).path
                 null -> null
             }
             val path = if (parentPath == null) title else "$parentPath / $title"
             val key = path.lowercase()
             val existing = context.projects.firstOrNull { it.path.lowercase() == key }
+            val sameKnown = known.firstOrNull { it.path.lowercase() == key }
             val earlier = paths.entries.firstOrNull { it.value.lowercase() == key }?.key
             outcomes[index] = when {
                 existing != null -> ProjectTarget.Existing(existing.id)
+                sameKnown != null -> ProjectTarget.New(sameKnown.ref)
                 earlier != null -> ProjectTarget.New(earlier)
                 else -> {
                     paths[ref] = path
@@ -99,7 +126,11 @@ object BrainDumpChecks {
             answer,
             context.copy(defaultDue = null),
             draftsMax = limits.brainDumpTasksMax,
-            resolveProjectRef = { ref -> firstWithRef[ref]?.let { outcomes[it] } },
+            resolveProjectRef = { ref ->
+                val at = firstWithRef[ref]
+                if (at != null) outcomes[at] else knownByRef[ref]?.let { ProjectTarget.New(it.ref) }
+            },
+            onDraft = onDraft,
         )
         return tasks.copy(projects = kept, dropped = dropped + tasks.dropped)
     }

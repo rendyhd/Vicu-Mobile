@@ -19,8 +19,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 
-/** What Add created: the new tasks' ids (temp ids while offline) and how many failed. */
-data class AddedDrafts(val taskIds: List<Long>, val failed: Int, val firstError: String?)
+/**
+ * What Add created: the new tasks' ids (temp ids while offline) and how many failed; [byDraft] has
+ * each draft's id in the drafts' order, null where it failed.
+ */
+data class AddedDrafts(val taskIds: List<Long>, val failed: Int, val firstError: String?, val byDraft: List<Long?> = emptyList())
 
 /**
  * Creates checked drafts through the path quick add uses (`docs/ai-assistant-v1.md`, section 4.5):
@@ -38,6 +41,7 @@ class DraftWriter(
         val prefs = notificationPrefs.getPrefs().first()
         val known = labels.getAll().first().toMutableList()
         val created = mutableListOf<Long>()
+        val byDraft = mutableListOf<Long?>()
         var failed = 0
         var firstError: String? = null
         val places = locations?.allPlaces().orEmpty()
@@ -59,6 +63,7 @@ class DraftWriter(
                 is NetworkResult.Success -> {
                     val id = result.data.id
                     created += id
+                    byDraft += id
                     for (labelId in labelIds) labels.addToTask(id, labelId)
                     for (title in draft.subtasks) {
                         tasks.createSubtask(id, Task(id = 0, title = title, projectId = draft.projectId))
@@ -70,13 +75,17 @@ class DraftWriter(
                     }
                 }
                 is NetworkResult.Error -> {
+                    byDraft += null
                     failed++
                     if (firstError == null) firstError = result.message
                 }
-                NetworkResult.Loading -> failed++
+                NetworkResult.Loading -> {
+                    byDraft += null
+                    failed++
+                }
             }
         }
-        return AddedDrafts(created, failed, firstError)
+        return AddedDrafts(created, failed, firstError, byDraft)
     }
 
     /** Undo of Add: deletes what was created (with its subtasks). */

@@ -185,6 +185,15 @@ class AssistantSettingsViewModel(
         }
     }
 
+    /** The model that reads pictures of notes when neither the dictation nor Ask's model does (section 4.9.1). */
+    fun setReadModel(model: String) {
+        viewModelScope.launch {
+            store.update { it.copy(readModel = model.trim()).withSavedModels() }
+            val picked = store.current().readModel
+            if (picked.isNotBlank() && store.current().capabilities(picked)?.vision == null) providers.testVision(picked)
+        }
+    }
+
     fun setAskModel(model: String) {
         viewModelScope.launch {
             store.update { it.copy(askModel = model.trim()).withSavedModels() }
@@ -236,9 +245,10 @@ class AssistantSettingsViewModel(
                     structured = result.structured,
                     tools = result.tools,
                     problems = last.problems + result.problems,
+                    vision = result.vision,
                 )
                 store.update { s ->
-                    s.copy(tested = s.tested + (s.modelKey(model) to ModelCapabilities(result.structured?.wire, result.tools)))
+                    s.copy(tested = s.tested + (s.modelKey(model) to ModelCapabilities(result.structured?.wire, result.tools, result.vision)))
                 }
                 if (result.models != null && local.value.models.isEmpty()) local.update { it.copy(models = result.models) }
             }

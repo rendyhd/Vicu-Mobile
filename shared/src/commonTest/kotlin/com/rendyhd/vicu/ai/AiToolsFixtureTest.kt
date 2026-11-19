@@ -7,6 +7,15 @@ import com.rendyhd.vicu.ai.dictation.ContextPlace
 import com.rendyhd.vicu.ai.dictation.ContextProject
 import com.rendyhd.vicu.ai.dictation.DictationChecks
 import com.rendyhd.vicu.ai.dictation.DictationContext
+import com.rendyhd.vicu.ai.dictation.KnownProject
+import com.rendyhd.vicu.ai.notes.NotesPage
+import com.rendyhd.vicu.ai.notes.NotesPlan
+import com.rendyhd.vicu.ai.notes.NotesRules
+import com.rendyhd.vicu.ai.provider.AnthropicMessagesProtocol
+import com.rendyhd.vicu.ai.provider.ChatImage
+import com.rendyhd.vicu.ai.provider.ChatMessage
+import com.rendyhd.vicu.ai.provider.ChatRequest
+import com.rendyhd.vicu.ai.provider.OpenAiChatProtocol
 import com.rendyhd.vicu.ai.organize.OrganizeChecks
 import com.rendyhd.vicu.ai.organize.OrganizeResult
 import com.rendyhd.vicu.ai.organize.OrganizeSession
@@ -125,6 +134,83 @@ class AiToolsFixtureTest {
             val actual = toJson(BrainDumpChecks.check(answer, context), brainDump = true)
             assertEquals(vector.getValue("expect").jsonObject, actual, name)
         }
+    }
+
+    /** Section 4.9.6, with the context of `dictation.context`, in each contract zone. */
+    @Test
+    fun notesCheckVectors() {
+        val ctx = fixture.getValue("dictation").jsonObject.getValue("context").jsonObject
+        for (zone in CrossAppFixture.zones) {
+            for (vector in fixture.getValue("notes").jsonObject.getValue("checks").jsonArray.map { it.jsonObject }) {
+                val name = vector.getValue("name").jsonPrimitive.content + " in " + zone.id
+                val context = contextOf(vector, ctx).copy(zone = zone)
+                val answer = vector.getValue("answer").jsonObject
+                assertNull(JsonSchema.firstProblem(answer, AiContract.notesAnswerSchema), name)
+                val result = NotesRules.check(
+                    answer,
+                    context,
+                    pages = vector.getValue("pages").jsonArray.map { NotesPage(it.jsonObject.getValue("n").jsonPrimitive.int, it.jsonObject.getValue("text").jsonPrimitive.content) },
+                    me = (vector["me"] as? JsonPrimitive)?.contentOrNull,
+                    known = vector.getValue("known").jsonArray.map {
+                        val o = it.jsonObject
+                        KnownProject(o.getValue("ref").jsonPrimitive.content, o.getValue("title").jsonPrimitive.content, o.getValue("path").jsonPrimitive.content)
+                    },
+                    firstProjectNumber = vector.getValue("firstProjectNumber").jsonPrimitive.int,
+                    firstDraftNumber = vector.getValue("firstDraftNumber").jsonPrimitive.int,
+                )
+                assertEquals(vector.getValue("expect").jsonObject, notesJson(result), name)
+            }
+        }
+    }
+
+    /** A plan of notes in the vectors' shape: the brain dump's with owner, page and from, decisions and questions. */
+    internal fun notesJson(plan: NotesPlan): JsonObject {
+        val base = toJson(CheckResult(plan.drafts.map { it.draft }, plan.dropped, plan.unclear, plan.projects), brainDump = true)
+        val drafts = base.getValue("drafts").jsonArray.mapIndexed { i, element ->
+            val d = plan.drafts[i]
+            JsonObject(
+                element.jsonObject + mapOf(
+                    "owner" to (d.owner?.let { JsonPrimitive(it) } ?: JsonNull),
+                    "page" to (d.page?.let { JsonPrimitive(it) } ?: JsonNull),
+                    "from" to (d.from?.let { JsonPrimitive(it) } ?: JsonNull),
+                ),
+            )
+        }
+        return buildJsonObject {
+            put("projects", base.getValue("projects"))
+            put("drafts", JsonArray(drafts))
+            putJsonArray("decisions") {
+                for (d in plan.decisions) addJsonObject { put("what", d.what); put("by", d.by?.let { JsonPrimitive(it) } ?: JsonNull); put("page", d.page?.let { JsonPrimitive(it) } ?: JsonNull) }
+            }
+            putJsonArray("questions") {
+                for (q in plan.questions) addJsonObject { put("what", q.what); put("ask", q.ask?.let { JsonPrimitive(it) } ?: JsonNull); put("page", q.page?.let { JsonPrimitive(it) } ?: JsonNull) }
+            }
+            put("dropped", base.getValue("dropped"))
+            put("unclear", base.getValue("unclear"))
+        }
+    }
+
+    /** Section 4.9.2: a user message with pictures on both wire protocols (`notes.wire`). */
+    @Test
+    fun notesWireVectors() {
+        val json = Json { ignoreUnknownKeys = true }
+        val preset = AiContract.providers.first()
+        for (vector in fixture.getValue("notes").jsonObject.getValue("wire").jsonArray.map { it.jsonObject }) {
+            val protocolName = vector.getValue("protocol").jsonPrimitive.content
+            val m = vector.getValue("message").jsonObject
+            val message = ChatMessage.User(
+                m.getValue("text").jsonPrimitive.content,
+                m.getValue("images").jsonArray.map { ChatImage(it.jsonObject.getValue("media_type").jsonPrimitive.content, it.jsonObject.getValue("data").jsonPrimitive.content) },
+            )
+            val request = ChatRequest(model = preset.id, system = "s", messages = listOf(message), idleTimeoutSeconds = 10, maxTokens = 100)
+            val omit = vector.getValue("omit").jsonArray.map { it.jsonPrimitive.content }.toSet()
+            val (protocol, index) = if (protocolName == ProviderPreset.PROTOCOL_OPENAI) OpenAiChatProtocol(json) to 1 else AnthropicMessagesProtocol(json) to 0
+            val sent = protocol.body(request, omit).getValue("messages").jsonArray[index]
+            assertEquals(vector.getValue("expect"), sent, "$protocolName without $omit")
+        }
+        // No pictures: the content stays a plain string.
+        val plain = OpenAiChatProtocol(json).body(ChatRequest(model = "m", system = "", messages = listOf(ChatMessage.User("hi")), idleTimeoutSeconds = 10, maxTokens = 10), emptySet())
+        assertEquals(JsonPrimitive("hi"), plain.getValue("messages").jsonArray[0].jsonObject.getValue("content"))
     }
 
     @Test
@@ -277,6 +363,7 @@ class AiToolsFixtureTest {
         val schemas = mutableMapOf(
             "dictation.answerSchema" to AiContract.dictationAnswerSchema,
             "brainDump.answerSchema" to AiContract.brainDumpAnswerSchema,
+            "notes.answerSchema" to AiContract.notesAnswerSchema,
             "organize.answerSchema" to AiContract.organizeAnswerSchema,
             "planDay.answerSchema" to AiContract.planDayAnswerSchema,
         )
@@ -284,6 +371,7 @@ class AiToolsFixtureTest {
         val probe = fixture.getValue("probe").jsonObject
         schemas["probe.structured"] = probe.getValue("structured").jsonObject.getValue("schema").jsonObject
         schemas["probe.tool"] = probe.getValue("tool").jsonObject.getValue("tool").jsonObject.getValue("parameters").jsonObject
+        schemas["probe.vision"] = probe.getValue("vision").jsonObject.getValue("schema").jsonObject
         for ((name, schema) in schemas) {
             assertEquals(emptyList(), JsonSchema.subsetProblems(schema, keywords), name)
         }

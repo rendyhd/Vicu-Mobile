@@ -58,6 +58,18 @@ import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.AiSettings
 import com.rendyhd.vicu.ai.dictation.DictationMic
+import com.rendyhd.vicu.ai.notes.NotesController
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.notes_title
+import com.rendyhd.vicu.resources.settings_assistant_consent_notes
+import com.rendyhd.vicu.resources.settings_assistant_notes_how
+import com.rendyhd.vicu.resources.settings_assistant_read_help
+import com.rendyhd.vicu.resources.settings_assistant_read_model
+import com.rendyhd.vicu.resources.settings_assistant_read_none
+import com.rendyhd.vicu.resources.settings_assistant_read_used
+import com.rendyhd.vicu.resources.settings_assistant_result_no_vision
+import com.rendyhd.vicu.resources.settings_assistant_result_vision
+import org.jetbrains.compose.resources.stringResource
 import com.rendyhd.vicu.speech.ModelFileState
 import com.rendyhd.vicu.speech.SpeechModelSpec
 import com.rendyhd.vicu.util.formatByteSize
@@ -85,6 +97,7 @@ internal fun AssistantTab(
     listState: LazyListState,
     onOpenAsk: (talk: Boolean) -> Unit = {},
     smartDictation: DictationMic = koinInject(),
+    notes: NotesController = koinInject(),
 ) {
     val settings = state.settings
     val preset = settings.providerId?.let { AiContract.provider(it) }
@@ -165,6 +178,7 @@ internal fun AssistantTab(
                     ModelField("Ask model", settings.askModel, state.models, viewModel::setAskModel)
                 }
             }
+            item(key = "model_read") { ReadModelField(settings, state.models, viewModel::setReadModel) }
             item(key = "model_actions") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -206,6 +220,17 @@ internal fun AssistantTab(
                     )
                     TryIt(enabled = settings.dictationReady, onClick = { smartDictation.tryIt(brainDump = true) })
                 }
+            }
+            item(key = "notes") {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(stringResource(Res.string.notes_title), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        stringResource(Res.string.settings_assistant_notes_how),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TryIt(enabled = settings.dictationReady, onClick = { notes.open() })
             }
             item(key = "ask") {
                 SwitchRow(
@@ -354,6 +379,7 @@ internal fun AssistantTab(
                     Text("To use the assistant, Vicu sends this to ${settings.address}:")
                     Text("Dictation: the text of what you said (never audio), and the names of your projects, labels and places, the list you are in, the date, time and time zone.")
                     Text("Ask and Talk: your messages, counts and names of your projects, labels and lists, and the tasks the model looks up, including names of the people they are shared with.")
+                    Text(stringResource(Res.string.settings_assistant_consent_notes))
                     Text("Never: your Vikunja password or token, your server's address, comments, attachments, or where your places are.")
                     Text("Your provider's terms decide what happens to it there, and you pay them for what you use.")
                 }
@@ -458,9 +484,48 @@ private fun TestResult(state: AssistantUiState) {
         ResultLine(test.models != null, if (test.models != null) "Model list: ${test.models.size} models" else "Model list: not available (type the name)")
         ResultLine(test.canDictate, if (test.canDictate) "Structured answers work (${test.structured?.wire})" else "No structured answers: dictation cannot use this model")
         ResultLine(test.tools, if (test.tools) "Tool calls work: Ask and Talk can use this model" else "No tool calls: Ask and Talk cannot use this model")
+        test.vision?.let { reads ->
+            ResultLine(reads, stringResource(if (reads) Res.string.settings_assistant_result_vision else Res.string.settings_assistant_result_no_vision))
+        }
         for (problem in test.problems.take(4)) {
             Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/**
+ * The model that reads pictures of notes (section 4.9.1): the dictation or Ask model when one of
+ * them reads pictures, else one picked for it, offered once neither does.
+ */
+@Composable
+private fun ReadModelField(settings: AiSettings, models: List<String>, onChange: (String) -> Unit) {
+    val reading = settings.readingModel()
+    val own = settings.readModel.isNotBlank()
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    if (!own && reading.model != null) {
+        Text(
+            stringResource(Res.string.settings_assistant_read_used, reading.model),
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        return
+    }
+    // Not known yet: the models in use are asked the first time a picture is read.
+    if (!own && reading.untested.isNotEmpty()) return
+    if (settings.modelsInUse().isEmpty()) return
+    Column {
+        ModelField(stringResource(Res.string.settings_assistant_read_model), settings.readModel, models, onChange)
+        Text(
+            when {
+                reading.model != null -> stringResource(Res.string.settings_assistant_read_used, reading.model)
+                own -> stringResource(Res.string.settings_assistant_read_none)
+                else -> stringResource(Res.string.settings_assistant_read_help)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
     }
 }
 

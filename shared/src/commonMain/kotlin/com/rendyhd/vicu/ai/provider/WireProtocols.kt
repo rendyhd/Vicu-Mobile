@@ -63,7 +63,7 @@ internal class OpenAiChatProtocol(private val json: Json) : WireProtocol {
             if (system.isNotEmpty()) add(buildJsonObject { put("role", "system"); put("content", system) })
             for (message in request.messages) {
                 when (message) {
-                    is ChatMessage.User -> add(buildJsonObject { put("role", "user"); put("content", message.text) })
+                    is ChatMessage.User -> add(userMessage(message, omit))
                     is ChatMessage.Assistant -> add(
                         buildJsonObject {
                             put("role", "assistant")
@@ -128,6 +128,32 @@ internal class OpenAiChatProtocol(private val json: Json) : WireProtocol {
         if (request.deterministic) {
             if ("temperature" !in omit) put("temperature", 0)
             if ("reasoning_effort" !in omit) put("reasoning_effort", "low")
+        }
+    }
+
+    /**
+     * A user message: its text, or with pictures (section 4.9.2) a list of parts, the images first
+     * (`image_url` with a data URL and `detail` high, unless this model refused `detail`), then the text.
+     */
+    private fun userMessage(message: ChatMessage.User, omit: Set<String>): JsonObject = buildJsonObject {
+        put("role", "user")
+        if (message.images.isEmpty()) {
+            put("content", message.text)
+        } else {
+            putJsonArray("content") {
+                for (image in message.images) {
+                    add(
+                        buildJsonObject {
+                            put("type", "image_url")
+                            putJsonObject("image_url") {
+                                put("url", "data:${image.mediaType};base64,${image.data}")
+                                if ("detail" !in omit) put("detail", "high")
+                            }
+                        },
+                    )
+                }
+                add(buildJsonObject { put("type", "text"); put("text", message.text) })
+            }
         }
     }
 
@@ -248,7 +274,8 @@ internal class AnthropicMessagesProtocol(private val json: Json) : WireProtocol 
         }
         for (message in messages) {
             when (message) {
-                is ChatMessage.User -> add("user", listOf(textBlock(message.text.ifEmpty { " " })))
+                // Pictures (section 4.9.2) go before the text as base64 image blocks.
+                is ChatMessage.User -> add("user", message.images.map(::imageBlock) + textBlock(message.text.ifEmpty { " " }))
                 is ChatMessage.Assistant -> {
                     val raw = message.raw as? JsonArray
                     if (raw != null && raw.isNotEmpty()) {
@@ -298,6 +325,14 @@ internal class AnthropicMessagesProtocol(private val json: Json) : WireProtocol 
         put("text", text)
     }
 
+    private fun imageBlock(image: ChatImage) = buildJsonObject {
+        put("type", "image")
+        putJsonObject("source") {
+            put("type", "base64")
+            put("media_type", image.mediaType)
+            put("data", image.data)
+        }
+    }
     override fun reader(): AnswerReader = Reader(json)
 
     private class Block(

@@ -81,6 +81,8 @@ import com.rendyhd.vicu.util.ProjectProgress
 import com.rendyhd.vicu.util.moveIdBy
 import com.rendyhd.vicu.util.parseHexColor
 import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.notes_title
+import androidx.compose.material.icons.outlined.Description
 import com.rendyhd.vicu.resources.nav_anytime
 import com.rendyhd.vicu.resources.nav_inbox
 import com.rendyhd.vicu.resources.nav_logbook
@@ -144,6 +146,9 @@ fun DrawerContent(
     onReorderLabel: (movedId: Long, idsInNewOrder: List<Long>) -> Unit = { _, _ -> },
     /** The assistant's Ask is set up and on (docs/ai-assistant-v1.md, section 5). */
     showAsk: Boolean = false,
+    /** Smart dictation is ready, so notes can be made into tasks (docs/ai-assistant-v1.md, 4.9). */
+    showNotes: Boolean = false,
+    onOpenNotes: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
@@ -441,6 +446,19 @@ fun DrawerContent(
                 // Settings
                 item(key = "divider_settings", contentType = "divider") {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+                if (showNotes) {
+                    item(key = "notes", contentType = "smart") {
+                        NavigationDrawerItem(
+                            label = { Text(stringResource(Res.string.notes_title)) },
+                            icon = {
+                                Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            },
+                            selected = false,
+                            onClick = onOpenNotes,
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                        )
+                    }
                 }
                 item(key = "settings", contentType = "smart") {
                     NavigationDrawerItem(

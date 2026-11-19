@@ -500,6 +500,7 @@ val commonModule = module {
             locationReminders = get(),
             assistantConversations = get(),
             keptTranscript = get(),
+            notesSession = get(),
             savedFilters = get(),
             offlineAttachments = get(),
             proLedger = get(),
