@@ -62,6 +62,8 @@ class LocalDataWiper(
     private val savedFilters: SavedFilterStore? = null,
     /** Copies of files waiting to upload; they go with the queue that names them. */
     private val offlineAttachments: OfflineAttachmentFiles? = null,
+    /** The notification mode chosen for each of the account's projects. */
+    private val projectNotifyPrefs: ProjectNotifyPrefsStore? = null,
 ) {
     /**
      * Entries of routine history that have not been uploaded to the server yet (the phone-only
@@ -129,6 +131,7 @@ class LocalDataWiper(
             assistantConversations?.clear()
             keptTranscript?.clear()
             savedFilters?.clear()
+            projectNotifyPrefs?.clear()
         }
         // The old account's reminders must not keep firing for a signed-out (or switched) account.
         platformHooks.cancelAllAlarms()

@@ -24,6 +24,7 @@ import com.rendyhd.vicu.ui.screens.settings.SavedFilterImportViewModel
 import com.rendyhd.vicu.ui.screens.setup.SetupViewModel
 import com.rendyhd.vicu.ui.screens.tag.TagViewModel
 import com.rendyhd.vicu.ui.components.location.PlacesViewModel
+import com.rendyhd.vicu.ui.components.notifications.ProjectNotificationsViewModel
 import com.rendyhd.vicu.ui.screens.taskdetail.TaskDetailViewModel
 import com.rendyhd.vicu.ui.screens.taskentry.TaskEntryViewModel
 import com.rendyhd.vicu.ui.screens.plan.PlanMyDayViewModel
@@ -89,6 +90,7 @@ val viewModelModule = module {
     viewModelOf(::CollabViewModel)
     viewModelOf(::TaskCommentsViewModel)
     viewModelOf(::PlacesViewModel)
+    viewModelOf(::ProjectNotificationsViewModel)
     viewModelOf(::AssistantSettingsViewModel)
     viewModelOf(::SavedFilterImportViewModel)
     viewModelOf(::AskViewModel)

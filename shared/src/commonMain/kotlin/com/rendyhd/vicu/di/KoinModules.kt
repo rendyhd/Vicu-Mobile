@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.di
 
+import com.rendyhd.vicu.data.local.ProjectNotifyPrefsStore
+import com.rendyhd.vicu.data.repository.ProjectNotificationSettings
 import com.rendyhd.vicu.location.DeviceLocation
 import com.rendyhd.vicu.location.LocationReminderCoordinator
 import com.rendyhd.vicu.location.LocationReminderStore
@@ -87,6 +89,7 @@ val databaseModule = module {
     single { NlpPrefsStore(createDataStore(get(), "nlp_prefs")) }
     single { NotificationPermissionStore(createDataStore(get(), "notification_permission")) }
     single { NotificationPrefsStore(createDataStore(get(), "notification_prefs")) }
+    single { ProjectNotifyPrefsStore(createDataStore(get(), "project_notify_prefs")) }
     single { ProjectSectionPrefsStore(createDataStore(get(), "project_section_prefs")) }
     single { ReminderAlarmRegistry(createDataStore(get(), "reminder_alarm_registry"), get()) }
     single { ReviewPrefsStore(createDataStore(get(), "review_prefs")) }
@@ -312,7 +315,8 @@ val repositoryModule = module {
 }
 
 val commonModule = module {
-    single { DailySummaryReader(get()) }
+    single { ProjectNotificationSettings(get(), get(), get()) }
+    single { DailySummaryReader(get()) { get<ProjectNotificationSettings>().gate() } }
     single {
         TextTaskCreator(
             taskRepository = get(),
@@ -441,6 +445,7 @@ val commonModule = module {
             keptTranscript = get(),
             savedFilters = get(),
             offlineAttachments = get(),
+            projectNotifyPrefs = get(),
         )
     }
     single {
@@ -453,6 +458,7 @@ val commonModule = module {
             notificationPrefs = get(),
             scope = get(),
             near = { get<DeviceLocation>().current() },
+            gate = { get<ProjectNotificationSettings>().gate() },
         )
     }
     single { CoroutineScope(SupervisorJob() + Dispatchers.Main) }

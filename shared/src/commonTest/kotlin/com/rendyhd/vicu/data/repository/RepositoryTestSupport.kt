@@ -155,7 +155,15 @@ class FakeTaskDao(initial: List<TaskEntity> = emptyList()) : TaskDao {
     override suspend fun countDueTomorrow(startOfTomorrow: String, startOfDayAfterTomorrow: String): Int =
         lock.withLock { openDated().count { it.dueDate >= startOfTomorrow && it.dueDate < startOfDayAfterTomorrow } }
 
-    override suspend fun getTodayTasksSync(startOfToday: String, startOfTomorrow: String): List<TaskEntity> = emptyList()
+    override suspend fun getTodayTasksSync(startOfToday: String, startOfTomorrow: String): List<TaskEntity> =
+        lock.withLock {
+            rows.values.filter {
+                !it.done && !it.isMetadata && (
+                    (it.dueDate.isNotEmpty() && it.dueDate != "0001-01-01T00:00:00Z" && it.dueDate < startOfTomorrow) ||
+                        (it.startDate >= startOfToday && it.startDate < startOfTomorrow)
+                    )
+            }.sortedBy { it.dueDate }
+        }
     override suspend fun getStartingTodayWithoutDueToday(startOfToday: String, startOfTomorrow: String): List<TaskEntity> =
         lock.withLock {
             rows.values.filter {
