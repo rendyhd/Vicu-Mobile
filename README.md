@@ -95,6 +95,7 @@ Prefer Vikunja's syntax? Switch to `*label` and `+project` in **Settings, Genera
 - **Reminders** at a set time or relative to the due date, with **Mark complete** and **Snooze** on the notification, and a **default reminder** for every new dated task.
 - **Location reminders**: "Call mom when I get home." Vicu reminds you when you arrive at or leave a saved place, an address or where you are now, also with the app closed. Places are saved in **Settings, Notifications, Places**; their names sync, where they are stays on the phone. Needs location access set to **Always**.
 - **Daily summary**: a morning and an afternoon notification with what is overdue, due today and coming up.
+- **Count on app icon**: the number of tasks due today and overdue on Vicu's icon, turned on in **Settings, Notifications**. On Android it comes with a silent notification, and some launchers show a dot instead of a number.
 - **Share a project** with people on your server to view, edit or manage it, from **Edit project, Shared with**.
 - **Assign and comment**: see who is on a task, talk in a thread, mention people with `@`, and follow a task with the bell.
 - **Lists for shared work**: Assigned to me, Waiting on others, Unread comments, Changed this week.

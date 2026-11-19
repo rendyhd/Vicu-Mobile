@@ -12,6 +12,7 @@ class NotificationChannelManager(
         const val CHANNEL_DAILY_SUMMARY = "daily_summary"
         const val CHANNEL_ROUTINES = "routine_reminders"
         const val CHANNEL_PLANNER = "planner_nudge"
+        const val CHANNEL_TODAY_COUNT = "today_count"
     }
 
     fun createChannels() {
@@ -49,6 +50,17 @@ class NotificationChannelManager(
             description = "The evening nudge to plan tomorrow"
         }
 
-        manager.createNotificationChannels(listOf(taskReminders, dailySummary, routines, planner))
+        // The count on the app icon (TodayCountNotification): launchers take badges from
+        // notifications, so this one is silent and does not peek, but shows its badge.
+        val todayCount = NotificationChannel(
+            CHANNEL_TODAY_COUNT,
+            "Today count",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "The number of tasks due today on the app icon"
+            setShowBadge(true)
+        }
+
+        manager.createNotificationChannels(listOf(taskReminders, dailySummary, routines, planner, todayCount))
     }
 }

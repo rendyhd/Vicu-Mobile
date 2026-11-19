@@ -26,6 +26,11 @@ data class NotificationPrefs(
     // Default per-task reminder offset (seconds before due; 0 = off, -1 = at due time)
     val defaultReminderOffset: Int = 0,
     val defaultReminderRelativeTo: String = "due_date",
+    /**
+     * The number of tasks on the Today list on the app icon ("Count on app icon"; off by default,
+     * this device only). See `TodayBadge`.
+     */
+    val todayCountBadge: Boolean = false,
 )
 
 class NotificationPrefsStore(
@@ -45,6 +50,7 @@ class NotificationPrefsStore(
         private val KEY_NOTIFY_UPCOMING = booleanPreferencesKey("notify_upcoming_enabled")
         private val KEY_DEFAULT_REMINDER_OFFSET = intPreferencesKey("default_reminder_offset")
         private val KEY_DEFAULT_REMINDER_RELATIVE_TO = stringPreferencesKey("default_reminder_relative_to")
+        private val KEY_TODAY_COUNT_BADGE = booleanPreferencesKey("today_count_badge")
     }
 
     fun getPrefs(): Flow<NotificationPrefs> =
@@ -63,6 +69,7 @@ class NotificationPrefsStore(
                 notifyUpcomingEnabled = prefs[KEY_NOTIFY_UPCOMING] ?: false,
                 defaultReminderOffset = prefs[KEY_DEFAULT_REMINDER_OFFSET] ?: 0,
                 defaultReminderRelativeTo = prefs[KEY_DEFAULT_REMINDER_RELATIVE_TO] ?: "due_date",
+                todayCountBadge = prefs[KEY_TODAY_COUNT_BADGE] ?: false,
             )
         }
 
@@ -115,5 +122,8 @@ class NotificationPrefsStore(
     suspend fun setDefaultReminderRelativeTo(value: String) {
         dataStore.edit { it[KEY_DEFAULT_REMINDER_RELATIVE_TO] = value }
     }
-}
 
+    suspend fun setTodayCountBadge(enabled: Boolean) {
+        dataStore.edit { it[KEY_TODAY_COUNT_BADGE] = enabled }
+    }
+}

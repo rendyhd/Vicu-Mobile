@@ -98,6 +98,8 @@ data class SettingsUiState(
     val notificationPrefs: NotificationPrefs = NotificationPrefs(),
     val supportsQuickAddTile: Boolean = false,
     val quickAddHint: String? = null,
+    /** Said under "Count on app icon" on this platform (Android: how launchers show it); null: nothing. */
+    val appIconCountNote: String? = null,
     // Behavior (delete confirm, completion sound)
     val behaviorPrefs: BehaviorPrefs = BehaviorPrefs(),
     // Sync
@@ -277,6 +279,7 @@ class SettingsViewModel(
             notificationPrefs = c.notificationPrefs,
             supportsQuickAddTile = platformSettingsHooks.supportsQuickAddTile,
             quickAddHint = platformSettingsHooks.quickAddHint,
+            appIconCountNote = platformSettingsHooks.appIconCountNote,
             behaviorPrefs = p.behaviorPrefs,
             pendingActionCount = s.pendingCount,
             failedActionCount = s.failedCount,
@@ -735,6 +738,14 @@ class SettingsViewModel(
 
     fun setNotifyUpcomingEnabled(enabled: Boolean) {
         viewModelScope.launch { notificationPrefsStore.setNotifyUpcomingEnabled(enabled) }
+    }
+
+    /** "Count on app icon": the icon (Android: its notification) follows at once, either way. */
+    fun setTodayCountBadge(enabled: Boolean) {
+        viewModelScope.launch {
+            notificationPrefsStore.setTodayCountBadge(enabled)
+            platformSettingsHooks.updateWidgets()
+        }
     }
 
     fun setDefaultReminderOffset(seconds: Int) {

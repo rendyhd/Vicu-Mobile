@@ -20,6 +20,18 @@ interface NotificationPermissionPlatform {
      */
     fun areNotificationsEnabled(): Boolean = isGranted()
 
+    /**
+     * Whether the system lets the app put a count on its icon. iOS has a switch for it of its own
+     * (Settings, Notifications, Vicu, Badges); true where there is none.
+     */
+    fun badgesAllowed(): Boolean = true
+
+    /**
+     * Asks for the icon count where it is a right of its own that the first prompt may not have
+     * covered (iOS, when the permission was answered before Vicu asked for badges); nothing elsewhere.
+     */
+    fun requestBadges() {}
+
     /** Shows the system prompt. False when there is no screen to show it on right now. */
     fun launchSystemRequest(): Boolean
 

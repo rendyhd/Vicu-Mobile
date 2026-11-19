@@ -6,14 +6,21 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.rendyhd.vicu.notification.TodayCountNotification
 import com.rendyhd.vicu.util.DayClock
+import kotlin.coroutines.cancellation.CancellationException
 
-/** Rebuilds the task list widgets' state ([TaskWidgetStates], shared with iOS) and redraws them. */
+/**
+ * Rebuilds the task list widgets' state ([TaskWidgetStates], shared with iOS) and redraws them.
+ * Every refresh also brings the count on the app icon up to date ([TodayCountNotification]),
+ * whether or not there are widgets.
+ */
 class TaskWidgetWorker(
     appContext: Context,
     workerParams: WorkerParameters,
     private val states: TaskWidgetStates,
     private val dayClock: DayClock,
+    private val todayCount: TodayCountNotification,
 ) : CoroutineWorker(appContext, workerParams) {
 
     companion object {
@@ -21,6 +28,14 @@ class TaskWidgetWorker(
     }
 
     override suspend fun doWork(): Result {
+        // On its own: a failure here must not keep the widgets from updating, nor the other way round.
+        try {
+            todayCount.refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "App icon count not updated", e)
+        }
         return try {
             val manager = GlanceAppWidgetManager(applicationContext)
             val glanceIds = manager.getGlanceIds(TaskListWidget::class.java)

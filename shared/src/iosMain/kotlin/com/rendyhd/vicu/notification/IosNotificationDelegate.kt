@@ -15,6 +15,7 @@ import platform.UserNotifications.UNNotificationAction
 import platform.UserNotifications.UNNotificationActionIcon
 import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationDefaultActionIdentifier
+import platform.UserNotifications.UNNotificationPresentationOptionBadge
 import platform.UserNotifications.UNNotificationPresentationOptionBanner
 import platform.UserNotifications.UNNotificationPresentationOptionList
 import platform.UserNotifications.UNNotificationPresentationOptionSound
@@ -79,6 +80,11 @@ class IosNotificationDelegate(
         willPresentNotification: UNNotification,
         withCompletionHandler: (UNNotificationPresentationOptions) -> Unit,
     ) {
+        // The midnight count on the app icon carries nothing to show: only its badge.
+        if (willPresentNotification.request.identifier == IosTodayBadge.ID) {
+            withCompletionHandler(UNNotificationPresentationOptionBadge)
+            return
+        }
         // Android shows reminders while the app is open too.
         withCompletionHandler(
             UNNotificationPresentationOptionBanner or UNNotificationPresentationOptionList or UNNotificationPresentationOptionSound,

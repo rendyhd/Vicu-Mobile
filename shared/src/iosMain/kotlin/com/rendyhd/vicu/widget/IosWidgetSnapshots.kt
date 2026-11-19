@@ -5,6 +5,7 @@ import com.rendyhd.vicu.data.local.RoutinePrefsStore
 import com.rendyhd.vicu.domain.model.OccurrenceStatus
 import com.rendyhd.vicu.domain.repository.RoutineRepository
 import com.rendyhd.vicu.domain.repository.TaskRepository
+import com.rendyhd.vicu.notification.IosTodayBadge
 import com.rendyhd.vicu.ui.components.shared.deviceUses24Hour
 import com.rendyhd.vicu.ui.navigation.AppLink
 import com.rendyhd.vicu.ui.navigation.ViewTarget
@@ -63,6 +64,8 @@ class IosWidgetSnapshots(
     private val appScope: CoroutineScope,
     /** The folder shared with the widget extension; null when the build has no App Group. */
     private val folder: () -> String? = { IosPaths.appGroupFolder("widgets") },
+    /** The count on the app icon, brought up to date with every write (it needs no App Group). */
+    private val todayBadge: IosTodayBadge? = null,
 ) {
     var bridge: AppleWidgetBridge? = null
 
@@ -90,17 +93,22 @@ class IosWidgetSnapshots(
 
     /**
      * Takes in the widget actions, then writes every snapshot and asks WidgetKit to reload when
-     * something changed (reloads from the background count against a daily budget).
+     * something changed (reloads from the background count against a daily budget). The count on
+     * the app icon follows.
      */
     suspend fun write(): Unit = mutex.withLock {
-        val root = root ?: return@withLock
-        try {
-            drainActions(root)
-            if (writeAll(root)) bridge?.reloadAllTimelines()
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Logger.w(TAG, "Widget snapshots not written: ${e.message}")
+        val root = root
+        if (root != null) {
+            try {
+                drainActions(root)
+                if (writeAll(root)) bridge?.reloadAllTimelines()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Logger.w(TAG, "Widget snapshots not written: ${e.message}")
+            }
         }
+        // After the widget taps were taken in, which can complete tasks.
+        todayBadge?.update()
     }
 
     /**

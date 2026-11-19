@@ -28,6 +28,8 @@ class AndroidSettingsHooks(
 
     override val supportsQuickAddTile: Boolean = true
     override val hasWidgetVoiceButton: Boolean = true
+    override val appIconCountNote: String =
+        "Shows as a silent notification. Some launchers show a dot instead of a number."
 
     override fun updateWidgets() {
         WidgetUpdateScheduler.enqueueImmediateUpdateAll(context)

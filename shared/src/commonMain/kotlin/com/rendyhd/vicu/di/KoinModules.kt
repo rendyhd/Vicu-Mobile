@@ -56,6 +56,7 @@ import com.rendyhd.vicu.ai.dictation.DictationMic
 import com.rendyhd.vicu.ai.dictation.DictationService
 import com.rendyhd.vicu.voice.VoiceAddResult
 import com.rendyhd.vicu.util.TimeSource
+import com.rendyhd.vicu.widget.AppIconCount
 import com.rendyhd.vicu.widget.TaskWidgetStates
 import kotlinx.coroutines.flow.first
 import com.rendyhd.vicu.util.CustomListContext
@@ -444,6 +445,7 @@ val commonModule = module {
             weekStart = { get<WeekStartPreferences>().current() },
         )
     }
+    single { AppIconCount(states = get(), notificationPrefs = get(), dayClock = get()) }
     single {
         ProjectTaskCounts(
             api = get(),

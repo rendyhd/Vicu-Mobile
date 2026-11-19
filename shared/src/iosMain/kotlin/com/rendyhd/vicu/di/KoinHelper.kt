@@ -43,6 +43,7 @@ import com.rendyhd.vicu.location.LocationPermissionPlatform
 import com.rendyhd.vicu.location.PlaceSearch
 import com.rendyhd.vicu.location.PlatformGeofencer
 import com.rendyhd.vicu.notification.IosNotificationScheduler
+import com.rendyhd.vicu.notification.IosTodayBadge
 import com.rendyhd.vicu.permission.IosNotificationPermissionPlatform
 import com.rendyhd.vicu.permission.NotificationPermissionPlatform
 import com.rendyhd.vicu.share.IosShareInbox
@@ -129,8 +130,10 @@ val iosModule = module {
             dayClock = get(),
             syncRequester = { get() },
             appScope = get(),
+            todayBadge = get(),
         )
     }
+    single { IosTodayBadge(count = get(), time = get()) }
     single {
         IosShareInbox(
             taskRepository = get(),

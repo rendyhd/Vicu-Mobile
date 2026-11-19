@@ -75,6 +75,9 @@ class TaskWidgetStates(
         )
     }
 
+    /** The number of tasks on the Today list of the local [day] (see [Batch.todayCount]). */
+    suspend fun todayCount(day: ClockDay): Int = prepare(day).todayCount()
+
     inner class Batch internal constructor(
         val day: ClockDay,
         /** The projects that are not archived, by id. */
@@ -123,6 +126,13 @@ class TaskWidgetStates(
                 error = if (projectUnavailable) PROJECT_UNAVAILABLE else null,
             )
         }
+
+        /**
+         * The number of tasks on this day's Today list, tasks of archived projects left out: the
+         * Today widget's count, and the count on the app icon (`TodayBadge`).
+         */
+        suspend fun todayCount(): Int =
+            query(WidgetConfig(WidgetViewType.TODAY)).count { it.projectId in activeProjectIds }
 
         private suspend fun query(config: WidgetConfig): List<WidgetRow> {
             // The same boundary as the Today and Upcoming screens: the start of the local tomorrow.

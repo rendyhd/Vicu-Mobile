@@ -38,6 +38,7 @@ import com.rendyhd.vicu.util.TaskReminderNotifications
 import com.rendyhd.vicu.notification.DailySummaryScheduler
 import com.rendyhd.vicu.notification.PlannerNudgeScheduler
 import com.rendyhd.vicu.notification.NotificationChannelManager
+import com.rendyhd.vicu.notification.TodayCountNotification
 import com.rendyhd.vicu.notification.RoutineAlarmScheduler
 import com.rendyhd.vicu.util.CompletionSoundPlayer
 import com.rendyhd.vicu.util.AndroidNetworkMonitor
@@ -126,6 +127,7 @@ val appModule = module {
     single { PlannerNudgeScheduler(androidContext(), get()) }
     single { CompletionSoundPlayer(androidContext(), get()) }
     single { NotificationChannelManager(androidContext()) }
+    single { TodayCountNotification(androidContext(), get()) }
 
     single {
         val baseUrlHolder = get<BaseUrlHolder>()

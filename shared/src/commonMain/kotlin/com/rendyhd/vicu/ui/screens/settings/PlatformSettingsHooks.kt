@@ -9,6 +9,12 @@ interface PlatformSettingsHooks {
      */
     val quickAddHint: String? get() = null
 
+    /**
+     * Said under "Count on app icon" in Settings, Notifications: how this platform shows the count
+     * (Android: a silent notification, which some launchers show as a dot); null says nothing.
+     */
+    val appIconCountNote: String? get() = null
+
     /** The task list widget has a microphone button that Settings can hide (Android). */
     val hasWidgetVoiceButton: Boolean get() = false
 

@@ -171,6 +171,14 @@ are planned ahead instead of being scheduled one by one:
 - Daily summaries carry their numbers for three days ahead (none on a day with nothing to
   report); after that a general "Open Vicu to see your tasks for today." keeps the summary
   coming when the app has not run.
+- The count on the app icon (Settings > Notifications > Count on app icon, off by default):
+  `IosTodayBadge` sets the number of tasks on the Today list with `setBadgeCount` whenever the
+  widget snapshots are written (every change, start, resume, background, a new day, the
+  background refresh), and keeps one pending notification, `today-count`, for the next local
+  midnight that carries only tomorrow's number as its badge (no title, text or sound). It is not
+  part of the planned set and is removed, with the badge set to 0, when the setting is off or on
+  sign-out. The permission request includes badges; turning the setting on asks again when the
+  permission was given before Vicu asked for badges, and Settings says so when badges are off.
 - Actions: Mark Complete and Snooze 15 min on task reminders, Complete and Skip on routine
   reminders. They run in the app (`NotificationActions`, shared with Android) inside a
   background task, then sync.
@@ -269,7 +277,10 @@ background refresh, then syncs and says so in the snackbar.
   the task when the alarm fires).
 - **Daily summary** numbers are worked out up to three days ahead; later days get a general
   text until the app runs again.
-- **No exact-alarm banner and no badge.** The snooze button reads "Snooze 15 min".
+- **No exact-alarm banner.** The snooze button reads "Snooze 15 min".
+- **Count on app icon** is a real badge number. On Android it comes from a silent notification,
+  which some launchers show as a dot. When the app has not run since midnight, iOS shows the
+  number set ahead the evening before.
 - **Background sync** runs when iOS allows it, not every 30 minutes. Settings > General >
   Background activity shows the last runs.
 - **Pasting an image into a comment.** A text field on iOS cannot take an image, so the composer's

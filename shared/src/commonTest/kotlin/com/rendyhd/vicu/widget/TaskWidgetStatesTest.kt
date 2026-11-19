@@ -103,6 +103,22 @@ class TaskWidgetStatesTest {
     }
 
     @Test
+    fun theAppIconCountIsTheTodayWidgetsCount() = runTest {
+        val widget = states.prepare(day).build(WidgetConfig(WidgetViewType.TODAY, "", "Today"))
+        // The same rows, the archived project's task left out, and no cap of twenty.
+        assertEquals(widget.totalCount, states.todayCount(day))
+        assertEquals(24, states.todayCount(day))
+    }
+
+    @Test
+    fun theAppIconCountForTomorrowReadsTomorrowsTodayList() = runTest {
+        todayBoundaries.clear()
+        states.todayCount(ClockDay(LocalDate(2026, 10, 13), zone))
+        // Due before the start of the day after tomorrow: overdue by then, or due tomorrow.
+        assertEquals(listOf("2026-10-13T22:00:00Z"), todayBoundaries)
+    }
+
+    @Test
     fun aWidgetForAnArchivedProjectSaysSo() = runTest {
         val state = states.prepare(day).build(WidgetConfig(WidgetViewType.PROJECT, "9", "Old"))
         assertEquals(TaskWidgetStates.PROJECT_UNAVAILABLE, state.error)

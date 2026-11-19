@@ -156,6 +156,9 @@
             android:name=".notification.RoutineNotificationActionReceiver"
             android:exported="false" />
         <receiver
+            android:name=".notification.TodayCountReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".notification.BootReceiver"
             android:exported="false">
             <intent-filter>
