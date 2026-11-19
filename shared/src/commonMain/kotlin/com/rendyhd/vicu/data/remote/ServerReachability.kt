@@ -12,7 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
 class ServerReachability {
     private val _unreachable = MutableStateFlow(false)
 
-    /** True since a request got no answer, or a proxy's answer that the server behind it is gone. */
+    /**
+     * True since a request got no answer, a proxy's answer that the server behind it is gone, or
+     * an answer something in front of the server gave in its place ([NotApiResponse]).
+     */
     val unreachable: StateFlow<Boolean> = _unreachable.asStateFlow()
 
     fun answered(status: Int) {

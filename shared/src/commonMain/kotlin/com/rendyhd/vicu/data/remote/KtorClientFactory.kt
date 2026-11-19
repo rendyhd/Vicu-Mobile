@@ -4,8 +4,11 @@ import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.remote.api.VikunjaApiService
 import com.rendyhd.vicu.util.isNetworkFailure
 import io.ktor.client.HttpClient
+import io.ktor.client.call.HttpClientCall
+import io.ktor.client.call.save
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpSend
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.Sender
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -15,10 +18,13 @@ import io.ktor.client.plugins.plugin
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.HttpRequestPipeline
 import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import io.ktor.http.contentType
 import io.ktor.http.takeFrom
 import io.ktor.http.encodedPath
 import io.ktor.serialization.kotlinx.json.json
@@ -71,6 +77,12 @@ object KtorClientFactory {
     internal fun isTokenRefreshPath(encodedPath: String, apiBasePath: String): Boolean =
         endpointOf(encodedPath, apiBasePath) == TOKEN_REFRESH_ENDPOINT
 
+    private val ATTACHMENT_ENDPOINT = Regex("""tasks/\d+/attachments/\d+""")
+
+    /** True for one attachment of a task: the only endpoint that answers with a file. */
+    internal fun isAttachmentPath(encodedPath: String, apiBasePath: String): Boolean =
+        ATTACHMENT_ENDPOINT.matches(endpointOf(encodedPath, apiBasePath))
+
     /** True for the collaboration endpoints, by whole endpoint (`user`, the signed-in user, is not one). */
     internal fun isCollaborationPath(encodedPath: String, apiBasePath: String): Boolean {
         val endpoint = endpointOf(encodedPath, apiBasePath)
@@ -98,12 +110,15 @@ object KtorClientFactory {
             header(HttpHeaders.Authorization, "Bearer $token")
             header(HttpHeaders.UserAgent, userAgent)
         }
-        execute(check).response.status.value
+        // An answer that is not Vikunja's is no answer about the token.
+        execute(check).takeUnless { it.isNotFromVikunja() }?.response?.status?.value
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         null
     }
+
+    private fun HttpClientCall.isNotFromVikunja(): Boolean = attributes.getOrNull(NotApiResponse.Marked) == true
 
     private fun apiBasePathOf(baseUrlHolder: BaseUrlHolder): String {
         val fullBaseUrl = baseUrlHolder.getFullBaseUrl()
@@ -131,6 +146,10 @@ object KtorClientFactory {
             install(UserAgent) {
                 agent = userAgent
             }
+
+            // No timeouts of its own: every request keeps the engine's, except those that set one
+            // (an upload gets time by its size, `uploadTimeoutMillis`).
+            install(HttpTimeout)
 
             if (enableLogging) {
                 install(Logging) {
@@ -186,7 +205,10 @@ object KtorClientFactory {
             val path = request.url.encodedPath
             var response = execute(request)
 
+            // A 401 that something in front of Vikunja gave (a network's sign-in page, a proxy)
+            // says nothing about the token: no refresh, and the session stays ([NotApiResponse]).
             if (response.response.status == HttpStatusCode.Unauthorized &&
+                !response.isNotFromVikunja() &&
                 !isTokenRefreshPath(path, apiBasePathOf(baseUrlHolder))
             ) {
                 val failedToken = request.headers[HttpHeaders.Authorization]?.removePrefix("Bearer ")
@@ -222,7 +244,9 @@ object KtorClientFactory {
         }
 
         // 4. Whether the server answers, for the banner. Registered last, so it is the innermost
-        // sender and sees each attempt, the retry after a token refresh included.
+        // sender and sees each attempt, the retry after a token refresh included. An error answer
+        // that is not Vikunja's (a network's sign-in page, a firewall: [NotApiResponse]) is marked
+        // here for the 401 handling above and counts as no answer.
         client.plugin(HttpSend).intercept { request ->
             val call = try {
                 execute(request)
@@ -232,8 +256,36 @@ object KtorClientFactory {
                 if (isNetworkFailure(e)) reachability.noAnswer()
                 throw e
             }
-            reachability.answered(call.response.status.value)
-            call
+            val status = call.response.status.value
+            // The request's attributes are also those of a second attempt: an earlier mark goes.
+            call.attributes.remove(NotApiResponse.Marked)
+            if (!NotApiResponse.mayBeNotApiError(status)) {
+                // A page answered with 2xx (a sign-in proxy, a network's sign-in page) is not the
+                // server either: the API never answers HTML. Only a downloaded attachment can be
+                // an HTML file. Its body is left for the caller, who reads it as a failure.
+                val page = status in 200..299 &&
+                    call.response.contentType()?.match(ContentType.Text.Html) == true &&
+                    !isAttachmentPath(request.url.encodedPath, apiBasePathOf(baseUrlHolder))
+                if (page) reachability.noAnswer() else reachability.answered(status)
+                return@intercept call
+            }
+            // An error answer is small: it is kept in memory, so it can be read here and again
+            // by the caller.
+            val saved = call.save()
+            val body = try {
+                saved.response.bodyAsText()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ""
+            }
+            if (NotApiResponse.isNotApiError(status, body)) {
+                saved.attributes.put(NotApiResponse.Marked, true)
+                reachability.noAnswer()
+            } else {
+                reachability.answered(status)
+            }
+            saved
         }
 
         return client

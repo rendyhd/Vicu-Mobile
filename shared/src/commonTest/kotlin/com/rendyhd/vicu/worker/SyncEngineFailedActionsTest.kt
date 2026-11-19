@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.worker
 
+import com.rendyhd.vicu.auth.AuthState
 import com.rendyhd.vicu.auth.authTestJson
 import com.rendyhd.vicu.auth.authTestJsonHeaders
 import com.rendyhd.vicu.data.local.entity.PendingActionEntity
@@ -12,8 +13,10 @@ import com.rendyhd.vicu.worker.SyncEngineHarness.Companion.emptyPage
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -244,6 +247,42 @@ class SyncEngineFailedActionsTest {
         assertTrue(h.pendingActionDao.snapshot().isEmpty(), "sent once the server is back")
         assertEquals(8, h.count(HttpMethod.Patch, "/tasks/11"))
         h.close()
+    }
+
+    @Test
+    fun `a firewall's page instead of the server keeps a change waiting - whatever its status`() = runTest {
+        // A plane's or hotel's network answers every request with its own page. None of these
+        // statuses is Vikunja's: not a refusal (403), not an ended session (401), not a task that
+        // is gone (404).
+        for (status in listOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized, HttpStatusCode.NotFound)) {
+            var blocked = true
+            val h = SyncEngineHarness(taskDao = FakeTaskDao(listOf(localTask(11)))) { request ->
+                when {
+                    blocked -> respond(
+                        "<html><body>Sign in to the network</body></html>",
+                        status,
+                        headersOf(HttpHeaders.ContentType, "text/html"),
+                    )
+                    request.method == HttpMethod.Patch && request.url.encodedPath == "/tasks/11" -> updatedTask(11)
+                    request.method == HttpMethod.Get -> emptyPage()
+                    else -> error("Unexpected ${request.method.value} ${request.url.encodedPath}")
+                }
+            }
+            h.pendingActionDao.insert(queuedTaskAction(11, "update"))
+            h.storage.storeUserId(1) // known, so signing in reads nothing
+            h.signInWithApiToken()
+
+            assertFalse(h.engine.performSync(), "$status: the run asks to be retried")
+            val waiting = h.pendingActionDao.snapshot().single()
+            assertEquals("pending", waiting.status, "$status: neither failed nor dropped")
+            assertEquals(listOf(11L), h.taskDao.snapshot().map { it.id }, "$status: the task stays")
+            assertEquals(AuthState.Authenticated, h.authManager.authState.value, "$status: still signed in")
+
+            blocked = false
+            assertTrue(h.engine.performSync(), "$status")
+            assertTrue(h.pendingActionDao.snapshot().isEmpty(), "$status: sent once the server answers")
+            h.close()
+        }
     }
 
     // ---- failed actions ---------------------------------------------------------------------

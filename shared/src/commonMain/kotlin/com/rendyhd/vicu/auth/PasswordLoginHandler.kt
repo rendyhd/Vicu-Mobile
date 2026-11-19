@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.auth
 
+import com.rendyhd.vicu.data.remote.NotApiResponse
 import com.rendyhd.vicu.data.remote.api.LoginRequestDto
 import com.rendyhd.vicu.data.remote.api.VikunjaApiService
 
@@ -24,6 +25,8 @@ class PasswordLoginHandler(
             val status = response.code()
             val problemCode = response.problem?.code
             when {
+                // A page from something in front of the server: it says nothing about the password.
+                response.notApiResponse -> PasswordLoginResult.Error(NotApiResponse.message(status))
                 response.isSuccessful -> {
                     val body = response.body()
                     val token = body?.token.orEmpty()

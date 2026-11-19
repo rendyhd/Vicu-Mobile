@@ -34,8 +34,13 @@ class SyncEngineNotFoundTest {
             headers = authTestJsonHeaders,
         )
 
+    /**
+     * A 404 that names nothing, as Vikunja answers a path it does not know. (A 404 whose body is a
+     * page, not JSON, is not the server's answer at all and keeps the change waiting:
+     * `SyncEngineFailedActionsTest`, `NotApiResponseTest`.)
+     */
     private fun MockRequestHandleScope.bare404(): HttpResponseData =
-        respond(content = "404 page not found", status = HttpStatusCode.NotFound)
+        respond(content = """{"message":"Not Found"}""", status = HttpStatusCode.NotFound, headers = authTestJsonHeaders)
 
     private fun MockRequestHandleScope.json(body: String): HttpResponseData =
         respond(content = body, status = HttpStatusCode.OK, headers = authTestJsonHeaders)

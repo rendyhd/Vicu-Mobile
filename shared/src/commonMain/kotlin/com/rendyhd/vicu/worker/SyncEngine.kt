@@ -367,7 +367,8 @@ class SyncEngine(
                     run.readBack += readBackIds(action, run.tempIdMap)
                 }
                 isRetriableNetworkError(e) -> {
-                    // Offline, a timeout, a 5xx or a 429: the change is fine, the server is
+                    // Offline, a timeout, a 5xx or a 429, or an answer that was not Vikunja's
+                    // (a network's sign-in page, a firewall): the change is fine, the server is
                     // not. It stays queued however often that happens (the count is only
                     // kept for the record); WorkManager's backoff spaces the attempts.
                     pendingActionDao.updateStatus(action.id, "pending", action.retryCount + 1)

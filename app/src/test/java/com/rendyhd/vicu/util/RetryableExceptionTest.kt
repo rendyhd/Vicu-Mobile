@@ -9,7 +9,9 @@ import java.io.InterruptedIOException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 class RetryableExceptionTest {
 
@@ -33,11 +35,25 @@ class RetryableExceptionTest {
     @Test fun `wrapped io cause is retriable`() =
         assertTrue(isRetriableNetworkError(RuntimeException(IOException("x"))))
 
-    @Test fun `ssl handshake is NOT retriable`() =
-        assertFalse(isRetriableNetworkError(SSLHandshakeException("bad cert")))
+    // A network that puts its sign-in page in front of every HTTPS address (a plane, a hotel)
+    // breaks the handshake with its own certificate: the change waits for the real server.
+    @Test fun `a certificate that does not verify is retriable`() {
+        assertTrue(isRetriableNetworkError(SSLHandshakeException("bad cert")))
+        assertTrue(isRetriableNetworkError(SSLPeerUnverifiedException("Hostname tasks.example.com not verified")))
+        assertTrue(isRetriableNetworkError(SSLException("Connection reset")))
+    }
 
-    @Test fun `wrapped ssl cause is NOT retriable`() =
-        assertFalse(isRetriableNetworkError(IOException(SSLHandshakeException("bad cert"))))
+    @Test fun `wrapped ssl cause is retriable`() =
+        assertTrue(isRetriableNetworkError(IOException(SSLHandshakeException("bad cert"))))
+
+    @Test fun `a failed handshake never sent the request`() {
+        assertFalse(mayHaveReachedServer(SSLHandshakeException("bad cert")))
+        assertFalse(mayHaveReachedServer(SSLPeerUnverifiedException("Hostname tasks.example.com not verified")))
+        assertFalse(mayHaveReachedServer(IOException(SSLHandshakeException("bad cert"))))
+    }
+
+    @Test fun `a TLS failure after the handshake may have reached the server`() =
+        assertTrue(mayHaveReachedServer(SSLException("Connection reset")))
 
     @Test fun `http 500 and 429 are retriable`() {
         assertTrue(isRetriableNetworkError(http(500)))

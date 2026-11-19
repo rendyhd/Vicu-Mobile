@@ -3,13 +3,17 @@ package com.rendyhd.vicu.data.repository
 import com.rendyhd.vicu.auth.authTestJsonHeaders
 import com.rendyhd.vicu.data.repository.TaskRepositoryHarness.Companion.jsonOk
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.util.NetworkResult
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -77,6 +81,41 @@ class TaskRepositoryCreateTest {
         )
 
         assertEquals(listOf("POST /projects/7/tasks"), h.sent.map { "${it.method} ${it.path}" })
+    }
+
+    @Test
+    fun `a create answered by a firewall's page is kept and queued`() = runTest {
+        // A plane's or hotel's network answered 403 with its own page: Vikunja never saw the task.
+        val h = TaskRepositoryHarness { _ ->
+            respond(
+                "<html><body>Access to this site is blocked</body></html>",
+                HttpStatusCode.Forbidden,
+                headersOf(HttpHeaders.ContentType, "text/html"),
+            )
+        }
+
+        val result = h.repository.create(Task(id = 0, title = "Lumae gemini", projectId = 7))
+
+        val created = (result as NetworkResult.Success).data
+        assertTrue(created.id < 0, "kept under a temporary id")
+        assertEquals(listOf("Lumae gemini"), h.taskDao.snapshot().map { it.title })
+        val queued = h.pendingActionDao.snapshot().single()
+        assertEquals("create", queued.actionType)
+        assertEquals("pending", queued.status)
+        assertFalse(h.tempIds.createMaybeSent(created.id), "nothing reached the server, so nothing is looked for")
+    }
+
+    @Test
+    fun `a create Vikunja itself refuses is still an error`() = runTest {
+        val h = TaskRepositoryHarness { _ ->
+            respond("""{"title":"Forbidden","status":403,"detail":"Forbidden"}""", HttpStatusCode.Forbidden, authTestJsonHeaders)
+        }
+
+        val result = h.repository.create(Task(id = 0, title = "Not allowed", projectId = 7))
+
+        assertEquals("Forbidden", (result as NetworkResult.Error).message)
+        assertTrue(h.taskDao.snapshot().isEmpty())
+        assertTrue(h.pendingActionDao.snapshot().isEmpty())
     }
 
     @Test

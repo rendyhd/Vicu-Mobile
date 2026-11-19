@@ -25,9 +25,11 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
 import com.rendyhd.vicu.data.remote.ApiTokenPermission
+import com.rendyhd.vicu.data.remote.NotApiResponse
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.contentDispositionFileParameter
 import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -41,6 +43,8 @@ data class KtorResponse<T>(
     val body: T?,
     val headers: Map<String, List<String>>,
     val problem: VikunjaProblemDto? = null,
+    /** The answer did not come from Vikunja ([NotApiResponse]); [code] says nothing about the request then. */
+    val notApiResponse: Boolean = false,
 ) {
     fun code(): Int = code
     fun body(): T? = body
@@ -588,7 +592,23 @@ class VikunjaApiService(
         expectedStatus: HttpStatusCode? = null,
     ): T {
         ensureSuccess(expectedStatus)
-        return body()
+        return try {
+            body()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw notApiPageOr(e)
+        }
+    }
+
+    /**
+     * A 2xx answer that could not be read: when its body is a page instead of JSON (a sign-in proxy
+     * or a network's sign-in page answers 200), it is not Vikunja's and is retried like an
+     * unreachable server; anything else stays the failure it was.
+     */
+    private suspend fun HttpResponse.notApiPageOr(e: Exception): Exception {
+        val raw = runCatching { bodyAsText() }.getOrDefault("")
+        return if (NotApiResponse.isNotApiSuccess(raw)) VikunjaApiException.notFromVikunja(status.value) else e
     }
 
     private suspend fun HttpResponse.requireNoContent() {
@@ -607,6 +627,9 @@ class VikunjaApiService(
 
     private suspend fun HttpResponse.toApiException(): VikunjaApiException {
         val raw = runCatching { bodyAsText() }.getOrDefault("")
+        // A page from something in front of Vikunja (a network's sign-in page, a firewall): the
+        // status is not Vikunja's, and the request is sent again later.
+        if (NotApiResponse.isNotApiError(status.value, raw)) return VikunjaApiException.notFromVikunja(status.value)
         val problem = runCatching {
             json.decodeFromString<VikunjaProblemDto>(raw)
         }.getOrNull()
@@ -631,10 +654,10 @@ class VikunjaApiService(
         } else {
             null
         }
+        val raw = if (success && bodyObject != null) "" else runCatching { bodyAsText() }.getOrDefault("")
         val problem = if (success) {
             null
         } else {
-            val raw = runCatching { bodyAsText() }.getOrDefault("")
             runCatching { json.decodeFromString<VikunjaProblemDto>(raw) }.getOrNull()
         }
         return KtorResponse(
@@ -643,6 +666,11 @@ class VikunjaApiService(
             body = bodyObject,
             headers = headers.entries().associate { it.key to it.value },
             problem = problem,
+            notApiResponse = if (success) {
+                bodyObject == null && NotApiResponse.isNotApiSuccess(raw)
+            } else {
+                NotApiResponse.isNotApiError(status.value, raw)
+            },
         )
     }
 }

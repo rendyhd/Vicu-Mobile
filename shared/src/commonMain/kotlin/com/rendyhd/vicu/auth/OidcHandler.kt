@@ -102,6 +102,9 @@ class OidcHandler(
             )
 
             val response = apiServiceProvider().exchangeOidcToken(provider.key, callbackDto)
+            if (response.notApiResponse) {
+                return OidcResult.Error(com.rendyhd.vicu.data.remote.NotApiResponse.message(response.code()))
+            }
             if (!response.isSuccessful) {
                 oidcTotpChallenge(response.problem)?.let { return it }
                 return OidcResult.Error(

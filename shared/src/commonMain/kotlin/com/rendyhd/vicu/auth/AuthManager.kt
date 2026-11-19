@@ -463,6 +463,13 @@ class AuthManager(
             val cookie = RefreshCookieExtractor.buildCookieHeader(refreshToken)
             val response = apiServiceProvider().refreshToken(cookie)
             when {
+                response.notApiResponse -> {
+                    // A network's sign-in page or a firewall answered, not Vikunja: whatever its
+                    // status, it says nothing about the refresh token, and the session stays.
+                    Logger.w(TAG, "V2 refresh was not answered by Vikunja: HTTP ${response.code()}")
+                    applyBackoff(RefreshFailure.NetworkError)
+                    RefreshResult.Failure(RefreshFailure.NetworkError)
+                }
                 response.isSuccessful -> {
                     val newJwt = response.body()?.token.orEmpty()
                     if (newJwt.isNotBlank()) {
