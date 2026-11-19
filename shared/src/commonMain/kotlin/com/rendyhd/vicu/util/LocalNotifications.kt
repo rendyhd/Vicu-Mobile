@@ -118,6 +118,8 @@ object LocalNotificationPlanner {
         val summaryFor: suspend (ClockDay) -> DailySummaryContent,
         /** "HH:mm" of Plan my day's evening nudge ([PlannerNudge.timeOf]); null while there is none. */
         val plannerNudge: String? = null,
+        /** Per-project notification modes; a held-back task plans no reminder. */
+        val gate: ReminderGate = ReminderGate.OPEN,
     )
 
     suspend fun plan(input: Input, capacity: Int = NotificationBudget.IOS_CAPACITY): List<LocalNotification> =
@@ -139,7 +141,7 @@ object LocalNotificationPlanner {
     private fun taskReminders(input: Input): List<LocalNotification> {
         if (!input.prefs.taskRemindersEnabled) return emptyList()
         val now = input.now.toEpochMilliseconds()
-        return input.tasksWithReminders.flatMap { task ->
+        return input.tasksWithReminders.filter(input.gate::allows).flatMap { task ->
             ReminderAlarms.desiredAlarms(task, now).map { alarm ->
                 LocalNotification(
                     id = reminderId(task.id, alarm.reminderIndex),

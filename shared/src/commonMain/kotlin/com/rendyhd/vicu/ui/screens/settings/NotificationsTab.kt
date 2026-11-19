@@ -26,6 +26,8 @@ import com.rendyhd.vicu.ui.components.settings.ExactAlarmBanner
 import com.rendyhd.vicu.ui.components.settings.NotificationsDisabledBanner
 import com.rendyhd.vicu.ui.components.location.PlacesSettingsSection
 import com.rendyhd.vicu.ui.components.location.PlacesViewModel
+import com.rendyhd.vicu.ui.components.notifications.ProjectNotificationsSection
+import com.rendyhd.vicu.ui.components.notifications.ProjectNotificationsViewModel
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -56,6 +58,7 @@ internal fun NotificationsTab(
 ) {
     val permission: NotificationPermissionCoordinator = koinInject()
     val placesViewModel: PlacesViewModel = koinViewModel()
+    val projectNotificationsViewModel: ProjectNotificationsViewModel = koinViewModel()
     // Turning one of these on is the moment to ask for the notification permission, if it is missing.
     fun enabling(set: (Boolean) -> Unit): (Boolean) -> Unit = { on ->
         set(on)
@@ -162,6 +165,14 @@ internal fun NotificationsTab(
                 checked = state.notificationPrefs.soundEnabled,
                 onCheckedChange = viewModel::setSoundEnabled,
             )
+        }
+
+        item(key = "notif_projects") {
+            ProjectNotificationsSection(projectNotificationsViewModel)
+        }
+
+        item(key = "notif_divider_projects") {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         }
 
         item(key = "notif_places") {

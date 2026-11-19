@@ -11,6 +11,8 @@ import com.rendyhd.vicu.data.local.SnoozeEntry
 import com.rendyhd.vicu.data.local.SnoozeStore
 import com.rendyhd.vicu.data.local.dao.TaskDao
 import com.rendyhd.vicu.data.mapper.TaskMapper
+import com.rendyhd.vicu.data.repository.ProjectNotificationSettings
+import com.rendyhd.vicu.util.ReminderGate
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.util.ReminderAlarmBackend
 import com.rendyhd.vicu.util.ReminderAlarmCoordinator
@@ -33,6 +35,7 @@ class AlarmScheduler(
     private val snoozeStore: SnoozeStore,
     registry: ReminderAlarmRegistry,
     private val time: TimeSource,
+    private val projectNotifications: ProjectNotificationSettings? = null,
 ) : TaskReminderNotifications {
     companion object {
         private const val TAG = "AlarmScheduler"
@@ -50,6 +53,7 @@ class AlarmScheduler(
             override fun cancel(requestCode: Int) = cancelReminderAlarm(requestCode)
         },
         nowMillis = { time.now().toEpochMilliseconds() },
+        gate = { projectNotifications?.gate() ?: ReminderGate.OPEN },
     )
 
     /** Replaces the alarms of [task] with the ones its reminders call for right now. */

@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.notification
 
+import com.rendyhd.vicu.data.repository.ProjectNotificationSettings
+import com.rendyhd.vicu.util.ReminderGate
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.data.local.DailySummaryReader
@@ -73,6 +75,7 @@ class IosNotificationScheduler(
     private val authManager: AuthManager,
     private val time: TimeSource,
     private val appScope: CoroutineScope,
+    private val projectNotifications: ProjectNotificationSettings? = null,
 ) : TaskReminderNotifications {
 
     private val mutex = Mutex()
@@ -187,6 +190,7 @@ class IosNotificationScheduler(
                     )
                 },
                 plannerNudge = PlannerNudge.timeOf(behavior.plannerEnabled, behavior.plannerNudge),
+                gate = projectNotifications?.gate() ?: ReminderGate.OPEN,
             ),
         )
     }

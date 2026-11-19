@@ -151,6 +151,7 @@ val iosModule = module {
             authManager = get(),
             time = get(),
             appScope = get(),
+            projectNotifications = get(),
         )
     }
     single<TaskReminderNotifications> { get<IosNotificationScheduler>() }

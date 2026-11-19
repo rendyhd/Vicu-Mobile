@@ -21,12 +21,14 @@ class ReminderAlarmCoordinator(
     private val registry: ReminderAlarmRegistry,
     private val backend: ReminderAlarmBackend,
     private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    /** Per-project notification modes: a task the gate holds back gets no alarm (its old ones go). */
+    private val gate: suspend () -> ReminderGate = { ReminderGate.OPEN },
 ) {
     private val mutex = Mutex()
 
     /** Replaces the alarms of one task with the ones its reminders call for right now. */
     suspend fun scheduleForTask(task: Task) = mutex.withLock {
-        val specs = ReminderAlarms.desiredAlarms(task, nowMillis())
+        val specs = if (gate().allows(task)) ReminderAlarms.desiredAlarms(task, nowMillis()) else emptyList()
         apply(
             desired = mapOf(task.id to specs.map { it.requestCode }.toSet()),
             scope = setOf(task.id),
@@ -42,7 +44,8 @@ class ReminderAlarmCoordinator(
      */
     suspend fun reconcileTasks(changed: List<Task>, goneTaskIds: Set<Long>) = mutex.withLock {
         val now = nowMillis()
-        val specs = changed.flatMap { ReminderAlarms.desiredAlarms(it, now) }
+        val allowed = gate()
+        val specs = changed.filter(allowed::allows).flatMap { ReminderAlarms.desiredAlarms(it, now) }
         apply(
             desired = specs.groupBy({ it.taskId }, { it.requestCode }).mapValues { it.value.toSet() },
             scope = changed.mapTo(HashSet()) { it.id } + goneTaskIds,
@@ -63,7 +66,8 @@ class ReminderAlarmCoordinator(
      */
     suspend fun reconcileAll(openTasksWithReminders: List<Task>) = mutex.withLock {
         val now = nowMillis()
-        val specs = openTasksWithReminders.flatMap { ReminderAlarms.desiredAlarms(it, now) }
+        val allowed = gate()
+        val specs = openTasksWithReminders.filter(allowed::allows).flatMap { ReminderAlarms.desiredAlarms(it, now) }
         apply(
             desired = specs.groupBy({ it.taskId }, { it.requestCode }).mapValues { it.value.toSet() },
             scope = null,

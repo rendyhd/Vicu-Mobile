@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.location
 
+import com.rendyhd.vicu.util.ReminderGate
 import com.rendyhd.vicu.data.local.NotificationPrefsStore
 import com.rendyhd.vicu.data.local.TempIdGenerator
 import com.rendyhd.vicu.domain.model.Task
@@ -42,6 +43,8 @@ class LocationReminderCoordinator(
     private val scope: CoroutineScope,
     /** Where the device is, to keep the nearest regions when there are more than the platform allows. */
     private val near: suspend () -> GeoPoint? = { null },
+    /** Per-project notification modes: a held-back task's place is not watched on this device. */
+    private val gate: suspend () -> ReminderGate = { ReminderGate.OPEN },
 ) {
     private val mutex = Mutex()
     private val requests = Channel<Unit>(Channel.CONFLATED)
@@ -94,7 +97,10 @@ class LocationReminderCoordinator(
                 if (task == null) pruneMissing else task.done
             }.mapTo(HashSet()) { it.taskId }
             locations.removeReminders(dropped)
-            val open = reminders.filter { it.taskId !in dropped && tasks[it.taskId] != null }.mapNotNull { it.watched() }
+            val allowed = gate()
+            val open = reminders
+                .filter { it.taskId !in dropped && tasks[it.taskId]?.let(allowed::allows) == true }
+                .mapNotNull { it.watched() }
             val nearPoint = if (open.size > geofencer.capacity) near() else null
             val regions = LocationRegionPlanner.plan(open, geofencer.capacity, nearPoint)
             if (force || regions != applied) {
@@ -114,10 +120,14 @@ class LocationReminderCoordinator(
      */
     suspend fun onRegionEvent(regionId: String, entered: Boolean) {
         val trigger = if (entered) LocationTrigger.ARRIVE else LocationTrigger.LEAVE
+        val allowed = gate()
         val fired = mutex.withLock {
             followTempIds()
-            val due = locations.allReminders().mapNotNull { it.watched() }
+            val candidates = locations.allReminders().mapNotNull { it.watched() }
                 .filter { it.trigger == trigger && LocationRegionPlanner.regionId(it) == regionId }
+            // A reminder this device holds back stays for the devices that ring for it.
+            val known = taskRepository.getByIds(candidates.mapTo(HashSet()) { it.taskId }).associateBy { it.id }
+            val due = candidates.filter { reminder -> known[reminder.taskId]?.let(allowed::allows) ?: true }
             if (due.isEmpty()) return@withLock emptyList()
             locations.removeReminders(due.mapTo(HashSet()) { it.taskId })
             due

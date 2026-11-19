@@ -115,7 +115,7 @@ val appModule = module {
         )
     }
 
-    single { AlarmScheduler(androidContext(), get(), get(), get(), get(), get()) }
+    single { AlarmScheduler(androidContext(), get(), get(), get(), get(), get(), get()) }
     single<TaskReminderNotifications> { get<AlarmScheduler>() }
     single { RoutineAlarmScheduler(androidContext(), get(), get(), get()) }
     single { DailySummaryScheduler(androidContext(), get()) }

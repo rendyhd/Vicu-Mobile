@@ -5,6 +5,8 @@ import com.rendyhd.vicu.data.repository.FakeTaskDao
 import com.rendyhd.vicu.util.ClockDay
 import com.rendyhd.vicu.util.DailySummary
 import com.rendyhd.vicu.util.DueDates
+import com.rendyhd.vicu.util.ProjectNotifyMode
+import com.rendyhd.vicu.util.ReminderGate
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -125,5 +127,34 @@ class DailySummaryReaderTest {
 
         assertEquals(0, content.counts.total)
         assertEquals(emptyList(), content.dueTodayTitles)
+    }
+
+    @Test
+    fun `held back tasks are neither counted nor named`() = runTest {
+        val me = 7L
+        val partner = 8L
+        fun assigned(id: Long, dueDate: String, project: Long, vararg users: Long) = task(id, dueDate).copy(
+            projectId = project,
+            assigneesJson = users.joinToString(",", "[", "]") { """{"id":$it,"username":"u$it","name":""}""" },
+        )
+        val house = 1L
+        val paul = 2L
+        val gate = ReminderGate(mapOf(house to ProjectNotifyMode.MINE, paul to ProjectNotifyMode.OFF), me)
+        val reader = DailySummaryReader(
+            FakeTaskDao(
+                listOf(
+                    assigned(1, dateOnly("2026-10-25"), house).copy(title = "Water plants"), // nobody's: counts
+                    assigned(2, dateOnly("2026-10-25"), house, partner).copy(title = "Mow lawn"), // partner's only
+                    assigned(3, dateOnly("2026-10-24"), house, me), // mine and overdue
+                    assigned(4, dateOnly("2026-10-26"), paul), // muted project
+                    assigned(5, dateOnly("2026-10-26"), house, partner, me), // mine too, tomorrow
+                ),
+            ),
+        ) { gate }
+
+        val content = reader.all()
+
+        assertEquals(DailySummary.Counts(overdue = 1, dueToday = 1, dueTomorrow = 1), content.counts)
+        assertEquals(listOf("Water plants"), content.dueTodayTitles)
     }
 }

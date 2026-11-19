@@ -8,6 +8,7 @@ import com.rendyhd.vicu.data.local.NotificationPrefsStore
 import com.rendyhd.vicu.data.local.SnoozeStore
 import com.rendyhd.vicu.data.local.dao.TaskDao
 import com.rendyhd.vicu.data.mapper.TaskMapper
+import com.rendyhd.vicu.data.repository.ProjectNotificationSettings
 import com.rendyhd.vicu.util.ReminderAlarms
 import com.rendyhd.vicu.util.ReminderFireDecision
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,7 @@ class AlarmReceiver : BroadcastReceiver(), KoinComponent {
     private val snoozeStore: SnoozeStore by inject()
     private val taskDao: TaskDao by inject()
     private val taskMapper: TaskMapper by inject()
+    private val projectNotifications: ProjectNotificationSettings by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getLongExtra(EXTRA_TASK_ID, 0L)
@@ -58,6 +60,13 @@ class AlarmReceiver : BroadcastReceiver(), KoinComponent {
                 Log.d(TAG, "Stale reminder for taskId=$taskId (${decision.reason}), showing nothing")
                 return
             }
+        }
+
+        // The project may have been muted (or the task given to someone else) since the alarm was set.
+        // A snooze was asked for by the user on this device and always rings.
+        if (!isSnooze && task != null && !runBlocking { projectNotifications.gate() }.allows(task)) {
+            Log.d(TAG, "Project notifications hold back taskId=$taskId, showing nothing")
+            return
         }
 
         // Check if reminders are enabled
