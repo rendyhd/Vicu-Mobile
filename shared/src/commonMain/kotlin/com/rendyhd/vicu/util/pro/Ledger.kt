@@ -19,8 +19,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * does not know survives at every level (section 10.8); the typed reads are the functions below and
  * in the sibling files.
  *
- * Records are `{ value, revision }`, `null` a tombstone. Promise verdicts and "sent" marks are
- * unions, so two devices never lose one. Estimates are `[minutes | null, wall time in seconds]`.
+ * Records are `{ value, revision }`, `null` a tombstone. Promise verdicts, "sent" and "checked"
+ * marks are unions, so two devices never lose one. Estimates are `[minutes | null, wall time in seconds]`.
  */
 class ProLedger(val json: JsonObject) {
     /** The records of a collection by id (`{ value, revision }` objects). */
@@ -96,6 +96,9 @@ object LedgerRules {
 
     /** Records closed for longer than this move to the archive parts. */
     const val ARCHIVE_AFTER_DAYS = 180
+
+    /** A group's records move sooner: its promises, its log entries and every round (section 21.7). */
+    const val GROUP_ARCHIVE_AFTER_DAYS = 90
 
     private val LOCAL_DATE = Regex("^\\d{4}-\\d{2}-\\d{2}\$")
 
@@ -228,8 +231,13 @@ object LedgerRules {
                     winnerValue.list("sent")?.mapNotNull { it.asText() },
                     loserValue.list("sent")?.mapNotNull { it.asText() },
                 )
+                val checked = unionSent(
+                    winnerValue.list("checked")?.mapNotNull { it.asText() },
+                    loserValue.list("checked")?.mapNotNull { it.asText() },
+                )
                 if (verdicts != null) value = value.with("verdicts", JsonArray(verdicts))
                 if (sent != null) value = value.with("sent", JsonArray(sent.map(::JsonPrimitive)))
+                if (checked != null) value = value.with("checked", JsonArray(checked.map(::JsonPrimitive)))
                 merged[id] = winner.asObject()!!.with("value", value)
             } else {
                 merged[id] = winner
@@ -257,7 +265,8 @@ object LedgerRules {
 
     /**
      * `merge(local, server)`: per record the newer revision wins (equal revisions keep the server's),
-     * except that two values of a promise keep the union of their verdicts (by id) and "sent" marks.
+     * except that two values of a promise keep the union of their verdicts (by id) and their "sent"
+     * and "checked" marks.
      * Estimates: the newer wall time wins. Unknown top-level fields are the union, the server's kept.
      * No pruning here.
      */
@@ -430,22 +439,39 @@ object LedgerRules {
         return when (collection) {
             "promises" -> finalVerdictOf(value)?.let { localDayOf(it.text("at"), zone) }
             "initiatives" -> if (value.text("status") == "closed") localDateOrNull(value["closed_on"]) else null
-            "log" -> if (value.text("kind") == "unknown") localDateOrNull(value["resolved"]) else localDateOrNull(value["at"])
+            "log" -> if (value.text("kind") == "unknown" || value.text("kind") == "issue") {
+                localDateOrNull(value["resolved"])
+            } else {
+                localDateOrNull(value["at"])
+            }
             "owed", "escalations" -> localDateOrNull(value["resolved"])
             "rounds" -> localDateOrNull(value["at"])
             else -> null
         }
     }
 
-    /** Records closed more than 180 days before [today], by the quarter they were closed in. */
+    /** After how many closed days a record moves to the archive. */
+    fun archiveAfterDays(collection: String, value: JsonObject?): Int {
+        if (collection == "rounds") return GROUP_ARCHIVE_AFTER_DAYS
+        value ?: return ARCHIVE_AFTER_DAYS
+        if (collection == "promises" && value.obj("to") != null) return GROUP_ARCHIVE_AFTER_DAYS
+        if (collection == "log" && (value.number("group") ?: 0.0) > 0) return GROUP_ARCHIVE_AFTER_DAYS
+        return ARCHIVE_AFTER_DAYS
+    }
+
+    /**
+     * Records closed more than 180 days before [today] (90 for a group's records), by the quarter
+     * they were closed in.
+     */
     fun archivePlan(ledger: ProLedger, today: LocalDate, zone: TimeZone): ArchivePlan {
         val parts = LinkedHashMap<String, LinkedHashMap<String, LinkedHashMap<String, JsonObject>>>()
         val moved = mutableListOf<MovedRecord>()
         for (collection in COLLECTIONS) {
             for ((id, record) in ledger.records(collection)) {
                 val recordObject = record.asObject() ?: continue
-                val day = closedOn(collection, recordObject["value"].asObject(), zone) ?: continue
-                if (day.daysUntil(today) <= ARCHIVE_AFTER_DAYS) continue
+                val value = recordObject["value"].asObject()
+                val day = closedOn(collection, value, zone) ?: continue
+                if (day.daysUntil(today) <= archiveAfterDays(collection, value)) continue
                 parts.getOrPut(quarterOf(day)) { LinkedHashMap() }
                     .getOrPut(collection) { LinkedHashMap() }[id] = recordObject
                 moved.add(MovedRecord(collection, id))

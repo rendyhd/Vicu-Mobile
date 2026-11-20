@@ -43,8 +43,8 @@ fun tokenTextColor(type: TokenType, isDark: Boolean): Color = when (type) {
     TokenType.LABEL -> if (isDark) LABEL_TEXT_DARK else LABEL_TEXT_LIGHT
     TokenType.PROJECT -> if (isDark) PROJECT_TEXT_DARK else PROJECT_TEXT_LIGHT
     TokenType.RECURRENCE -> if (isDark) RECURRENCE_TEXT_DARK else RECURRENCE_TEXT_LIGHT
-    TokenType.PLACE, TokenType.PERSON -> if (isDark) PLACE_TEXT_DARK else PLACE_TEXT_LIGHT
-    TokenType.START, TokenType.ESTIMATE -> if (isDark) DATE_TEXT_DARK else DATE_TEXT_LIGHT
+    TokenType.PLACE, TokenType.PERSON, TokenType.REQUESTER -> if (isDark) PLACE_TEXT_DARK else PLACE_TEXT_LIGHT
+    TokenType.START, TokenType.ESTIMATE, TokenType.CHECK_ON -> if (isDark) DATE_TEXT_DARK else DATE_TEXT_LIGHT
     TokenType.FLAG -> if (isDark) LABEL_TEXT_DARK else LABEL_TEXT_LIGHT
     TokenType.REQUEST -> if (isDark) PROJECT_TEXT_DARK else PROJECT_TEXT_LIGHT
 }
@@ -55,8 +55,8 @@ fun tokenBgColor(type: TokenType, isDark: Boolean): Color = when (type) {
     TokenType.LABEL -> if (isDark) LABEL_BG_DARK else LABEL_BG_LIGHT
     TokenType.PROJECT -> if (isDark) PROJECT_BG_DARK else PROJECT_BG_LIGHT
     TokenType.RECURRENCE -> if (isDark) RECURRENCE_BG_DARK else RECURRENCE_BG_LIGHT
-    TokenType.PLACE, TokenType.PERSON -> if (isDark) PLACE_BG_DARK else PLACE_BG_LIGHT
-    TokenType.START, TokenType.ESTIMATE -> if (isDark) DATE_BG_DARK else DATE_BG_LIGHT
+    TokenType.PLACE, TokenType.PERSON, TokenType.REQUESTER -> if (isDark) PLACE_BG_DARK else PLACE_BG_LIGHT
+    TokenType.START, TokenType.ESTIMATE, TokenType.CHECK_ON -> if (isDark) DATE_BG_DARK else DATE_BG_LIGHT
     TokenType.FLAG -> if (isDark) LABEL_BG_DARK else LABEL_BG_LIGHT
     TokenType.REQUEST -> if (isDark) PROJECT_BG_DARK else PROJECT_BG_LIGHT
 }

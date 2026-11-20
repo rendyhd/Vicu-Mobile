@@ -80,6 +80,8 @@ object ProPrefs {
 
     fun readIsPerson(value: JsonElement?): Boolean = value.asText() == "person"
 
+    fun readIsGroup(value: JsonElement?): Boolean = value.asText() == "group"
+
     fun projectMode(values: Map<String, JsonElement?>, projectId: Long): ProjectMode =
         readProjectMode(values[projectModeKey(projectId)])
 
@@ -95,6 +97,13 @@ object ProPrefs {
     /** The label ids marked as a person. */
     fun personLabelIds(values: Map<String, JsonElement?>): Set<Long> =
         values.mapNotNull { (key, value) -> idOfKey(key, LABEL_KIND_PREFIX)?.takeIf { readIsPerson(value) } }.toSet()
+
+    fun isGroupLabel(values: Map<String, JsonElement?>, labelId: Long): Boolean =
+        readIsGroup(values[labelKindKey(labelId)])
+
+    /** The label ids marked as a group (section 21.16). */
+    fun groupLabelIds(values: Map<String, JsonElement?>): Set<Long> =
+        values.mapNotNull { (key, value) -> idOfKey(key, LABEL_KIND_PREFIX)?.takeIf { readIsGroup(value) } }.toSet()
 
     /** The label ids on hold. */
     fun onHoldLabelIds(values: Map<String, JsonElement?>): Set<Long> =

@@ -81,11 +81,20 @@ object TaskParser {
                 val found = extractPersonPrefix(rawInput, people, consumed)
                 found.value?.let { result.person = ParsedPerson(it.id, it.mine) }
                 result.tokens.addAll(found.tokens)
-                // `$Jan` anywhere, only when no `Jan:` prefix named someone.
+                // `$Jan` anywhere, only when no `Jan:` prefix named someone. Two `$` phrases with one
+                // after `for`: the owner and who it was promised to.
                 if (found.value == null) {
-                    val dollar = extractDollarPerson(rawInput, people, consumed, config.newPeople)
-                    dollar.value?.let { result.person = ParsedPerson(it.id, it.mine, it.name) }
-                    result.tokens.addAll(dollar.tokens)
+                    val pair = extractOwnerAndRequester(rawInput, people, consumed, config.newPeople)
+                    if (pair != null) {
+                        val (person, requester) = pair.value.person to pair.value.requester
+                        result.person = ParsedPerson(person.id, false, person.name)
+                        result.requester = ParsedRequester(requester.id, requester.name)
+                        result.tokens.addAll(pair.tokens)
+                    } else {
+                        val dollar = extractDollarPerson(rawInput, people, consumed, config.newPeople)
+                        dollar.value?.let { result.person = ParsedPerson(it.id, it.mine, it.name) }
+                        result.tokens.addAll(dollar.tokens)
+                    }
                 }
             }
             if (TokenType.FLAG !in suppress) {
@@ -178,6 +187,24 @@ object TaskParser {
                 consumed.add(words.start until token.end)
                 result.tokens.add(
                     ParsedToken(TokenType.START, words.start, token.end, start, rawInput.substring(words.start, token.end)),
+                )
+                break
+            }
+        }
+
+        // Pro: `check on <date>` in a text with a person is a check date, never a due date.
+        if (pro && result.person != null && TokenType.CHECK_ON !in suppress) {
+            for (words in findCheckOnWords(rawInput, consumed)) {
+                val trial = (consumed + listOf(0 until words.phrase)).toMutableList()
+                val found = extractDate(rawInput, trial, options)
+                val token = found.tokens.firstOrNull()
+                val due = found.dueDate
+                if (due == null || token == null) continue
+                if (rawInput.substring(words.phrase, maxOf(words.phrase, token.start)).isNotBlank()) continue
+                result.checkOn = due.date
+                consumed.add(words.start until token.end)
+                result.tokens.add(
+                    ParsedToken(TokenType.CHECK_ON, words.start, token.end, due.date, rawInput.substring(words.start, token.end)),
                 )
                 break
             }
@@ -299,6 +326,8 @@ private class MutableParseResult(
     var recurrence: ParsedRecurrence? = null,
     var place: PlaceMatch? = null,
     var person: ParsedPerson? = null,
+    var requester: ParsedRequester? = null,
+    var checkOn: kotlinx.datetime.LocalDate? = null,
     var start: LocalDateTime? = null,
     var estimate: Int? = null,
     var flag: Boolean = false,
@@ -327,6 +356,8 @@ private class MutableParseResult(
         recurrence = recurrence,
         place = place,
         person = person,
+        requester = requester,
+        checkOn = checkOn,
         start = start,
         estimate = estimate,
         flag = flag,

@@ -28,6 +28,14 @@ data class VerdictChange(
     val taskPatch: JsonObject?,
 )
 
+/** Who a promise was made to (section 21.6): you, a group or a person (label ids), or anyone named in words. */
+sealed class Requester {
+    data object You : Requester()
+    data class Group(val group: Long) : Requester()
+    data class Person(val person: Long) : Requester()
+    data class Text(val text: String) : Requester()
+}
+
 data class WaitingGroup(
     /** The person's label id; null for tasks without one. */
     val person: Long?,
@@ -169,6 +177,48 @@ object Promises {
     }
 
     fun isSent(promise: JsonObject?): Boolean = (promise?.list("sent")?.size ?: 0) > 0
+
+    // --- Who it was promised to, and checks (sections 21.6 and 21.18) ----------------------
+
+    private fun labelId(value: JsonElement?): Long? = value.asWhole()?.takeIf { it > 0 }
+
+    /**
+     * Who a promise was promised to: the first of `to.group`, `to.person` and `to.text` that is set;
+     * without one of them (and without `to`), you.
+     */
+    fun requesterOf(promise: JsonObject?): Requester {
+        val to = promise?.obj("to") ?: return Requester.You
+        labelId(to["group"])?.let { return Requester.Group(it) }
+        labelId(to["person"])?.let { return Requester.Person(it) }
+        val text = to.text("text")?.trim()
+        if (!text.isNullOrEmpty()) return Requester.Text(text)
+        return Requester.You
+    }
+
+    /** True when the promise was made to someone other than you. */
+    fun promisedToOthers(promise: JsonObject?): Boolean = requesterOf(promise) != Requester.You
+
+    /** The promise with a check made at [at] (a UTC instant). */
+    fun withChecked(promise: JsonObject, at: String): JsonObject {
+        val checked = (promise.texts("checked") + at).toSet().sorted()
+        return promise.with("checked", JsonArray(checked.map(::JsonPrimitive)))
+    }
+
+    /** Undo of a copy: the marks made at [at] in [field] (`checked` or `sent`) are taken out again. */
+    fun withoutMark(promise: JsonObject, field: String, at: String): JsonObject {
+        val left = promise.list(field).orEmpty().filter { it.asText() != at }
+        return if (left.isNotEmpty()) promise.with(field, JsonArray(left)) else promise.without(field)
+    }
+
+    /** True when a check was made on or after [day] (a local day). */
+    fun checkedSince(promise: JsonObject?, day: LocalDate, zone: TimeZone): Boolean =
+        promise?.texts("checked").orEmpty().any { at -> localDayOf(at, zone)?.let { it >= day } == true }
+
+    /** The `check_on` day, or null when it is not a date. */
+    fun checkOnOf(promise: JsonObject?): LocalDate? {
+        val day = promise?.text("check_on") ?: return null
+        return if (LOCAL_DATE.matches(day)) runCatching { LocalDate.parse(day) }.getOrNull() else null
+    }
 
     // --- Waiting on (section 21.6) ---------------------------------------------------------
 

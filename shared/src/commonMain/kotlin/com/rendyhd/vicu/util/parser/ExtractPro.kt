@@ -6,8 +6,9 @@ import com.rendyhd.vicu.util.pro.PersonMatchKind
 
 /**
  * Pro's quick-add phrases (docs/cross-app-semantics-v1.md section 5.5), read only while Pro is on:
- * `req:` and a person's `Jan:` / `for Jan:` at the start, `~1h30` estimates and `!flag`. The start
- * date (`starts monday`) is read in [TaskParser], because it needs the date reader. The same rules
+ * `req:` and a person's `Jan:` / `for Jan:` at the start, `$Jan` (and `$Jan ... for $Priya`) anywhere,
+ * `~1h30` estimates and `!flag`. The start date (`starts monday`) and the check date (`check on 3
+ * dec`) are read in [TaskParser], because they need the date reader. The same rules
  * as the desktop's `extract-pro.ts`.
  */
 
@@ -150,23 +151,19 @@ private fun readDollarName(text: String, from: Int): Pair<String, Int>? {
     return null
 }
 
+/** A `$` phrase: its name as written, whether `for` comes before it, and where it is ([start] includes the `for`). */
+private class DollarPhrase(val name: String, val forWord: Boolean, val start: Int, val end: Int)
+
 /**
- * `$Lalith`, `$"Jan de Vries"` or `for $Priya` anywhere (section 5.5), in both syntax modes: the
- * first one only (the caller skips this after a `Jan:` prefix). `$` follows the start or a space, so
- * `US$` stays, and the name starts with a letter or a quote, so `$50` stays. A name that matches
- * nobody is a new person (only with [newPeople]; otherwise it stays); an ambiguous one stays.
+ * Every `$` phrase in [input], in order (the desktop's `DOLLAR_PERSON` matches). `$` follows the
+ * start or a space, so `US$` stays, and the name starts with a letter or a quote, so `$50` stays.
  */
-internal fun extractDollarPerson(
-    input: String,
-    people: List<Person>,
-    consumed: MutableList<IntRange>,
-    newPeople: Boolean = true,
-): ProExtraction<DollarPerson?> {
-    val none = ProExtraction<DollarPerson?>(null, emptyList())
+private fun dollarPhrases(input: String): List<DollarPhrase> {
+    val phrases = mutableListOf<DollarPhrase>()
     var from = 0
     while (true) {
         val dollar = input.indexOf('$', from)
-        if (dollar < 0) return none
+        if (dollar < 0) return phrases
         if (dollar > 0 && !input[dollar - 1].isWhitespace()) {
             from = dollar + 1
             continue
@@ -176,32 +173,89 @@ internal fun extractDollarPerson(
             from = dollar + 1
             continue
         }
-        // `for` and spaces just before it: your promise to them.
-        var start = dollar
+        // `for` and spaces just before it.
         var lead = dollar
         while (lead > 0 && input[lead - 1].isWhitespace()) lead--
-        val mine = lead < dollar && lead >= 3 &&
+        val forWord = lead < dollar && lead >= 3 &&
             input.regionMatches(lead - 3, "for", 0, 3, ignoreCase = true) &&
             (lead == 3 || input[lead - 4].isWhitespace())
-        if (mine) start = lead - 3
-        val end = read.second
-        if (overlaps(consumed, start, end)) {
-            from = end
-            continue
-        }
-        val name = People.newPersonTitle(read.first)
+        phrases += DollarPhrase(read.first, forWord, if (forWord) lead - 3 else dollar, read.second)
+        from = read.second
+    }
+}
+
+/**
+ * `$Lalith`, `$"Jan de Vries"` or `for $Priya` anywhere (section 5.5), in both syntax modes: the
+ * first one only (the caller skips this after a `Jan:` prefix). A `for` before it makes it your
+ * promise to them. A name that matches nobody is a new person (only with [newPeople]; otherwise it
+ * stays); an ambiguous one stays.
+ */
+internal fun extractDollarPerson(
+    input: String,
+    people: List<Person>,
+    consumed: MutableList<IntRange>,
+    newPeople: Boolean = true,
+): ProExtraction<DollarPerson?> {
+    val none = ProExtraction<DollarPerson?>(null, emptyList())
+    for (phrase in dollarPhrases(input)) {
+        val start = phrase.start
+        val end = phrase.end
+        if (overlaps(consumed, start, end)) continue
+        val name = People.newPersonTitle(phrase.name)
         if (name.isEmpty()) return none
         val found = People.matchPerson(name, people)
         if (found.match == PersonMatchKind.AMBIGUOUS) return none
         if (found.id == null && !newPeople) return none
         val person = if (found.id != null) {
-            DollarPerson(found.id, null, mine, start, end)
+            DollarPerson(found.id, null, phrase.forWord, start, end)
         } else {
-            DollarPerson(null, name, mine, start, end)
+            DollarPerson(null, name, phrase.forWord, start, end)
         }
         consumed.add(start until end)
         return ProExtraction(person, listOf(ParsedToken(TokenType.PERSON, start, end, person, input.substring(start, end))))
     }
+    return none
+}
+
+/** Who a promise was made to, as a `for $Priya` phrase names them: a known person or a new one ([id] null). */
+internal class DollarRequester(val id: Long?, val name: String?, val start: Int, val end: Int)
+
+internal class OwnerAndRequester(val person: DollarPerson, val requester: DollarRequester)
+
+/**
+ * Who it was promised to (section 5.5): exactly two `$` phrases, exactly one of them after `for`.
+ * The plain one is the owner and the `for` one the requester. Null when the text is not of that
+ * shape or a name is ambiguous (or new while [newPeople] is off): the caller then reads the first
+ * phrase only, as before.
+ */
+internal fun extractOwnerAndRequester(
+    input: String,
+    people: List<Person>,
+    consumed: MutableList<IntRange>,
+    newPeople: Boolean = true,
+): ProExtraction<OwnerAndRequester>? {
+    val phrases = dollarPhrases(input).filter { !overlaps(consumed, it.start, it.end) }
+    if (phrases.size != 2 || phrases.count { it.forWord } != 1) return null
+    val owner = phrases.first { !it.forWord }
+    val asked = phrases.first { it.forWord }
+    val ownerName = People.newPersonTitle(owner.name)
+    val askedName = People.newPersonTitle(asked.name)
+    if (ownerName.isEmpty() || askedName.isEmpty()) return null
+    val ownerFound = People.matchPerson(ownerName, people)
+    val askedFound = People.matchPerson(askedName, people)
+    if (ownerFound.match == PersonMatchKind.AMBIGUOUS || askedFound.match == PersonMatchKind.AMBIGUOUS) return null
+    if (!newPeople && (ownerFound.id == null || askedFound.id == null)) return null
+    val person = DollarPerson(ownerFound.id, if (ownerFound.id == null) ownerName else null, false, owner.start, owner.end)
+    val requester = DollarRequester(askedFound.id, if (askedFound.id == null) askedName else null, asked.start, asked.end)
+    consumed.add(owner.start until owner.end)
+    consumed.add(asked.start until asked.end)
+    return ProExtraction(
+        OwnerAndRequester(person, requester),
+        listOf(
+            ParsedToken(TokenType.PERSON, owner.start, owner.end, person, input.substring(owner.start, owner.end)),
+            ParsedToken(TokenType.REQUESTER, asked.start, asked.end, requester, input.substring(asked.start, asked.end)),
+        ),
+    )
 }
 
 private val ESTIMATE_RE = Regex(
@@ -248,6 +302,15 @@ private val STARTS_RE = Regex("""(?:^|(?<=\s))starts\s+""", RegexOption.IGNORE_C
 
 internal fun findStartsWords(input: String, consumed: List<IntRange>): List<StartsWords> =
     STARTS_RE.findAll(input)
+        .map { StartsWords(it.range.first, it.range.last + 1) }
+        .filter { !overlaps(consumed, it.start, it.phrase) }
+        .toList()
+
+private val CHECK_ON_RE = Regex("""(?:^|(?<=\s))check\s+on\s+""", RegexOption.IGNORE_CASE)
+
+/** Where `check on` begins a check-date phrase: the words' start and the index right after their spaces. */
+internal fun findCheckOnWords(input: String, consumed: List<IntRange>): List<StartsWords> =
+    CHECK_ON_RE.findAll(input)
         .map { StartsWords(it.range.first, it.range.last + 1) }
         .filter { !overlaps(consumed, it.start, it.phrase) }
         .toList()

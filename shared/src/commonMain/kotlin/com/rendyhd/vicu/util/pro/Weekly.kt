@@ -7,13 +7,16 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.plus
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 enum class ProWeeklyStepId(val key: String, val title: String) {
     VERDICTS("verdicts", "Give verdicts"),
     UNSENT("unsent", "Send what was agreed"),
+    NOTE("note", "Send the weekly note"),
     ESCALATIONS("escalations", "Escalations and decisions"),
     PORTFOLIO("portfolio", "Check the portfolio"),
     VALUE("value", "Note the value delivered"),
@@ -50,7 +53,7 @@ object Weekly {
 
     /**
      * The steps, in this order, for the layers that are on: promises (verdicts due, promises not sent
-     * yet), portfolio (escalations drafted or accepted plus open owed decisions; initiatives not
+     * yet, the weekly note while it is due), portfolio (escalations drafted or accepted plus open owed decisions; initiatives not
      * ready, over the cap or stalled; initiatives closed in the last 7 days without a value entry). A
      * step with nothing to do is still listed with 0, so the review has the same shape each week.
      * [stalledInitiatives] is the active initiatives with no available task.
@@ -68,6 +71,8 @@ object Weekly {
         if (layers.promises) {
             step(ProWeeklyStepId.VERDICTS, tasks.count { Promises.needsVerdict(it, ledger?.value("promises", it.id), today, null, zone) })
             step(ProWeeklyStepId.UNSENT, Promises.unsentPromises(tasks, ledger).size)
+            val settings = ledger?.settingsRecord?.get("value").asObject()
+            step(ProWeeklyStepId.NOTE, if (FollowUps.noteDue(settings, today, zone) != null) 1 else 0)
         }
         if (layers.portfolio) {
             val escalations = ledger?.values("escalations").orEmpty().values.count {
@@ -78,7 +83,7 @@ object Weekly {
             val ranked = Portfolio.rankedInitiatives(ledger)
             val cap = Portfolio.capState(ledger)
             val notReady = ranked.count { !Portfolio.readiness(it.value).ready }
-            step(ProWeeklyStepId.PORTFOLIO, notReady + (if (cap.active > cap.cap) 1 else 0) + stalledInitiatives)
+            step(ProWeeklyStepId.PORTFOLIO, notReady + (if (Portfolio.overCap(cap)) 1 else 0) + stalledInitiatives)
             val weekStart = today.plus(-6, DateTimeUnit.DAY).toString()
             val last = today.toString()
             var closedWithoutValue = 0
@@ -93,6 +98,24 @@ object Weekly {
             step(ProWeeklyStepId.VALUE, closedWithoutValue)
         }
         return steps
+    }
+
+    // --- Marked done by hand (section 21.11) -----------------------------------------------
+
+    /** The steps marked done in the week that starts on [week]; another week's marks do not count. */
+    fun weeklyDoneSteps(settings: JsonObject?, week: LocalDate): List<String> {
+        val done = settings?.obj("weekly_done") ?: return emptyList()
+        if (done.text("week") != week.toString()) return emptyList()
+        val steps = done.list("steps") ?: return emptyList()
+        return steps.mapNotNull { it.asText() }.distinct()
+    }
+
+    /** The settings with one more step marked done for the week that starts on [week]. */
+    fun withWeeklyDone(settings: JsonObject?, week: LocalDate, step: String): JsonObject {
+        val steps = weeklyDoneSteps(settings, week)
+        val next = if (step in steps) steps else steps + step
+        val done = JsonObject(mapOf("week" to JsonPrimitive(week.toString()), "steps" to JsonArray(next.map(::JsonPrimitive))))
+        return (settings ?: JsonObject(emptyMap())).with("weekly_done", done)
     }
 
     // --- The mirror ------------------------------------------------------------------------

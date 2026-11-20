@@ -14,7 +14,11 @@ import com.rendyhd.vicu.data.sync.TaskListServer
 import com.rendyhd.vicu.util.MutableTimeSource
 import com.rendyhd.vicu.util.ProLedgerEnvelope
 import com.rendyhd.vicu.util.pro.LedgerRules
+import com.rendyhd.vicu.util.pro.Groups
 import com.rendyhd.vicu.util.pro.ProLedger
+import com.rendyhd.vicu.util.pro.Promises
+import com.rendyhd.vicu.util.pro.Requester
+import com.rendyhd.vicu.util.pro.Sessions
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -193,6 +197,56 @@ class ProLedgerRepositoryTest {
         // The temporary key is a tombstone, so an older copy cannot bring it back.
         assertEquals(JsonNull, ledger.records("promises")["-3"]?.jsonObject?.get("value"))
         assertTrue(rig.tasks.requests.isEmpty())
+    }
+
+    @Test
+    fun `a change for another reason keeps who a promise was made to, its checks and the fields of meetings and rounds`() = runTest {
+        val rig = rig()
+        val to = JsonObject(mapOf("group" to JsonPrimitive(70)))
+        val promise = JsonObject(
+            promise(7) + mapOf(
+                "to" to to,
+                "checked" to JsonArray(listOf(JsonPrimitive("2026-11-10T08:00:00Z"))),
+                "check_on" to JsonPrimitive("2026-11-11"),
+                "no_check" to JsonPrimitive(true),
+                "later" to JsonObject(mapOf("kept" to JsonPrimitive(1))),
+            ),
+        )
+        val meeting = JsonObject(
+            mapOf(
+                "name" to JsonPrimitive("LT Operations"),
+                "people" to JsonArray(listOf(JsonPrimitive(7))),
+                "label" to JsonPrimitive(70),
+                "sessions" to JsonArray(listOf(JsonObject(mapOf("id" to JsonPrimitive("w"), "kind" to JsonPrimitive("weekly"), "later" to JsonPrimitive("x"))))),
+                "checks" to JsonPrimitive(false),
+                "language" to JsonPrimitive("nl"),
+                "later" to JsonPrimitive("meeting field"),
+            ),
+        )
+        val round = Sessions.endSession("g1", "weekly", kotlinx.datetime.LocalDate(2026, 11, 9), "2026-11-09T08:00:00Z", "2026-11-09T09:00:00Z", listOf(7), readBack = true, score = 7)
+        val roundWithMore = JsonObject(round + ("later" to JsonPrimitive("round field")))
+        rig.repo.setRecord("promises", "42", promise)
+        rig.repo.setRecord("meetings", "g1", meeting)
+        rig.repo.setRecord("rounds", "r1", roundWithMore)
+        rig.repo.sync()
+
+        // What ProActions.verdict writes, and a recap copied for the round.
+        val before = assertNotNull(rig.repo.current().value("promises", 42))
+        rig.repo.setRecord("promises", "42", Promises.withVerdict(before, verdict("v1", "2026-11-12T09:00:00Z", "not_yet")))
+        val storedRound = assertNotNull(rig.repo.current().value("rounds", "r1"))
+        rig.repo.setRecord("rounds", "r1", Sessions.withRecapSent(storedRound, "2026-11-12T09:30:00Z"))
+        rig.repo.sync()
+
+        val carrier = assertNotNull(rig.carrier())
+        val written = assertNotNull(carrier.value("promises", 42))
+        for (key in listOf("to", "checked", "check_on", "no_check", "later", "dir", "person")) assertEquals(promise[key], written[key], key)
+        assertEquals(1, (written["verdicts"] as JsonArray).size)
+        assertEquals(meeting, carrier.value("meetings", "g1"))
+        val writtenRound = assertNotNull(carrier.value("rounds", "r1"))
+        for ((key, value) in roundWithMore) assertEquals(value, writtenRound[key], key)
+        assertEquals(JsonArray(listOf(JsonPrimitive("2026-11-12T09:30:00Z"))), writtenRound["recap_sent"])
+        assertEquals(Requester.Group(70), Promises.requesterOf(written))
+        assertEquals("nl", Groups.groupsOf(carrier).single().language)
     }
 
     @Test

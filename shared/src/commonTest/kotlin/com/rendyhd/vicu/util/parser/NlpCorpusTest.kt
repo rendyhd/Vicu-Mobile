@@ -19,7 +19,8 @@ import kotlin.test.assertTrue
  * The shared quick-add corpus (`test-fixtures/nlp-corpus-v1.json`, identical in the desktop repo;
  * docs/cross-app-semantics-v1.md section 5). Reference time is Tue 2026-10-06 10:00 local, in
  * every zone the contract vectors run in, and a case passes only when all of title, due date,
- * priority, labels, project, recurrence and place match. Every case is parsed with the corpus's
+ * priority, labels, project, recurrence and place match (and, with Pro, the person, who it was
+ * promised to, the check date, the start date, the estimate, the flag and the request). Every case is parsed with the corpus's
  * saved places (section 5.3).
  */
 object NlpCorpusFixture {
@@ -35,6 +36,9 @@ object NlpCorpusFixture {
 
     @Serializable
     data class PersonRead(val id: Long?, val mine: Boolean, val name: String? = null)
+
+    @Serializable
+    data class RequesterRead(val id: Long?, val name: String? = null)
 
     @Serializable
     data class CorpusPerson(val id: Long, val title: String, val aliases: List<String> = emptyList())
@@ -60,6 +64,10 @@ object NlpCorpusFixture {
         /** Parsed with Pro on and the corpus's people (section 5.5). */
         val pro: Boolean = false,
         val person: PersonRead? = null,
+        /** Who it was promised to (`$Jan ... for $Priya`). */
+        val requester: RequesterRead? = null,
+        /** `check on 3 dec`, a local day. */
+        val checkOn: String? = null,
         val proStart: String? = null,
         val estimate: Int? = null,
         val flag: Boolean = false,
@@ -128,6 +136,10 @@ class NlpCorpusTest {
         if (place != case.place) problems += "place $place, expected ${case.place}"
         val person = result.person?.let { NlpCorpusFixture.PersonRead(it.id, it.mine, it.name) }
         if (person != case.person) problems += "person $person, expected ${case.person}"
+        val requester = result.requester?.let { NlpCorpusFixture.RequesterRead(it.id, it.name) }
+        if (requester != case.requester) problems += "requester $requester, expected ${case.requester}"
+        val checkOn = result.checkOn?.toString()
+        if (checkOn != case.checkOn) problems += "check on $checkOn, expected ${case.checkOn}"
         val proStart = result.start?.let(::wallOf)
         if (proStart != case.proStart) problems += "start date $proStart, expected ${case.proStart}"
         if (result.estimate != case.estimate) problems += "estimate ${result.estimate}, expected ${case.estimate}"
@@ -147,7 +159,7 @@ class NlpCorpusTest {
     @Test
     fun `the corpus is the contract version this parser implements`() {
         assertEquals(1, NlpCorpusFixture.corpus.contractVersion)
-        assertEquals(203, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
+        assertEquals(217, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
     }
 
     @Test

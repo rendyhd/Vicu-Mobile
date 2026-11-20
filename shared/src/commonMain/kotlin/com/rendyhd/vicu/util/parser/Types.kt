@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.util.parser
 
 import com.rendyhd.vicu.location.PlaceMatch
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 
 enum class SyntaxMode { TODOIST, VIKUNJA }
@@ -10,10 +11,13 @@ enum class SyntaxMode { TODOIST, VIKUNJA }
  * the caller passes the saved places. It is not in the shared contract (the desktop saves no places).
  * [LENGTH] is `for 30m` when it makes a time block (section 5.4 of the contract).
  *
- * [PERSON], [START], [ESTIMATE], [FLAG] and [REQUEST] are Pro's phrases (section 5.5), read only
- * while [ParserConfig.pro] is on.
+ * [PERSON], [REQUESTER], [CHECK_ON], [START], [ESTIMATE], [FLAG] and [REQUEST] are Pro's phrases
+ * (section 5.5), read only while [ParserConfig.pro] is on. [REQUESTER] goes with [PERSON]: suppressing
+ * the person suppresses both, and the check date too, which is read only with a person.
  */
-enum class TokenType { LABEL, PROJECT, PRIORITY, RECURRENCE, DATE, LENGTH, PLACE, PERSON, START, ESTIMATE, FLAG, REQUEST }
+enum class TokenType {
+    LABEL, PROJECT, PRIORITY, RECURRENCE, DATE, LENGTH, PLACE, PERSON, REQUESTER, CHECK_ON, START, ESTIMATE, FLAG, REQUEST,
+}
 
 data class ParsedToken(
     val type: TokenType,
@@ -34,6 +38,9 @@ data class ParsedRecurrence(
  * (quotes removed, spacing collapsed), made when the task is saved (section 21.5).
  */
 data class ParsedPerson(val id: Long?, val mine: Boolean, val name: String? = null)
+
+/** Who a promise was made to: a known person ([id]), or a new one ([id] null, [name]) made when the task is saved. */
+data class ParsedRequester(val id: Long?, val name: String? = null)
 
 enum class RecurrenceUnit { DAY, WEEK, MONTH, YEAR }
 
@@ -62,6 +69,13 @@ data class ParseResult(
      * yours to them. A `$` name that matches nobody is a new person ([ParsedPerson.id] null).
      */
     val person: ParsedPerson? = null,
+    /**
+     * Who the promise was made to, when the text has two `$` phrases and one follows `for`
+     * (`$Jan site list for $Priya`). Null otherwise.
+     */
+    val requester: ParsedRequester? = null,
+    /** `check on 3 feb`, only with a person: the local day to look at the promise. */
+    val checkOn: LocalDate? = null,
     /** `starts monday`: a start date (local midnight without a time). Null when a block holds the start. */
     val start: LocalDateTime? = null,
     /** `~1h30`: minutes. */

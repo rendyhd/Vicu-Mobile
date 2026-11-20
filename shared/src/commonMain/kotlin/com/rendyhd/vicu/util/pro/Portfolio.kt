@@ -18,6 +18,8 @@ data class CapState(
     val agreed: Boolean,
     /** Adding one more needs one parked first. */
     val full: Boolean,
+    /** No limit (the setting `cap_off`): never full, never over. */
+    val unlimited: Boolean = false,
 )
 
 enum class ReadinessItem(val key: String, val label: String) {
@@ -79,8 +81,12 @@ object Portfolio {
         val agreedValue = settings?.value?.get("cap_agreed")
         val agreed = agreedValue != null && agreedValue !is JsonNull && agreedValue != JsonPrimitive(false)
         val active = rankedInitiatives(ledger).size
+        if (settings?.value?.get("cap_off").asFlag() == true) return CapState(active, cap, agreed, full = false, unlimited = true)
         return CapState(active, cap, agreed, active >= cap)
     }
+
+    /** True when more initiatives are active than the cap allows; never with no limit. */
+    fun overCap(cap: CapState): Boolean = !cap.unlimited && cap.active > cap.cap
 
     /** Parking: status parked with the day and reason; the rank is dropped (it comes back last). */
     fun parkedValue(value: JsonObject, on: LocalDate, reason: String): JsonObject {
