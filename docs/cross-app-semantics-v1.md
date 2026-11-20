@@ -2719,7 +2719,9 @@ shows open flagged tasks; Vikunja's own Favorites pseudo-project (-1) is not use
   a log entry's `group`, `session`, `rank`, `task`, `shared`, `solved_in` and the kind
   `issue`; the settings `cap_off`, `check_days`, `workdays`, `note_day`, `note_sent`,
   `text_language` and `weekly_done`. A promise's `checked` is merged like `sent`: the sorted
-  union of both sides.
+  union of both sides. A union cannot lose a mark, so a mark that is taken back (the Undo of a
+  copy) is also named in the promise's `unmarked`, itself a sorted union: a mark in `unmarked`
+  is in neither `sent` nor `checked`, after every merge and for every reader.
 - **Pruning:** tombstones and cleared estimates older than 90 days (section 10.6). Pro devices
   remove the promise and estimate of a task that is gone or done for 30 days.
 - **A task created offline** has a temporary id until the replay creates it; its ledger keys and the

@@ -225,19 +225,28 @@ object LedgerRules {
             val winnerValue = winner.asObject()?.get("value").asObject()
             val loserValue = loser.asObject()?.get("value").asObject()
             if (collection == "promises" && winnerValue != null && loserValue != null) {
-                var value = winnerValue
+                var value: JsonObject = winnerValue
                 val verdicts = unionVerdicts(verdictsOf(winnerValue), verdictsOf(loserValue))
-                val sent = unionSent(
-                    winnerValue.list("sent")?.mapNotNull { it.asText() },
-                    loserValue.list("sent")?.mapNotNull { it.asText() },
-                )
-                val checked = unionSent(
-                    winnerValue.list("checked")?.mapNotNull { it.asText() },
-                    loserValue.list("checked")?.mapNotNull { it.asText() },
+                // Marks are unions, so one that was taken back is named in "unmarked" (a union too)
+                // and left out of both lists, or the other side's copy would bring it back.
+                val unmarked = unionSent(
+                    winnerValue.list("unmarked")?.mapNotNull { it.asText() },
+                    loserValue.list("unmarked")?.mapNotNull { it.asText() },
                 )
                 if (verdicts != null) value = value.with("verdicts", JsonArray(verdicts))
-                if (sent != null) value = value.with("sent", JsonArray(sent.map(::JsonPrimitive)))
-                if (checked != null) value = value.with("checked", JsonArray(checked.map(::JsonPrimitive)))
+                for (field in listOf("sent", "checked")) {
+                    val all = unionSent(
+                        winnerValue.list(field)?.mapNotNull { it.asText() },
+                        loserValue.list(field)?.mapNotNull { it.asText() },
+                    ) ?: continue
+                    val left = if (unmarked != null) all.filter { it !in unmarked } else all
+                    value = if (left.isNotEmpty() || left.size == all.size) {
+                        value.with(field, JsonArray(left.map(::JsonPrimitive)))
+                    } else {
+                        value.without(field)
+                    }
+                }
+                if (unmarked != null) value = value.with("unmarked", JsonArray(unmarked.map(::JsonPrimitive)))
                 merged[id] = winner.asObject()!!.with("value", value)
             } else {
                 merged[id] = winner

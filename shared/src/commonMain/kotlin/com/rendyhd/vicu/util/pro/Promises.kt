@@ -176,7 +176,16 @@ object Promises {
         return promise.with("sent", JsonArray(sent.map(::JsonPrimitive)))
     }
 
-    fun isSent(promise: JsonObject?): Boolean = (promise?.list("sent")?.size ?: 0) > 0
+    fun isSent(promise: JsonObject?): Boolean = marksOf(promise, "sent").isNotEmpty()
+
+    /**
+     * The marks of `sent` or `checked` that stand: a mark named in `unmarked` was taken back and
+     * does not count, also when a copy that does not know `unmarked` wrote it into the list again.
+     */
+    fun marksOf(promise: JsonObject?, field: String): List<String> {
+        val taken = promise?.texts("unmarked").orEmpty()
+        return promise?.texts(field).orEmpty().filter { it !in taken }
+    }
 
     // --- Who it was promised to, and checks (sections 21.6 and 21.18) ----------------------
 
@@ -204,15 +213,21 @@ object Promises {
         return promise.with("checked", JsonArray(checked.map(::JsonPrimitive)))
     }
 
-    /** Undo of a copy: the marks made at [at] in [field] (`checked` or `sent`) are taken out again. */
+    /**
+     * Undo of a copy: the mark made at [at] in [field] (`checked` or `sent`) is taken out again and
+     * named in `unmarked`, because the lists are merged as unions and another copy of the record may
+     * still hold it (section 21.7).
+     */
     fun withoutMark(promise: JsonObject, field: String, at: String): JsonObject {
         val left = promise.list(field).orEmpty().filter { it.asText() != at }
-        return if (left.isNotEmpty()) promise.with(field, JsonArray(left)) else promise.without(field)
+        val unmarked = (promise.texts("unmarked") + at).toSet().sorted()
+        val next = promise.with("unmarked", JsonArray(unmarked.map(::JsonPrimitive)))
+        return if (left.isNotEmpty()) next.with(field, JsonArray(left)) else next.without(field)
     }
 
     /** True when a check was made on or after [day] (a local day). */
     fun checkedSince(promise: JsonObject?, day: LocalDate, zone: TimeZone): Boolean =
-        promise?.texts("checked").orEmpty().any { at -> localDayOf(at, zone)?.let { it >= day } == true }
+        marksOf(promise, "checked").any { at -> localDayOf(at, zone)?.let { it >= day } == true }
 
     /** The `check_on` day, or null when it is not a date. */
     fun checkOnOf(promise: JsonObject?): LocalDate? {
