@@ -251,9 +251,9 @@ class DrawerStateTest {
 
         assertEquals(listOf(DrawerView.LOGBOOK), choices(availability = false, promises = false))
         assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.FLAGGED), choices(availability = true, promises = false))
-        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.WAITING_ON, DrawerView.PEOPLE), choices(availability = false, promises = true))
+        assertEquals(listOf(DrawerView.LOGBOOK, DrawerView.FOLLOW_UPS, DrawerView.WAITING_ON, DrawerView.PEOPLE), choices(availability = false, promises = true))
         assertEquals(
-            listOf(DrawerView.LOGBOOK, DrawerView.FLAGGED, DrawerView.WAITING_ON, DrawerView.PEOPLE),
+            listOf(DrawerView.LOGBOOK, DrawerView.FLAGGED, DrawerView.FOLLOW_UPS, DrawerView.WAITING_ON, DrawerView.PEOPLE),
             choices(availability = true, promises = true),
         )
     }

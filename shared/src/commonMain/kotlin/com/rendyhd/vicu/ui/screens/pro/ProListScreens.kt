@@ -57,6 +57,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_people_groups
 import com.rendyhd.vicu.ui.components.pro.LocalPro
 import com.rendyhd.vicu.ui.components.pro.PersonMark
 import com.rendyhd.vicu.ui.components.pro.ProHiddenSummary
@@ -78,12 +80,13 @@ import com.rendyhd.vicu.ui.navigation.ScreenReady
 import com.rendyhd.vicu.util.parseHexColor
 import com.rendyhd.vicu.util.pro.AvailabilityView
 import com.rendyhd.vicu.util.pro.ProScreens
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /** The frame of a Pro screen: the top bar, the error snackbar and one list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProScreenScaffold(
+internal fun ProScreenScaffold(
     title: String,
     onOpenDrawer: () -> Unit,
     onNavigateToSearch: () -> Unit,
@@ -144,7 +147,7 @@ private fun ProOffNotice(onOpenSettings: () -> Unit, modifier: Modifier = Modifi
 
 /** A task row of a Pro screen: completing keeps it in place for a moment, as on every list. */
 @Composable
-private fun ProTaskRow(
+internal fun ProTaskRow(
     task: Task,
     held: Set<Long>,
     viewModel: ProTaskListViewModel,
@@ -264,11 +267,13 @@ fun PeopleScreen(
     onNavigateToSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenPerson: (Long) -> Unit,
+    onOpenGroup: (Long) -> Unit = {},
 ) {
     val pro = LocalPro.current
     val world = pro.world
     val rows = remember(world) { ProScreens.peopleRows(world.people, world.open, world::promiseFor, world.today, world.zone) }
-    val candidates = remember(world) { world.labels.filter { !world.isPerson(it.id) }.sortedBy { it.title.lowercase() } }
+    // A group's label (contract 21.16) is never offered as a person.
+    val candidates = remember(world) { world.labels.filter { !world.isPerson(it.id) && !world.isGroup(it.id) }.sortedBy { it.title.lowercase() } }
     ProScreenScaffold("People", onOpenDrawer, onNavigateToSearch) {
         if (!world.promisesOn) {
             item(key = "off") { ProOffNotice(onOpenSettings) }
@@ -332,6 +337,28 @@ fun PeopleScreen(
                         }
                     }
                 }
+            }
+        }
+        // The groups (contract 21.16), each opening its read-only page.
+        if (world.groups.isNotEmpty()) {
+            item(key = "groups_header", contentType = "header") {
+                SectionHeader(title = stringResource(Res.string.pro_people_groups), count = world.groups.size)
+            }
+            items(world.groups, key = { "group_${it.label}" }) { group ->
+                val name = world.groupName(group.label)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .clickable(role = Role.Button) { onOpenGroup(group.label) }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(ProIcons.PEOPLE, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(16.dp))
+                    Text(name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }

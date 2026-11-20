@@ -107,10 +107,18 @@ object ProScreens {
     fun hiddenSummary(count: Int): String =
         if (count == 1) "1 task is not available yet." else "$count tasks are not available yet."
 
-    /** "From Jan" for a promise of theirs, "For Jan" for yours; null for anything else. */
-    fun promiseMeta(dir: String?, name: String): String? = when (dir) {
-        "theirs" -> "From $name"
-        "mine" -> "For $name"
+    /**
+     * Who a promise is from and who it was made to (section 21.6): "From Jan", "From Jan, for
+     * Leadership team" for a promise of theirs; "For Jan" for yours to a person, "Yours" or "Yours,
+     * for Leadership team" for your own action without one ([name] null). Null for anything else.
+     */
+    fun promiseMeta(dir: String?, name: String?, requester: String? = null): String? = when (dir) {
+        "theirs" -> if (requester != null) "From ${name ?: "Someone"}, for $requester" else "From ${name ?: "Someone"}"
+        "mine" -> when {
+            name != null -> "For $name"
+            requester != null -> "Yours, for $requester"
+            else -> "Yours"
+        }
         else -> null
     }
 

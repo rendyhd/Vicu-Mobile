@@ -38,6 +38,9 @@ class ProPreferencesTest {
         assertTrue(SyncedPrefKeys.isWritableProValue("project_status.1", JsonPrimitive("on_hold")))
         assertFalse(SyncedPrefKeys.isWritableProValue("label_status.1", JsonPrimitive("held")))
         assertTrue(SyncedPrefKeys.isWritableProValue("label_kind.1", JsonPrimitive("person")))
+        // A group's label (contract 21.16) is kept and may be written back.
+        assertTrue(SyncedPrefKeys.isWritableProValue("label_kind.1", JsonPrimitive("group")))
+        assertFalse(SyncedPrefKeys.isWritableProValue("label_kind.1", JsonPrimitive("team")))
         assertTrue(SyncedPrefKeys.isWritableProValue("repeat_rule.1", JsonObject(mapOf("count" to JsonPrimitive(3)))))
         assertFalse(SyncedPrefKeys.isWritableProValue("repeat_rule.1", JsonObject(emptyMap())))
         assertTrue(SyncedPrefKeys.isWritableProValue("pro.area", JsonArray(listOf(JsonPrimitive("c1")))))

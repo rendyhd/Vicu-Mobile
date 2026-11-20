@@ -126,6 +126,7 @@ internal fun drawerViewOffers(
         // Pro's views, between the smart lists and the projects (design system 9).
         if (proAvailability) add(DrawerViewOffer(DrawerView.FLAGGED, inBar = false))
         if (proPromises) {
+            add(DrawerViewOffer(DrawerView.FOLLOW_UPS, inBar = false))
             add(DrawerViewOffer(DrawerView.WAITING_ON, inBar = false))
             add(DrawerViewOffer(DrawerView.PEOPLE, inBar = false))
         }

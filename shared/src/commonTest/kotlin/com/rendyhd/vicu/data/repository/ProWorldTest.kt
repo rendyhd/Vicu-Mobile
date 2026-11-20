@@ -49,6 +49,8 @@ class ProWorldTest {
         ledger: ProLedger = LedgerRules.empty(),
         listViews: Map<String, ProListView> = emptyMap(),
         snoozes: Map<String, VerdictSnooze> = emptyMap(),
+        labels: List<Label> = listOf(jan),
+        followUpDismissed: Map<String, String> = emptyMap(),
     ): ProWorld {
         val projects = listOf(work, pilot, home)
         val allPrefs = prefs + ("label_kind.31" to JsonPrimitive("person"))
@@ -62,7 +64,7 @@ class ProWorldTest {
             donePromiseTasks = emptyList(),
             ledger = ledger,
             prefs = allPrefs,
-            labels = listOf(jan),
+            labels = labels,
             projects = projects,
             listViews = listViews,
             snoozes = snoozes,
@@ -72,6 +74,7 @@ class ProWorldTest {
             } else {
                 null
             },
+            followUpDismissed = followUpDismissed,
         )
     }
 
@@ -143,5 +146,48 @@ class ProWorldTest {
         assertFalse(snoozed.needsVerdict(task))
         assertFalse(snoozed.canSnooze(task))
         assertTrue(world(listOf(task), ledger = ledger(promise)).canSnooze(task))
+    }
+
+    private val leadership = Label(id = 50, title = "LT Ops")
+
+    @Test
+    fun `a promise line says who it was made to - a group, a person or a name`() {
+        val due = DueDates.dateOnlyDue(today, zone).toString()
+        val tasks = listOf(
+            Task(id = 1, title = "Deck", projectId = 11, dueDate = due, labels = listOf(jan, leadership)),
+            Task(id = 2, title = "Agenda", projectId = 11, labels = listOf(leadership)),
+            Task(id = 3, title = "Site list", projectId = 11, labels = listOf(jan)),
+        )
+        val ledger = ProLedger(
+            Json.parseToJsonElement(
+                """{"version":1,"meetings":{"m1":{"value":{"name":"Leadership team","label":50,"people":[31]}}},""" +
+                    """"promises":{"1":{"value":{"dir":"theirs","person":31,"to":{"group":50}}},""" +
+                    """"2":{"value":{"dir":"mine","person":null,"to":{"group":50}}},""" +
+                    """"3":{"value":{"dir":"theirs","person":31,"to":{"text":"Priya"}}}}}""",
+            ).jsonObject,
+        )
+        val w = world(tasks, ledger = ledger, labels = listOf(jan, leadership))
+
+        assertEquals(listOf(50L), w.groups.map { it.label })
+        assertTrue(w.isGroup(50))
+        assertEquals("Leadership team", w.groupName(50))
+        assertEquals("From Jan de Vries, for Leadership team", w.rowOf(tasks[0], fmt)?.promiseText)
+        assertEquals("Yours, for Leadership team", w.rowOf(tasks[1], fmt)?.promiseText)
+        assertEquals("From Jan de Vries, for Priya", w.rowOf(tasks[2], fmt)?.promiseText)
+        assertEquals("Yours, for Leadership team", w.promiseLine(w.promiseFor(tasks[1])))
+        // Without the promises layer there are no groups.
+        assertTrue(world(tasks, promises = false, ledger = ledger, labels = listOf(jan, leadership)).groups.isEmpty())
+    }
+
+    @Test
+    fun `follow-ups list a verdict due unless it was dismissed for today`() {
+        val task = Task(id = 1, title = "Deck", projectId = 11, dueDate = DueDates.dateOnlyDue(today, zone).toString())
+        val lines = world(listOf(task), ledger = ledger(promise)).followUps
+        assertEquals(listOf("verdict:1"), lines.map { it.key })
+
+        assertTrue(world(listOf(task), ledger = ledger(promise), followUpDismissed = mapOf("verdict:1" to "2026-11-13")).followUps.isEmpty())
+        // The day it shows again has come.
+        assertEquals(1, world(listOf(task), ledger = ledger(promise), followUpDismissed = mapOf("verdict:1" to "2026-11-12")).followUps.size)
+        assertTrue(world(listOf(task), promises = false, ledger = ledger(promise)).followUps.isEmpty())
     }
 }

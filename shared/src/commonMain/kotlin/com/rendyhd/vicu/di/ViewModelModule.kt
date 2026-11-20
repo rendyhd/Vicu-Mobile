@@ -11,6 +11,8 @@ import com.rendyhd.vicu.ui.components.selection.SelectionViewModel
 import com.rendyhd.vicu.ui.navigation.DrawerViewModel
 import com.rendyhd.vicu.ui.screens.anytime.AnytimeViewModel
 import com.rendyhd.vicu.ui.screens.pro.FlaggedViewModel
+import com.rendyhd.vicu.ui.screens.pro.FollowUpsViewModel
+import com.rendyhd.vicu.ui.screens.pro.GroupViewModel
 import com.rendyhd.vicu.ui.screens.pro.PersonViewModel
 import com.rendyhd.vicu.ui.screens.pro.WaitingOnViewModel
 import com.rendyhd.vicu.ui.screens.comments.TaskCommentsViewModel
@@ -51,6 +53,8 @@ val viewModelModule = module {
     viewModelOf(::FlaggedViewModel)
     viewModelOf(::WaitingOnViewModel)
     viewModelOf(::PersonViewModel)
+    viewModelOf(::FollowUpsViewModel)
+    viewModelOf(::GroupViewModel)
     viewModelOf(::CustomListViewModel)
     viewModelOf(::InboxViewModel)
     viewModelOf(::LogbookViewModel)

@@ -1737,10 +1737,8 @@ private fun proEditorEntries(
     val blockers = (world.openById[task.id] ?: task).relatedTasks[RelationKind.BLOCKED].orEmpty()
     val afterText = ProScreens.afterValue(blockers.map { it.title })
     val promise = world.promiseFor(task)
-    val promiseText = promise?.let {
-        val dir = (it["dir"] as? JsonPrimitive)?.content
-        ProScreens.promiseMeta(dir, world.nameOf((it["person"] as? JsonPrimitive)?.content?.toLongOrNull()))
-    }
+    // Who it is from and who it was made to (contract 21.6): "From Jan, for Leadership team".
+    val promiseText = world.promiseLine(promise)
     return listOf(
         EditorEntry(
             "pro_promise",

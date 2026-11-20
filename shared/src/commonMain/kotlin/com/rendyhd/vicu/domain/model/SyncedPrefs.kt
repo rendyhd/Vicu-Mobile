@@ -155,7 +155,7 @@ object SyncedPrefKeys {
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_MODE_PREFIX) != null -> text == "sequential" || text == "single"
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_STATUS_PREFIX) != null ||
                 ProPrefs.idOfKey(key, ProPrefs.LABEL_STATUS_PREFIX) != null -> text == "on_hold"
-            ProPrefs.idOfKey(key, ProPrefs.LABEL_KIND_PREFIX) != null -> text == "person"
+            ProPrefs.idOfKey(key, ProPrefs.LABEL_KIND_PREFIX) != null -> text == "person" || text == "group"
             ProPrefs.idOfKey(key, ProPrefs.REPEAT_RULE_PREFIX) != null -> ProPrefs.readRepeatRule(value) != null
             else -> false
         }

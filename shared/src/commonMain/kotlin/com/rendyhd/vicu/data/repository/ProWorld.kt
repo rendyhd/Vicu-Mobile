@@ -17,6 +17,10 @@ import com.rendyhd.vicu.util.pro.AreaProject
 import com.rendyhd.vicu.util.pro.Availability
 import com.rendyhd.vicu.util.pro.AvailabilityContext
 import com.rendyhd.vicu.util.pro.AvailabilityView
+import com.rendyhd.vicu.util.pro.FollowUpLine
+import com.rendyhd.vicu.util.pro.FollowUps
+import com.rendyhd.vicu.util.pro.Group
+import com.rendyhd.vicu.util.pro.Groups
 import com.rendyhd.vicu.util.pro.LedgerRules
 import com.rendyhd.vicu.util.pro.People
 import com.rendyhd.vicu.util.pro.Person
@@ -27,6 +31,7 @@ import com.rendyhd.vicu.util.pro.ProScreens
 import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.ProjectMode
 import com.rendyhd.vicu.util.pro.Promises
+import com.rendyhd.vicu.util.pro.Requester
 import com.rendyhd.vicu.util.pro.TaskAvailability
 import com.rendyhd.vicu.util.pro.ViewFiltered
 import kotlin.time.Instant
@@ -76,6 +81,8 @@ class ProWorld internal constructor(
     private val snoozes: Map<String, VerdictSnooze>,
     val onboardingSeen: Boolean,
     private val context: AvailabilityContext?,
+    /** "Dismiss for today" of the follow-up lines: a line's key and the day it shows again. */
+    private val followUpDismissed: Map<String, String> = emptyMap(),
 ) {
     val on: Boolean get() = availabilityOn || promisesOn
 
@@ -128,6 +135,61 @@ class ProWorld internal constructor(
 
     fun label(id: Long?): Label? = id?.let { labelsById[it] }
 
+    /**
+     * The groups (section 21.16): the ledger's meetings with a label, while the promises layer is
+     * on. A group whose label is gone from the device is left out.
+     */
+    val groups: List<Group> by lazy {
+        if (!promisesOn) emptyList() else Groups.groupsOf(ledger).filter { it.label in labelsById }
+    }
+
+    val groupByLabel: Map<Long, Group> by lazy { groups.associateBy { it.label } }
+
+    /** The label ids of the groups (what an action carries). */
+    val groupLabelIds: Set<Long> get() = groupByLabel.keys
+
+    fun isGroup(labelId: Long): Boolean = labelId in groupByLabel
+
+    /** A group's name by its label id: its own, else the label's title. */
+    fun groupName(labelId: Long): String =
+        groupByLabel[labelId]?.name?.trim()?.takeIf { it.isNotEmpty() } ?: label(labelId)?.title ?: "Someone"
+
+    /** Who a promise was made to, in words: a group, a person, a name; null when it was made to you. */
+    fun requesterName(promise: JsonObject?): String? = when (val requester = Promises.requesterOf(promise)) {
+        is Requester.Group -> groupName(requester.group)
+        is Requester.Person -> label(requester.person)?.title ?: "Someone"
+        is Requester.Text -> requester.text
+        Requester.You -> null
+    }
+
+    /** "From Jan, for Leadership team" and the like for a promise (section 21.6), or null. */
+    fun promiseLine(promise: JsonObject?): String? {
+        promise ?: return null
+        val dir = (promise["dir"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val person = (promise["person"] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()?.takeIf { it > 0 }
+        val name = person?.let { nameOf(it) } ?: if (dir == "theirs") "Someone" else null
+        return ProScreens.promiseMeta(dir, name, requesterName(promise))
+    }
+
+    /** "Ask me tomorrow" of every promise, as the follow-up rules read it. */
+    private val verdictSnoozes: Map<String, com.rendyhd.vicu.util.pro.VerdictSnooze> by lazy {
+        snoozes.keys.mapNotNull { key -> key.toLongOrNull()?.let { id -> snoozeOf(id)?.let { key to it } } }.toMap()
+    }
+
+    /** The open tasks, where a promise outside the area does not count as one. */
+    val openInArea: List<Task> by lazy {
+        open.filter { Promises.promiseOf(ledger, it.id) == null || promiseFor(it) != null }
+    }
+
+    /**
+     * Follow-ups (section 21.18): verdicts due, checks before due, bring-back dates, recaps not
+     * copied and the weekly note, without the lines dismissed for today. Empty while the promises
+     * layer is off.
+     */
+    val followUps: List<FollowUpLine> by lazy {
+        if (!promisesOn) emptyList() else FollowUps.followUps(openInArea, ledger, today, zone, verdictSnoozes, followUpDismissed)
+    }
+
     /** A person's name; "Someone" when the label is gone. */
     fun nameOf(personId: Long?): String = label(personId)?.title ?: "Someone"
 
@@ -168,7 +230,7 @@ class ProWorld internal constructor(
         val promise = promiseFor(task)
         val open = promise != null && LedgerRules.finalVerdictOf(promise) == null
         val dir = (promise?.get("dir") as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val personId = (promise?.get("person") as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+        val personId = (promise?.get("person") as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()?.takeIf { it > 0 }
         val person = label(personId)
         return ProRow(
             reason = if (availability != null && !availability.available) reasonText(task, fmt) else null,
@@ -182,6 +244,8 @@ class ProWorld internal constructor(
             words = (promise?.get("words") as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()?.takeIf { it.isNotEmpty() },
             sent = Promises.isSent(promise),
             hasPromise = promise != null,
+            requester = if (open) requesterName(promise) else null,
+            hasPerson = personId != null,
         )
     }
 
@@ -236,12 +300,19 @@ data class ProRow(
     /** Copied in a recap. */
     val sent: Boolean,
     val hasPromise: Boolean,
+    /** Who the open promise was made to, in words (a group, a person, a name); null when to you. */
+    val requester: String? = null,
+    /** False for your own action without a person ("Yours"). */
+    val hasPerson: Boolean = true,
 ) {
-    /** "From Jan" or "For Jan" while the promise is open. */
+    /**
+     * "From Jan", "From Jan, for Leadership team", "For Jan", "Yours" or "Yours, for Leadership
+     * team" while the promise is open (section 21.6).
+     */
     val promiseText: String?
         get() = when {
-            theirs -> "From $personName"
-            mine -> "For $personName"
+            theirs -> ProScreens.promiseMeta("theirs", personName, requester)
+            mine -> ProScreens.promiseMeta("mine", personName.takeIf { hasPerson }, requester)
             else -> null
         }
 }
@@ -283,6 +354,7 @@ class ProWorldSource(
         val listViews: Map<String, ProListView>,
         val snoozes: Map<String, VerdictSnooze>,
         val onboardingSeen: Boolean,
+        val followUpDismissed: Map<String, String>,
     )
 
     private class Stored(val open: List<Task>, val projects: List<Project>, val labels: List<Label>)
@@ -317,7 +389,7 @@ class ProWorldSource(
         }
         val open = taskRepository.getAllOpenTasksFlat()
         val device = behaviorPrefs.getPrefs()
-            .map { Device(it.proListViews, it.proVerdictSnooze, it.proOnboardingSeen) }
+            .map { Device(it.proListViews, it.proVerdictSnooze, it.proOnboardingSeen, it.proFollowUpDismissed) }
             .distinctUntilChanged()
         val stored = combine(open, projectRepository.getAll(), labelRepository.getAll()) { tasks, projects, labels ->
             Stored(tasks, projects.filter { !it.isArchived }, labels)
@@ -363,6 +435,7 @@ class ProWorldSource(
                 snoozes = v.device.snoozes,
                 onboardingSeen = v.device.onboardingSeen,
                 context = context,
+                followUpDismissed = v.device.followUpDismissed,
             )
         }
     }

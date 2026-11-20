@@ -115,6 +115,7 @@ internal fun currentRouteKey(entry: NavBackStackEntry?): String? {
         dest.hasRoute(SettingsRoute::class) -> "SettingsRoute"
         dest.hasRoute(AskRoute::class) -> "AskRoute"
         dest.hasRoute(FlaggedRoute::class) -> "FlaggedRoute"
+        dest.hasRoute(FollowUpsRoute::class) -> "FollowUpsRoute"
         dest.hasRoute(WaitingOnRoute::class) -> "WaitingOnRoute"
         dest.hasRoute(PeopleRoute::class) -> "PeopleRoute"
         dest.hasRoute(ProjectRoute::class) -> "ProjectRoute/${entry.toRoute<ProjectRoute>().projectId}"

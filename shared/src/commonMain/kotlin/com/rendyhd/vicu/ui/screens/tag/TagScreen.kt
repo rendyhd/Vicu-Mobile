@@ -63,6 +63,7 @@ fun TagScreen(
     onOpenDrawer: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onShowTaskEntry: (Long?, String?) -> Unit = { _, _ -> },
+    onOpenGroup: (Long) -> Unit = {},
     viewModel: TagViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -109,7 +110,7 @@ fun TagScreen(
                     scroll = topBarScroll,
                     onNavigateToSearch = onNavigateToSearch,
                     // Pro's label menu: on hold, and marking the label as a person (contract 21.2, 21.5).
-                    trailingActions = { LabelProMenu(labelId) },
+                    trailingActions = { LabelProMenu(labelId, onOpenGroup) },
                 )
             }
         },

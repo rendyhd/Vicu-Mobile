@@ -785,6 +785,16 @@ class TaskEntryViewModel(
                         personNotice = true
                     }
                 }
+                // Who it was promised to (`for $Priya`, contract 5.5), when that names nobody yet:
+                // made a person too; when that fails the name is kept in words (21.6, `to.text`).
+                // The requester is never one of the task's labels.
+                proCapture.newRequesterOf(proParsed)?.let { name ->
+                    val made = proCaptureSource?.makePerson(name)
+                    if (made is NetworkResult.Success) {
+                        proCapture = proCapture.withPerson(made.data)
+                        proParsed = proParsed?.copy(requester = proParsed?.requester?.copy(id = made.data.id, name = null))
+                    }
+                }
                 proCapture.personLabelOf(proParsed)?.let { resolvedLabelIds += it }
 
                 val plainTask = Task(
@@ -827,7 +837,7 @@ class TaskEntryViewModel(
                         // Pro on: `Jan:` makes the task that person's promise, `~45m` gives its estimate.
                         proLedger?.recordCapture(
                             createdTask.id,
-                            proCapture.promiseOf(proParsed, state.promiseWords, state.promiseDoneWhen),
+                            proCapture.promiseOf(proParsed, state.promiseWords, state.promiseDoneWhen, resolvedLabelIds),
                             proCapture.estimateOf(proParsed),
                         )
                         // A newer message replaces the one on screen: what the user must act on or

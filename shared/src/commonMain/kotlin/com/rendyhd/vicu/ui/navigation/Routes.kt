@@ -28,6 +28,12 @@ import kotlinx.serialization.Serializable
 @Serializable object WaitingOnRoute
 @Serializable object PeopleRoute
 
+/** Follow-ups (section 21.18): what needs a move from you. */
+@Serializable object FollowUpsRoute
+
+/** A group's page (section 21.16), by the group's label. */
+@Serializable data class GroupRoute(val labelId: Long)
+
 /** A person's page: a label marked as a person. */
 @Serializable data class PersonRoute(val labelId: Long)
 

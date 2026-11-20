@@ -161,7 +161,7 @@ class TextTaskCreator(
                 val created = result.data
                 for (labelId in labelIds + listOfNotNull(personLabel)) labelRepository.addToTask(created.id, labelId)
                 // Pro on: `Jan:` makes the task that person's promise, `~45m` gives its estimate.
-                proLedger?.recordCapture(created.id, pro.promiseOf(parsed), pro.estimateOf(parsed))
+                proLedger?.recordCapture(created.id, pro.promiseOf(parsed, labelIds = labelIds), pro.estimateOf(parsed))
                 placePhrase?.let { phrase ->
                     locations.setReminder(locations.reminderAt(created.id, phrase.place, phrase.trigger))
                 }

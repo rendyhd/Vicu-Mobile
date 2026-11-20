@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.rendyhd.vicu.util.pro.Focus
+import com.rendyhd.vicu.util.pro.FollowUps
 import com.rendyhd.vicu.util.pro.ProFocus
 import com.rendyhd.vicu.util.pro.ProLayer
 import com.rendyhd.vicu.util.pro.ProLayers
@@ -14,6 +15,7 @@ import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.ProSwitches
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -48,7 +50,7 @@ enum class SubprojectDisplayMode { SECTIONS, PROJECT_ROWS }
  * and where (Settings, General, Drawer; the rules are in `DrawerLayout`); a view that is not listed
  * keeps working.
  */
-enum class DrawerView { INBOX, TODAY, PLAN, UPCOMING, ANYTIME, LOGBOOK, ROUTINES, REVIEW, ASK, FLAGGED, WAITING_ON, PEOPLE }
+enum class DrawerView { INBOX, TODAY, PLAN, UPCOMING, ANYTIME, LOGBOOK, ROUTINES, REVIEW, ASK, FLAGGED, FOLLOW_UPS, WAITING_ON, PEOPLE }
 
 data class BehaviorPrefs(
     val completionSoundEnabled: Boolean = false,
@@ -96,6 +98,8 @@ data class BehaviorPrefs(
     val proVerdictSnooze: Map<String, VerdictSnooze> = emptyMap(),
     /** The first-run notice about start dates set elsewhere was shown. */
     val proOnboardingSeen: Boolean = false,
+    /** "Dismiss for today" of the follow-up lines (contract 21.18): a line's key and the local day it shows again. */
+    val proFollowUpDismissed: Map<String, String> = emptyMap(),
 ) {
     /** The switch and layers as the Pro rules read them. This app has no standalone mode. */
     val proSwitches: ProSwitches get() = ProSwitches(proEnabled = proEnabled, proLayers = proLayers)
@@ -165,6 +169,7 @@ class BehaviorPrefsStore(
         private val KEY_PRO_ASSISTANT = booleanPreferencesKey("pro_assistant")
         private val KEY_PRO_VERDICT_SNOOZE = stringPreferencesKey("pro_verdict_snooze")
         private val KEY_PRO_ONBOARDING_SEEN = booleanPreferencesKey("pro_onboarding_seen")
+        private val KEY_PRO_FOLLOWUP_DISMISSED = stringPreferencesKey("pro_followup_dismissed")
 
         /** A stored JSON value, or null when there is none or it does not read. */
         private fun parseJson(raw: String?): JsonElement? =
@@ -184,6 +189,10 @@ class BehaviorPrefsStore(
                 val until = entry["until"].text() ?: return@mapNotNull null
                 key to VerdictSnooze(due, until)
             }.toMap()
+
+        /** `pro_followup_dismissed`: a line's key and the day it shows again; anything else is left out. */
+        internal fun readFollowUpDismissed(raw: String?): Map<String, String> =
+            objectOf(raw).mapNotNull { (key, value) -> value.text()?.let { key to it } }.toMap()
     }
 
     fun getPrefs(): Flow<BehaviorPrefs> =
@@ -224,6 +233,7 @@ class BehaviorPrefsStore(
                 proAssistant = prefs[KEY_PRO_ASSISTANT] ?: false,
                 proVerdictSnooze = readVerdictSnooze(prefs[KEY_PRO_VERDICT_SNOOZE]),
                 proOnboardingSeen = prefs[KEY_PRO_ONBOARDING_SEEN] ?: false,
+                proFollowUpDismissed = readFollowUpDismissed(prefs[KEY_PRO_FOLLOWUP_DISMISSED]),
             )
         }
 
@@ -357,6 +367,22 @@ class BehaviorPrefsStore(
                 stored + (taskId to JsonObject(mapOf("due" to JsonPrimitive(snooze.due), "until" to JsonPrimitive(snooze.until))))
             }
             if (next.isEmpty()) prefs.remove(KEY_PRO_VERDICT_SNOOZE) else prefs[KEY_PRO_VERDICT_SNOOZE] = JsonObject(next).toString()
+        }
+    }
+
+    /**
+     * Hides the follow-up line [key] until [until] (a local day). Entries whose day has come by
+     * [today] are dropped on the way (`FollowUps.pruneDismissed`).
+     */
+    suspend fun dismissFollowUp(key: String, until: LocalDate, today: LocalDate) {
+        dataStore.edit { prefs ->
+            val stored = readFollowUpDismissed(prefs[KEY_PRO_FOLLOWUP_DISMISSED])
+            val next = FollowUps.pruneDismissed(stored + (key to until.toString()), today)
+            if (next.isEmpty()) {
+                prefs.remove(KEY_PRO_FOLLOWUP_DISMISSED)
+            } else {
+                prefs[KEY_PRO_FOLLOWUP_DISMISSED] = JsonObject(next.mapValues { JsonPrimitive(it.value) }).toString()
+            }
         }
     }
 

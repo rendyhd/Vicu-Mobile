@@ -45,6 +45,8 @@ import com.rendyhd.vicu.data.local.DrawerView
 import com.rendyhd.vicu.ui.components.pro.ProIcons
 import com.rendyhd.vicu.ui.components.shared.SmartListIdentity
 import com.rendyhd.vicu.ui.components.task.moveCustomActions
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_follow_ups_title
 import com.rendyhd.vicu.ui.navigation.DrawerBlock
 import com.rendyhd.vicu.ui.navigation.DrawerEntry
 import com.rendyhd.vicu.ui.navigation.DrawerLayout
@@ -52,6 +54,7 @@ import com.rendyhd.vicu.ui.navigation.DrawerViewOffer
 import com.rendyhd.vicu.ui.navigation.drawerViewOffers
 import com.rendyhd.vicu.ui.theme.LocalVicuColors
 import com.rendyhd.vicu.util.pro.ProLayer
+import org.jetbrains.compose.resources.stringResource
 import sh.calvin.reorderable.ReorderableColumn
 
 /**
@@ -225,6 +228,7 @@ private fun DrawerEntryRow(
     }
 }
 
+@Composable
 internal fun drawerEntryLabel(entry: DrawerEntry): String = when (entry) {
     is DrawerEntry.Block -> when (entry.block) {
         DrawerBlock.PROJECTS -> "Projects"
@@ -242,6 +246,7 @@ internal fun drawerEntryLabel(entry: DrawerEntry): String = when (entry) {
         DrawerView.REVIEW -> "Review"
         DrawerView.ASK -> "Ask"
         DrawerView.FLAGGED -> "Flagged"
+        DrawerView.FOLLOW_UPS -> stringResource(Res.string.pro_follow_ups_title)
         DrawerView.WAITING_ON -> "Waiting on"
         DrawerView.PEOPLE -> "People"
     }
@@ -256,7 +261,7 @@ private fun drawerEntryIdentity(entry: DrawerEntry): SmartListIdentity? = when (
     DrawerView.LOGBOOK -> SmartListIdentity.LOGBOOK
     DrawerView.ROUTINES -> SmartListIdentity.ROUTINES
     DrawerView.REVIEW -> SmartListIdentity.REVIEW
-    DrawerView.ASK, DrawerView.FLAGGED, DrawerView.WAITING_ON, DrawerView.PEOPLE, null -> null
+    DrawerView.ASK, DrawerView.FLAGGED, DrawerView.FOLLOW_UPS, DrawerView.WAITING_ON, DrawerView.PEOPLE, null -> null
 }
 
 private fun drawerEntryIcon(entry: DrawerEntry): ImageVector = when (entry) {
@@ -267,6 +272,7 @@ private fun drawerEntryIcon(entry: DrawerEntry): ImageVector = when (entry) {
     }
     is DrawerEntry.View -> drawerEntryIdentity(entry)?.icon ?: when (entry.view) {
         DrawerView.FLAGGED -> ProIcons.FLAGGED
+        DrawerView.FOLLOW_UPS -> ProIcons.FOLLOW_UPS
         DrawerView.WAITING_ON -> ProIcons.WAITING_ON
         DrawerView.PEOPLE -> ProIcons.PEOPLE
         else -> Icons.Outlined.AutoAwesome

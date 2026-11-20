@@ -6,6 +6,9 @@ import com.rendyhd.vicu.data.local.VerdictSnooze
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.LabelRepository
 import com.rendyhd.vicu.domain.repository.TaskRepository
+import com.rendyhd.vicu.i18n.UiText
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_follow_ups_undo
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.Constants
 import com.rendyhd.vicu.util.DayClock
@@ -18,7 +21,9 @@ import com.rendyhd.vicu.util.pro.Promises
 import com.rendyhd.vicu.util.randomUuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -133,6 +138,41 @@ class ProActions(
                 next = com.rendyhd.vicu.util.pro.LedgerRules.setRecord(next, "promises", id.toString(), Promises.withSent(promise, at), deviceId, nowMs)
             }
             next
+        }
+    }
+
+    /**
+     * Marks the promises of [taskIds] as checked now (contract 21.18: a check message copied or
+     * shared, or "Checked" on a bring-back line), then says [message] with an Undo that takes off
+     * exactly this mark ([Promises.withoutMark]). Unknown fields of each promise stay.
+     */
+    fun markChecked(taskIds: List<Long>, message: UiText) {
+        if (taskIds.isEmpty()) return
+        scope.launch {
+            val at = time.now().toString()
+            val changed = editPromises(taskIds) { Promises.withChecked(it, at) }
+            if (!changed) return@launch
+            appMessages.post(message, UiText.Res(Res.string.pro_follow_ups_undo)) {
+                scope.launch { editPromises(taskIds) { Promises.withoutMark(it, "checked", at) } }
+            }
+        }
+    }
+
+    private suspend fun editPromises(taskIds: List<Long>, edit: (JsonObject) -> JsonObject): Boolean =
+        proLedger.change { ledger, deviceId, nowMs ->
+            var next = ledger
+            for (id in taskIds) {
+                val promise = next.value("promises", id) ?: continue
+                next = com.rendyhd.vicu.util.pro.LedgerRules.setRecord(next, "promises", id.toString(), edit(promise), deviceId, nowMs)
+            }
+            next
+        }
+
+    /** "Dismiss for today" of a follow-up line (per device): it shows again tomorrow. */
+    fun dismissFollowUp(key: String) {
+        scope.launch {
+            val today = dayClock.day.value.date
+            behaviorPrefs.dismissFollowUp(key, today.plus(1, DateTimeUnit.DAY), today)
         }
     }
 

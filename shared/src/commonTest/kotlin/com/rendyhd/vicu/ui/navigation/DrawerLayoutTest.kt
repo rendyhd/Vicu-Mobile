@@ -109,7 +109,7 @@ class DrawerLayoutTest {
         assertEquals(
             listOf(
                 "INBOX", "TODAY", "PLAN", "UPCOMING", "ANYTIME", "LOGBOOK", "REVIEW", "PROJECTS", "ASK",
-                "FLAGGED", "WAITING_ON", "PEOPLE", "LISTS", "ROUTINES", "LABELS",
+                "FLAGGED", "FOLLOW_UPS", "WAITING_ON", "PEOPLE", "LISTS", "ROUTINES", "LABELS",
             ),
             keys,
         )

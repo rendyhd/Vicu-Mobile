@@ -213,6 +213,12 @@ class ProScreensTest {
         assertEquals("From Jan", ProScreens.promiseMeta("theirs", "Jan"))
         assertEquals("For Jan", ProScreens.promiseMeta("mine", "Jan"))
         assertNull(ProScreens.promiseMeta(null, "Jan"))
+        // Who it was made to (section 21.6).
+        assertEquals("From Lalith, for Leadership team", ProScreens.promiseMeta("theirs", "Lalith", "Leadership team"))
+        assertEquals("For Priya", ProScreens.promiseMeta("mine", "Priya", "Leadership team"))
+        assertEquals("Yours", ProScreens.promiseMeta("mine", null))
+        assertEquals("Yours, for Leadership team", ProScreens.promiseMeta("mine", null, "Leadership team"))
+        assertEquals("From Someone", ProScreens.promiseMeta("theirs", null))
 
         assertEquals("New date", ProScreens.verdictLabel("renegotiated"))
         assertEquals("I did it", ProScreens.verdictLabel("taken_over"))

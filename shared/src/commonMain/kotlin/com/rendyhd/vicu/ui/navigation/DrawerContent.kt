@@ -82,6 +82,7 @@ import com.rendyhd.vicu.util.moveIdBy
 import com.rendyhd.vicu.util.parseHexColor
 import com.rendyhd.vicu.resources.Res
 import com.rendyhd.vicu.resources.notes_title
+import com.rendyhd.vicu.resources.pro_follow_ups_title
 import androidx.compose.material.icons.outlined.Description
 import com.rendyhd.vicu.resources.nav_anytime
 import com.rendyhd.vicu.resources.nav_inbox
@@ -709,6 +710,13 @@ private fun DrawerViewItem(view: DrawerView, state: DrawerUiState, currentRoute:
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
             selected = currentRoute == "FlaggedRoute",
             onClick = { onNavigate(FlaggedRoute) },
+        )
+        DrawerView.FOLLOW_UPS -> SmartListItem(
+            label = stringResource(Res.string.pro_follow_ups_title),
+            icon = ProIcons.FOLLOW_UPS,
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            selected = currentRoute == "FollowUpsRoute",
+            onClick = { onNavigate(FollowUpsRoute) },
         )
         DrawerView.WAITING_ON -> SmartListItem(
             label = "Waiting on",

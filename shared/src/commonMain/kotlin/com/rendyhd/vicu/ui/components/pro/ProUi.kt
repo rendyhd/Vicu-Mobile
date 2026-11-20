@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PendingActions
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -60,9 +61,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
 import com.rendyhd.vicu.data.repository.ProActions
 import com.rendyhd.vicu.data.repository.ProWorld
 import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_label_open_group
 import com.rendyhd.vicu.ui.components.picker.MonthCalendar
 import com.rendyhd.vicu.ui.components.shared.LocalClockDay
 import com.rendyhd.vicu.ui.components.shared.VicuDragHandle
@@ -89,6 +93,7 @@ val LocalPro = compositionLocalOf { ProUi() }
 /** The icons of Pro's drawer views. */
 object ProIcons {
     val FLAGGED: ImageVector = Icons.Outlined.Flag
+    val FOLLOW_UPS: ImageVector = Icons.Outlined.PendingActions
     val WAITING_ON: ImageVector = Icons.Outlined.HourglassEmpty
     val PEOPLE: ImageVector = Icons.Outlined.People
 }
@@ -141,7 +146,7 @@ fun PersonMark(
  * is on, This is a person or Not a person while the promises layer is on. Nothing while Pro is off.
  */
 @Composable
-fun LabelProMenu(labelId: Long) {
+fun LabelProMenu(labelId: Long, onOpenGroup: ((Long) -> Unit)? = null) {
     val pro = LocalPro.current
     val world = pro.world
     if (!world.availabilityOn && !world.promisesOn) return
@@ -161,7 +166,18 @@ fun LabelProMenu(labelId: Long) {
                     },
                 )
             }
-            if (world.promisesOn) {
+            // A group's label (contract 21.16) opens the group; it is never also a person.
+            if (world.promisesOn && world.isGroup(labelId)) {
+                if (onOpenGroup != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.pro_label_open_group)) },
+                        onClick = {
+                            open = false
+                            onOpenGroup(labelId)
+                        },
+                    )
+                }
+            } else if (world.promisesOn) {
                 val person = world.isPerson(labelId)
                 DropdownMenuItem(
                     text = { Text(if (person) "Not a person" else "This is a person") },

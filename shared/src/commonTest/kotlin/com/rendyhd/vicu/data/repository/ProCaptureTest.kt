@@ -106,6 +106,71 @@ class ProCaptureTest {
         assertNull(ProCapture(on = true).promiseOf(parse("Jan: send the plan", on)))
     }
 
+    private val priya = Person(id = 43, title = "Priya")
+
+    /** Jan and Priya are people; labels 70 and 90 are groups' labels (contract 21.16). */
+    private val withGroups = ProCapture(on = true, people = listOf(jan, priya), groupLabels = setOf(90L, 70L))
+
+    @Test
+    fun `a requester who is a person is who it was promised to and is no label of the task`() {
+        val result = parse("\$Jan site list for \$Priya friday check on wednesday", withGroups)
+
+        assertEquals("site list", result.title)
+        val checkOn = result.checkOn
+        assertTrue(checkOn != null, "check on is read")
+        // The owner's label only: the requester is never added to the task.
+        assertEquals(31L, withGroups.personLabelOf(result))
+        // A named requester wins over the group the task carries.
+        assertEquals(
+            """{"dir":"theirs","person":31,"to":{"person":43},"check_on":"$checkOn"}""",
+            withGroups.promiseOf(result, labelIds = setOf(90L)).toString(),
+        )
+        assertNull(withGroups.newRequesterOf(result))
+    }
+
+    @Test
+    fun `a new requester is made a person in quick add and kept in words when that fails`() {
+        val quickAdd = TaskParser.parse(
+            "\$Jan budget for \$Lalith", withGroups.config(ParserConfig(), makesPeople = true),
+            reference = now, zone = zone, people = withGroups.parserPeople,
+        )
+        assertEquals("budget", quickAdd.title)
+        assertEquals("Lalith", withGroups.newRequesterOf(quickAdd))
+        // Not made (no server): the name in words.
+        assertEquals(
+            """{"dir":"theirs","person":31,"to":{"text":"Lalith"}}""",
+            withGroups.promiseOf(quickAdd, labelIds = setOf(70L)).toString(),
+        )
+        // Made: the new person.
+        val made = quickAdd.copy(requester = quickAdd.requester!!.copy(id = 77, name = null))
+        assertEquals("""{"dir":"theirs","person":31,"to":{"person":77}}""", withGroups.withPerson(Person(77, "Lalith")).promiseOf(made).toString())
+        // Off, or without the promises layer, nobody is made.
+        assertNull(ProCapture.OFF.newRequesterOf(quickAdd))
+        assertNull(ProCapture(on = true, promises = false).newRequesterOf(quickAdd))
+    }
+
+    @Test
+    fun `a promise of theirs on a group's action is made to the lowest group label on the task`() {
+        val theirs = parse("Jan: send the plan", withGroups)
+        assertEquals(
+            """{"dir":"theirs","person":31,"to":{"group":70}}""",
+            withGroups.promiseOf(theirs, labelIds = listOf(90L, 5L, 70L)).toString(),
+        )
+        // No group label: promised to you, no `to`.
+        assertEquals("""{"dir":"theirs","person":31}""", withGroups.promiseOf(theirs, labelIds = listOf(5L)).toString())
+        // Yours to them: the group does not make it the group's.
+        val mine = parse("for Jan: review the deck", withGroups)
+        assertEquals("""{"dir":"mine","person":31}""", withGroups.promiseOf(mine, labelIds = listOf(70L)).toString())
+    }
+
+    @Test
+    fun `check on is written as a local day`() {
+        val result = parse("Jan: the numbers friday check on thursday 9am", withGroups)
+        assertEquals("the numbers", result.title)
+        assertEquals("""{"dir":"theirs","person":31,"check_on":"${result.checkOn}"}""", withGroups.promiseOf(result).toString())
+        assertTrue(Regex("""\d{4}-\d{2}-\d{2}""").matches(result.checkOn.toString()))
+    }
+
     @Test
     fun `an estimate is read only while Pro is on`() {
         assertEquals(90, on.estimateOf(parse("Write the report ~1h30", on)))

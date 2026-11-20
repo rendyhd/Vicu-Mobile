@@ -182,4 +182,234 @@
         <item quantity="one">Added %1$d task</item>
         <item quantity="other">Added %1$d tasks</item>
     </plurals>
+
+    <!-- Pro (contract 21): a Pro page opened while Pro is off on this device. -->
+    <string name="pro_off_notice">This is part of Pro, which is off on this device.</string>
+    <!-- The button under that notice; it opens Settings. -->
+    <string name="pro_off_settings">Pro settings</string>
+
+    <!-- Pro, Follow-ups (contract 21.18): the drawer entry and the screen's title. -->
+    <string name="pro_follow_ups_title">Follow-ups</string>
+    <!-- Follow-ups with nothing in them. -->
+    <string name="pro_follow_ups_empty">Nothing to follow up on today.</string>
+    <!-- The button on every line of Follow-ups: the line shows again tomorrow. -->
+    <string name="pro_follow_ups_dismiss">Dismiss for today</string>
+    <!-- The button on the message after a line was handled; it puts back what was written. -->
+    <string name="pro_follow_ups_undo">Undo</string>
+    <!-- A line asking to check on someone's actions before they are due. %1$s is their first name, %2$d how many actions, %3$s the day the first is due. -->
+    <plurals name="pro_follow_ups_check">
+        <item quantity="one">Check with %1$s: %2$d action, first due %3$s</item>
+        <item quantity="other">Check with %1$s: %2$d actions, first due %3$s</item>
+    </plurals>
+    <!-- The button that opens the share sheet with the check message. -->
+    <string name="pro_follow_ups_share_message">Share message</string>
+    <!-- After the check message was shared. %1$d is how many actions were marked as checked. -->
+    <plurals name="pro_follow_ups_shared">
+        <item quantity="one">Message shared; %1$d marked as checked</item>
+        <item quantity="other">Message shared; %1$d marked as checked</item>
+    </plurals>
+    <!-- A line asking to look at a promise again on the day set for it. %1$s is the task's title. -->
+    <string name="pro_follow_ups_bring">Look at: %1$s</string>
+    <!-- Under that line. %1$s is the person's name, %2$s the day. -->
+    <string name="pro_follow_ups_bring_meta">%1$s, check on %2$s</string>
+    <!-- The same without a person. %1$s is the day. -->
+    <string name="pro_follow_ups_bring_meta_no_one">Check on %1$s</string>
+    <!-- The button that marks a promise as checked. -->
+    <string name="pro_follow_ups_checked">Checked</string>
+    <!-- After a promise was marked as checked. %1$s is the task's title. -->
+    <string name="pro_follow_ups_checked_toast">Marked as checked: %1$s</string>
+    <!-- The button that opens the task. -->
+    <string name="pro_follow_ups_open">Open</string>
+    <!-- A line about a weekly session whose recap was not copied. %1$s is the group's name, %2$s the day. -->
+    <string name="pro_follow_ups_recap_weekly">Recap not copied: %1$s weekly, %2$s</string>
+    <!-- The same for a stand-up. -->
+    <string name="pro_follow_ups_recap_standup">Recap not copied: %1$s stand-up, %2$s</string>
+    <!-- Under that line: the phone does not run sessions. -->
+    <string name="pro_follow_ups_recap_where">Sessions and their recaps are in Vicu on a computer or the web. Copy it there.</string>
+    <!-- A line saying the weekly note is due. -->
+    <string name="pro_follow_ups_note">The weekly note is due</string>
+    <!-- Under that line: the phone does not write the weekly note. -->
+    <string name="pro_follow_ups_note_where">The weekly note is written in Vicu on a computer or the web.</string>
+
+    <!-- Pro, a group's page (contract 21.16): the title while the group's name is not known. -->
+    <string name="pro_group_title">Group</string>
+    <!-- A group's page opened for a label that is not a group. -->
+    <string name="pro_group_not_group">This label is not a group.</string>
+    <!-- Under the group's name before its first session. -->
+    <string name="pro_group_no_session">No session yet. The counts start after the first one.</string>
+    <!-- How the group's actions went over its last sessions, in counts. %1$d is how many sessions, %2$d on time, %3$d all of them, %4$d late, %5$d open past their date. -->
+    <plurals name="pro_group_reliability">
+        <item quantity="one">Last session: %2$d of %3$d on time, %4$d late, %5$d open past their date.</item>
+        <item quantity="other">Last %1$d sessions: %2$d of %3$d on time, %4$d late, %5$d open past their date.</item>
+    </plurals>
+    <!-- After that line when some were dropped or done by you. %1$d dropped, %2$d done by you. -->
+    <string name="pro_group_reliability_more">%1$d dropped, %2$d done by you.</string>
+    <!-- The parts of a group's page. -->
+    <string name="pro_group_part_overdue">Overdue since the last session</string>
+    <string name="pro_group_part_due">Due now</string>
+    <string name="pro_group_part_due_no_session">Due</string>
+    <string name="pro_group_part_fresh">New since the last session</string>
+    <string name="pro_group_part_open">Open</string>
+    <string name="pro_group_part_yours">Yours</string>
+    <string name="pro_group_part_done">Done since the last session</string>
+    <string name="pro_group_part_done_recent">Done in the last 7 days</string>
+    <!-- An owner heading on a group's page: you. -->
+    <string name="pro_group_you">You</string>
+    <!-- An owner heading on a group's page: actions nobody owns. -->
+    <string name="pro_group_no_owner">No owner</string>
+    <!-- The group's open issues. -->
+    <string name="pro_group_issues">Issues</string>
+    <string name="pro_group_no_issues">No open issues.</string>
+    <!-- The group's recent decisions. -->
+    <string name="pro_group_decisions">Decisions</string>
+    <string name="pro_group_no_decisions">No decisions yet.</string>
+    <!-- Under a decision. %1$s is who decided, %2$s the day. -->
+    <string name="pro_group_decided_by">%1$s, %2$s</string>
+    <!-- The group's open questions. -->
+    <string name="pro_group_questions">Open questions</string>
+    <string name="pro_group_no_questions">No open questions.</string>
+    <!-- At the end of a group's page: the phone shows a group, the computer runs it. -->
+    <string name="pro_group_read_only">Groups are set up and their sessions run in Vicu on a computer or the web.</string>
+    <!-- The People screen's list of groups. -->
+    <string name="pro_people_groups">Groups</string>
+    <!-- A label's menu: opens the page of the group whose label it is. -->
+    <string name="pro_label_open_group">Open group</string>
+
+    <!--
+      Text Vicu Pro writes for other people (docs/translating.md, "Text Vicu writes for other people"):
+      agendas, recaps, check messages and the weekly note, copied into a mail or a chat. Its language is
+      chosen per group, apart from the app's. The English is the contract's (cross-app-semantics-v1.json,
+      pro.documents.messages); names, titles and what people typed are filled in as they are.
+    -->
+    <!-- agenda.title.weekly: %1$s is the group's name, %2$s is a day, already written out. -->
+    <string name="pro_text_agenda_title_weekly">Agenda: %1$s weekly, %2$s</string>
+    <!-- agenda.title.standup: %1$s is the group's name, %2$s is a day, already written out. -->
+    <string name="pro_text_agenda_title_standup">Agenda: %1$s stand-up, %2$s</string>
+    <!-- agenda.close -->
+    <string name="pro_text_agenda_close">Close: read back the decisions and new actions.</string>
+    <!-- recap.title.weekly: %1$s is the group's name, %2$s is a day, already written out. -->
+    <string name="pro_text_recap_title_weekly">%1$s weekly, %2$s</string>
+    <!-- recap.title.standup: %1$s is the group's name, %2$s is a day, already written out. -->
+    <string name="pro_text_recap_title_standup">%1$s stand-up, %2$s</string>
+    <!-- recap.nothing -->
+    <string name="pro_text_recap_nothing">Nothing was decided or changed.</string>
+    <!-- readback.title: %1$s is the group's name, %2$s is a day, already written out. -->
+    <string name="pro_text_readback_title">Read-back: %1$s, %2$s</string>
+    <!-- readback.nothing -->
+    <string name="pro_text_readback_nothing">No decisions or new actions.</string>
+    <!-- heading.actionsDue -->
+    <string name="pro_text_heading_actions_due">Actions due</string>
+    <!-- heading.actionsOpen -->
+    <string name="pro_text_heading_actions_open">Other open actions</string>
+    <!-- heading.issues -->
+    <string name="pro_text_heading_issues">Open issues</string>
+    <!-- heading.decisions -->
+    <string name="pro_text_heading_decisions">Decisions</string>
+    <!-- heading.newActions -->
+    <string name="pro_text_heading_new_actions">New actions</string>
+    <!-- heading.delivered -->
+    <string name="pro_text_heading_delivered">Delivered</string>
+    <!-- heading.changed -->
+    <string name="pro_text_heading_changed">Changed</string>
+    <!-- heading.issuesSolved -->
+    <string name="pro_text_heading_issues_solved">Issues solved</string>
+    <!-- heading.questions -->
+    <string name="pro_text_heading_questions">Open questions</string>
+    <!-- action.owner: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out. -->
+    <string name="pro_text_action_owner">%1$s: %2$s, by %3$s</string>
+    <!-- action.ownerNoDate: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_action_owner_no_date">%1$s: %2$s</string>
+    <!-- action.forPerson: %1$s is who does it, %2$s is who it is for, %3$s is the task's title, %4$s is a day, already written out. -->
+    <string name="pro_text_action_for_person">%1$s for %2$s: %3$s, by %4$s</string>
+    <!-- action.forPersonNoDate: %1$s is who does it, %2$s is who it is for, %3$s is the task's title. -->
+    <string name="pro_text_action_for_person_no_date">%1$s for %2$s: %3$s</string>
+    <!-- action.noOwner: %1$s is the task's title, %2$s is a day, already written out. -->
+    <string name="pro_text_action_no_owner">No owner: %1$s, by %2$s</string>
+    <!-- action.noOwnerNoDate: %1$s is the task's title. -->
+    <string name="pro_text_action_no_owner_no_date">No owner: %1$s</string>
+    <!-- action.delivered: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_action_delivered">%1$s: %2$s</string>
+    <!-- action.deliveredLate: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_action_delivered_late">%1$s: %2$s (late)</string>
+    <!-- action.dropped: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_action_dropped">%1$s: %2$s (dropped)</string>
+    <!-- action.takenOver: %1$s is who does it, %2$s is the task's title, %3$s is your own name. -->
+    <string name="pro_text_action_taken_over">%1$s: %2$s (done by %3$s)</string>
+    <!-- action.newDate: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out. -->
+    <string name="pro_text_action_new_date">%1$s: %2$s, new date %3$s</string>
+    <!-- action.newDateBlocker: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out, %4$s is what is in the way. -->
+    <string name="pro_text_action_new_date_blocker">%1$s: %2$s, new date %3$s (%4$s)</string>
+    <!-- action.notYet: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_action_not_yet">%1$s: %2$s, not yet</string>
+    <!-- action.notYetBlocker: %1$s is who does it, %2$s is the task's title, %3$s is what is in the way. -->
+    <string name="pro_text_action_not_yet_blocker">%1$s: %2$s, not yet (%3$s)</string>
+    <!-- decision.plain: %1$s is what was written down. -->
+    <string name="pro_text_decision_plain">%1$s</string>
+    <!-- decision.by: %1$s is what was written down, %2$s is a person's name. -->
+    <string name="pro_text_decision_by">%1$s (decided by %2$s)</string>
+    <!-- absent: %1$s is names, joined by commas. -->
+    <string name="pro_text_absent">Absent: %1$s</string>
+    <!-- check.one: %1$s is a first name, %2$s is the task's title, %3$s is a day, already written out. -->
+    <string name="pro_text_check_one">Hi %1$s, checking one thing: %2$s (%3$s). Still on track?</string>
+    <!-- check.oneNoDate: %1$s is a first name, %2$s is the task's title. -->
+    <string name="pro_text_check_one_no_date">Hi %1$s, checking one thing: %2$s. Still on track?</string>
+    <!-- check.intro: %1$s is a first name, %2$d is how many. -->
+    <plurals name="pro_text_check_intro">
+        <item quantity="one">Hi %1$s, checking %2$d thing:</item>
+        <item quantity="other">Hi %1$s, checking %2$d things:</item>
+    </plurals>
+    <!-- check.item: %1$s is the task's title, %2$s is a day, already written out. -->
+    <string name="pro_text_check_item">%1$s (%2$s)</string>
+    <!-- check.itemNoDate: %1$s is the task's title. -->
+    <string name="pro_text_check_item_no_date">%1$s</string>
+    <!-- check.close -->
+    <string name="pro_text_check_close">Still on track?</string>
+    <!-- note.title: %1$s is the first day, already written out, %2$s is the last day, already written out. -->
+    <string name="pro_text_note_title">Weekly note, %1$s to %2$s</string>
+    <!-- note.onTime: %1$d is how many. -->
+    <plurals name="pro_text_note_on_time">
+        <item quantity="one">%1$d action delivered on time</item>
+        <item quantity="other">%1$d actions delivered on time</item>
+    </plurals>
+    <!-- note.late: %1$d is how many. -->
+    <plurals name="pro_text_note_late">
+        <item quantity="one">%1$d action delivered late</item>
+        <item quantity="other">%1$d actions delivered late</item>
+    </plurals>
+    <!-- note.dropped: %1$d is how many. -->
+    <plurals name="pro_text_note_dropped">
+        <item quantity="one">%1$d action dropped</item>
+        <item quantity="other">%1$d actions dropped</item>
+    </plurals>
+    <!-- note.takenOver: %1$d is how many, %2$s is your own name. -->
+    <plurals name="pro_text_note_taken_over">
+        <item quantity="one">%1$d action done by %2$s</item>
+        <item quantity="other">%1$d actions done by %2$s</item>
+    </plurals>
+    <!-- note.slipped.newDate: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out. -->
+    <string name="pro_text_note_slipped_new_date">Slipped: %1$s: %2$s, new date %3$s</string>
+    <!-- note.slipped.newDateBlocker: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out, %4$s is what is in the way. -->
+    <string name="pro_text_note_slipped_new_date_blocker">Slipped: %1$s: %2$s, new date %3$s (%4$s)</string>
+    <!-- note.slipped.notYet: %1$s is who does it, %2$s is the task's title. -->
+    <string name="pro_text_note_slipped_not_yet">Slipped: %1$s: %2$s, not yet</string>
+    <!-- note.slipped.notYetBlocker: %1$s is who does it, %2$s is the task's title, %3$s is what is in the way. -->
+    <string name="pro_text_note_slipped_not_yet_blocker">Slipped: %1$s: %2$s, not yet (%3$s)</string>
+    <!-- note.decision: %1$s is what was written down. -->
+    <string name="pro_text_note_decision">Decision: %1$s</string>
+    <!-- note.issue: %1$s is what was written down. -->
+    <string name="pro_text_note_issue">Open issue: %1$s</string>
+    <!-- note.pastDue: %1$d is how many. -->
+    <plurals name="pro_text_note_past_due">
+        <item quantity="one">%1$d action open past its date</item>
+        <item quantity="other">%1$d actions open past their date</item>
+    </plurals>
+    <!-- note.nextWeek: %1$d is how many. -->
+    <plurals name="pro_text_note_next_week">
+        <item quantity="one">%1$d action due in the next 7 days</item>
+        <item quantity="other">%1$d actions due in the next 7 days</item>
+    </plurals>
+    <!-- note.nothing -->
+    <string name="pro_text_note_nothing">Nothing to report.</string>
+    <!-- note.noGroups -->
+    <string name="pro_text_note_no_groups">No groups yet.</string>
 </resources>

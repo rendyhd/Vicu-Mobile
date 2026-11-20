@@ -3001,7 +3001,9 @@ Vicu. They state what happened in counts and events and never judge.
   escaped (`&`, `<`, `>`, `"`). Markdown: the title as `## `, a heading as `### `, items as
   `- `, an empty line between parts. Copying puts HTML and plain text on the clipboard.
 - **Language:** the group's `language`, else the setting `text_language`, else `en`; a language
-  without a catalog reads as `en`. It is separate from the language the app is shown in.
+  without a catalog reads as `en`. It is separate from the language the app is shown in. The phone
+  cannot read its strings in a second language yet, so for now it writes its check message in the
+  language the app is shown in; the desktop and the web follow the rule.
 - **The documents:** a session's **agenda** (actions due, other open actions, open issues, the
   closing line), its **read-back** (decisions, new actions), its **recap** (decisions, new
   actions, delivered, changed, issues solved, open issues, who was absent), the **check message**

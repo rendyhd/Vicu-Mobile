@@ -9,6 +9,7 @@ import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.parser.ParseResult
 import com.rendyhd.vicu.util.parser.ParserConfig
 import com.rendyhd.vicu.util.parser.TokenType
+import com.rendyhd.vicu.util.pro.Groups
 import com.rendyhd.vicu.util.pro.People
 import com.rendyhd.vicu.util.pro.Person
 import com.rendyhd.vicu.util.pro.ProLayer
@@ -36,6 +37,8 @@ data class ProCapture(
     val on: Boolean = false,
     val people: List<Person> = emptyList(),
     val promises: Boolean = true,
+    /** The labels of the groups (section 21.16): a promise of theirs on a task with one is made to that group. */
+    val groupLabels: Set<Long> = emptySet(),
 ) {
 
     /**
@@ -60,6 +63,17 @@ data class ProCapture(
         if (!on || !promises) return null
         val person = result?.person ?: return null
         return person.name?.takeIf { person.id == null && it.isNotBlank() }
+    }
+
+    /**
+     * A new person the `for $Priya` of an owner-and-requester phrase asks for (section 5.5): the
+     * name, while Pro and its promises are on. Quick add makes them a person when the task is
+     * saved; when that fails the name is kept in words (`to.text`, section 21.6).
+     */
+    fun newRequesterOf(result: ParseResult?): String? {
+        if (!on || !promises) return null
+        val requester = result?.requester ?: return null
+        return requester.name?.takeIf { requester.id == null && it.isNotBlank() }
     }
 
     /** This capture with [person] among its people, once quick add has made them. */
@@ -90,10 +104,18 @@ data class ProCapture(
 
     /**
      * The promise `Jan:` (or `for Jan:`) makes of the new task (section 21.6), with what the entry
-     * sheet's fields add: their words and how you will see it is done. Null while Pro is off,
-     * without a person, or when the label is no longer a person.
+     * sheet's fields add: their words and how you will see it is done. Who it was promised to
+     * (`to`): the person `for $Priya` names (in words when they are not a person), else, for a
+     * promise of theirs, the group whose label the task carries ([labelIds], the lowest); without
+     * either, you. `check on friday` gives `check_on`. Null while Pro is off, without a person, or
+     * when the label is no longer a person. The requester is never one of the task's labels.
      */
-    fun promiseOf(result: ParseResult?, words: String? = null, doneWhen: String? = null): JsonObject? {
+    fun promiseOf(
+        result: ParseResult?,
+        words: String? = null,
+        doneWhen: String? = null,
+        labelIds: Collection<Long> = emptyList(),
+    ): JsonObject? {
         val person = personLabelOf(result) ?: return null
         val mine = result?.person?.mine == true
         val fields = LinkedHashMap<String, JsonElement>()
@@ -101,7 +123,21 @@ data class ProCapture(
         fields["person"] = JsonPrimitive(person)
         words?.trim()?.takeIf { it.isNotEmpty() }?.let { fields["words"] = JsonPrimitive(it) }
         doneWhen?.trim()?.takeIf { it.isNotEmpty() }?.let { fields["done_when"] = JsonPrimitive(it) }
+        toOf(result, mine, labelIds)?.let { fields["to"] = it }
+        result?.checkOn?.let { fields["check_on"] = JsonPrimitive(it.toString()) }
         return JsonObject(fields)
+    }
+
+    private fun toOf(result: ParseResult?, mine: Boolean, labelIds: Collection<Long>): JsonObject? {
+        val requester = result?.requester
+        if (requester != null) {
+            requester.id?.takeIf { it > 0 }?.let { return JsonObject(mapOf("person" to JsonPrimitive(it))) }
+            val name = requester.name?.trim()?.takeIf { it.isNotEmpty() }
+            if (name != null) return JsonObject(mapOf("text" to JsonPrimitive(name)))
+        }
+        if (mine) return null
+        val group = labelIds.filter { it in groupLabels }.minOrNull() ?: return null
+        return JsonObject(mapOf("group" to JsonPrimitive(group)))
     }
 
     /** `~45m` read while Pro is on: the estimate in minutes (section 21.2, kept in the ledger). */
@@ -154,6 +190,7 @@ class ProCaptureSource(
                     ProCapture(
                         on = true,
                         people = People.peopleWithAliases(labels.map { it.id to it.title }, prefs::isPerson, ledger),
+                        groupLabels = Groups.groupsOf(ledger).mapTo(HashSet()) { it.label },
                     )
                 }
             }

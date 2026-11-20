@@ -112,7 +112,9 @@ section 9.1. Pro only adds: with it off (the default) nothing below is read, wri
   `config.json` keys of the same names): the switch `pro_enabled` (off; turning it off writes nothing
   else), `pro_layers` (JSON, a layer not stored is on; layers a newer version stored are kept),
   `pro_list_views` (Available, Remaining or All per list key), `pro_focus` (categories and projects),
-  `pro_assistant`, `pro_verdict_snooze` ("Ask me tomorrow" per promise) and `pro_onboarding_seen`.
+  `pro_assistant`, `pro_verdict_snooze` ("Ask me tomorrow" per promise), `pro_onboarding_seen` and
+  `pro_followup_dismissed` ("Dismiss for today" per follow-up line: the line's key and the day it
+  shows again; pruned on every write).
   `BehaviorPrefs.isProEnabled(layer)` is the one check; this app has no standalone mode.
 - **Synced preferences** of the account (contract 11.3), written only from Pro screens through
   `ProPreferences`: `pro.area`, `project_mode.<id>`, `project_status.<id>`, `label_status.<id>`,

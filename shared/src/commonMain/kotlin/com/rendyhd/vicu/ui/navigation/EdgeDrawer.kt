@@ -67,7 +67,7 @@ internal fun isEdgeDrawerRoute(routeKey: String?): Boolean = when {
 
 private val EDGE_DRAWER_ROUTES = setOf(
     "InboxRoute", "TodayRoute", "UpcomingRoute", "AnytimeRoute", "LogbookRoute", "ReviewRoute", "RoutinesRoute",
-    "FlaggedRoute", "WaitingOnRoute", "PeopleRoute",
+    "FlaggedRoute", "FollowUpsRoute", "WaitingOnRoute", "PeopleRoute",
 )
 
 /**
