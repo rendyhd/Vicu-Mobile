@@ -13,6 +13,10 @@ import com.rendyhd.vicu.util.AppDispatchers
 import com.rendyhd.vicu.util.DateDisplayFormat
 import com.rendyhd.vicu.util.DayClock
 import com.rendyhd.vicu.util.TimeSource
+import com.rendyhd.vicu.util.SyncedPrefsEnvelope
+import com.rendyhd.vicu.util.WorkProject
+import com.rendyhd.vicu.util.WorkScopeRules
+import com.rendyhd.vicu.domain.model.SyncedPrefKeys
 import com.rendyhd.vicu.util.pro.AreaProject
 import com.rendyhd.vicu.util.pro.Availability
 import com.rendyhd.vicu.util.pro.AvailabilityContext
@@ -99,6 +103,17 @@ class ProWorld internal constructor(
 
     private val area: List<String> by lazy { ProSettings.readArea(prefs[ProSettings.AREA_KEY]) }
 
+    /** The area is the work projects (contract 22.8), on every device whatever its mode. */
+    private val areaIsWork: Boolean by lazy { WorkScopeRules.isWorkProArea(prefs[ProSettings.AREA_KEY]) }
+
+    private val workProjects: Set<Long> by lazy {
+        WorkScopeRules.workProjectIds(
+            projects.map { WorkProject(it.id, it.parentProjectId.takeIf { parent -> parent > 0 }) },
+            { id -> prefs[WorkScopeRules.workProjectKey(id)] },
+            SyncedPrefsEnvelope.projectId(prefs[SyncedPrefKeys.INBOX_PROJECT_ID]),
+        )
+    }
+
     /** The labels marked as a person, by title. */
     val people: List<Label> by lazy {
         val ids = ProPrefs.personLabelIds(prefs)
@@ -130,8 +145,12 @@ class ProWorld internal constructor(
     fun promiseFor(task: Task): JsonObject? {
         if (!promisesOn) return null
         val promise = Promises.promiseOf(ledger, task.id) ?: return null
-        val inArea = ProSettings.inArea(task.projectId, area, areaProjects) { id ->
-            (prefs["category.project.$id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val inArea = if (areaIsWork) {
+            task.projectId in workProjects
+        } else {
+            ProSettings.inArea(task.projectId, area, areaProjects) { id ->
+                (prefs["category.project.$id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            }
         }
         return if (inArea) promise else null
     }

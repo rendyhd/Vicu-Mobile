@@ -1,5 +1,10 @@
 package com.rendyhd.vicu.ui.screens.project
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.data.repository.parentTaskOf
+import com.rendyhd.vicu.data.repository.stateOrOff
+import com.rendyhd.vicu.ui.components.WorkHidden
 import com.rendyhd.vicu.data.repository.ProActions
 import com.rendyhd.vicu.data.repository.ProListState
 import com.rendyhd.vicu.data.repository.ProWorldSource
@@ -70,6 +75,8 @@ data class ProjectUiState(
     val proView: AvailabilityView? = null,
     /** Open tasks the view leaves out, sections included. */
     val proHidden: Int = 0,
+    /** Tasks the Work or Personal mode leaves out, with a way to show them until the screen is left (contract 22.4). */
+    val workHidden: WorkHidden = WorkHidden.NONE,
 )
 
 /** What the project screen's options menu offers, and what its dialogs need. */
@@ -88,6 +95,8 @@ data class ProjectMenuState(
     val inheritedTaskOrder: TaskOrder = TaskOrder.DEFAULT,
     /** A top-level project of the project list, which can be in a category (section 13.2). */
     val canHaveCategory: Boolean = false,
+    /** "Work project" is offered while Work and Personal is on (not for the Inbox); whether it is ticked. Null: not offered. */
+    val workProject: Boolean? = null,
     /** The user's categories in display order, and the one this project is in. */
     val categories: List<ProjectCategory> = emptyList(),
     val category: ProjectCategory? = null,
@@ -106,6 +115,8 @@ internal fun projectMenuState(
     confirmBeforeDelete: Boolean,
     taskOrders: TaskOrderSettings = TaskOrderSettings(),
     categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
+    /** Work and Personal (contract 22.7): whether the project is work while the feature is on, else null. */
+    workProject: Boolean? = null,
 ): ProjectMenuState {
     if (project == null || project.isArchived) return ProjectMenuState(confirmBeforeDelete = confirmBeforeDelete)
     val isInbox = inboxProjectId != null && project.id == inboxProjectId
@@ -123,6 +134,7 @@ internal fun projectMenuState(
         canHaveCategory = ProjectCategories.isTopLevel(project, allProjects, inboxProjectId),
         categories = categories.categories,
         category = categories.categoryOf(project.id),
+        workProject = workProject.takeUnless { isInbox },
     )
 }
 
@@ -186,6 +198,8 @@ class ProjectViewModel(
     /** Pro's Available / Remaining / All (contract 21.2); none in tests. */
     private val proWorld: ProWorldSource? = null,
     private val proActions: ProActions? = null,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val projectId: Long = savedStateHandle["projectId"]!!
@@ -205,6 +219,13 @@ class ProjectViewModel(
 
     /** Bumped to draw the lists again from what is stored (see [onTaskDropped]). */
     private val redraw = MutableStateFlow(0)
+
+    /** The tasks of the other mode are shown for now; lasts until this screen is left. */
+    private val showWorkHidden = MutableStateFlow(false)
+
+    fun setShowWorkHidden(show: Boolean) {
+        showWorkHidden.value = show
+    }
 
     init {
         viewModelScope.launch {
@@ -307,7 +328,9 @@ class ProjectViewModel(
                     upstream,
                     completions.state,
                     proWorld?.listState(ProListKeys.project(projectId)) ?: flowOf(ProListState.OFF),
-                ) { state, _, pro -> withHeldRows(withProView(state, pro)) }
+                    workMode.stateOrOff(),
+                    showWorkHidden,
+                ) { state, _, pro, work, showing -> withHeldRows(withProView(withWorkMode(state, work, showing), pro)) }
             }.collect { newState ->
                 val previousProjectError = projectError
                 projectError = newState.error
@@ -327,6 +350,26 @@ class ProjectViewModel(
             }
         }
         if (refresher.isStale()) refresh()
+    }
+
+    /**
+     * [state] with the mode applied (contract 22.4), sections included: a subtask under a shown task
+     * stays with it. Unchanged in All and while the feature is off.
+     */
+    private fun withWorkMode(state: ProjectUiState, work: WorkState, showing: Boolean): ProjectUiState {
+        if (!work.filtering || state.project == null || state.project.isArchived) return state
+        var hidden = 0
+        fun shown(tasks: List<Task>): List<Task> =
+            work.split(tasks, showing, ::parentTaskOf).also { hidden += it.hidden }.tasks
+        fun sections(list: List<ProjectSection>): List<ProjectSection> =
+            list.map { it.copy(tasks = shown(it.tasks), children = sections(it.children)) }
+        val unsectioned = shown(state.unsectionedTasks)
+        val filteredSections = sections(state.sections)
+        return state.copy(
+            unsectionedTasks = unsectioned,
+            sections = filteredSections,
+            workHidden = WorkHidden(hidden, work.otherMode, showing),
+        )
     }
 
     /** [state] as Pro's view shows it, sections included; unchanged while the layer is off (O1). */
@@ -530,10 +573,30 @@ class ProjectViewModel(
         projectRepository.getAll(),
         projectActions.inboxProjectId,
         reviewPrefsStore.getPrefs(),
-        combine(behaviorPrefsStore.getPrefs(), taskOrderPreferences.settings, projectActions.categories, ::Triple),
-    ) { project, all, inboxId, reviewPrefs, (behaviorPrefs, taskOrders, categories) ->
-        projectMenuState(project, all, inboxId, reviewPrefs, behaviorPrefs.confirmBeforeDelete, taskOrders, categories)
+        combine(
+            behaviorPrefsStore.getPrefs(),
+            taskOrderPreferences.settings,
+            projectActions.categories,
+            workMode?.scope ?: flowOf(com.rendyhd.vicu.util.WorkScope.NONE),
+        ) { behavior, orders, categories, work -> MenuInputs(behavior, orders, categories, work) },
+    ) { project, all, inboxId, reviewPrefs, (behaviorPrefs, taskOrders, categories, work) ->
+        projectMenuState(
+            project, all, inboxId, reviewPrefs, behaviorPrefs.confirmBeforeDelete, taskOrders, categories,
+            workProject = if (behaviorPrefs.workModeEnabled) project?.id in work.projects else null,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectMenuState())
+
+    private data class MenuInputs(
+        val behavior: com.rendyhd.vicu.data.local.BehaviorPrefs,
+        val orders: TaskOrderSettings,
+        val categories: ProjectCategoryState,
+        val work: com.rendyhd.vicu.util.WorkScope,
+    )
+
+    /** Marks this project as work or not (contract 22.7): writes only its own entry. */
+    fun setWorkProject(want: Boolean) {
+        viewModelScope.launch { workMode?.setProjectWork(projectId, want, projectRepository.getAll().first()) }
+    }
 
     private val _exit = MutableStateFlow(ProjectExit.NONE)
     val exit: StateFlow<ProjectExit> = _exit.asStateFlow()

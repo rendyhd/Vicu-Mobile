@@ -24,6 +24,8 @@ import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.local.ReviewPrefsStore
 import com.rendyhd.vicu.data.local.createDataStore
 import com.rendyhd.vicu.data.repository.TaskOrderPreferences
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.stateOrOff
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.CollaborationRepository
 import com.rendyhd.vicu.domain.repository.CustomListRepository
@@ -52,6 +54,8 @@ class RepositoryAskBackend(
     private val auth: AuthManager,
     private val dayClock: DayClock,
     private val dictation: DictationService,
+    /** The mode the tools answer by (contract 22.4); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : AskBackend {
     override suspend fun snapshot(): AskSnapshot {
         dayClock.refresh()
@@ -72,6 +76,7 @@ class RepositoryAskBackend(
             reviewEnabled = review.enabled,
             reviewExcludeInbox = review.excludeInbox,
             weekStart = day.weekStart,
+            work = workMode.stateOrOff().first(),
         )
     }
 
@@ -107,7 +112,7 @@ val aiModule = module {
             time = get(),
         )
     }
-    single { DraftWriter(tasks = get(), labels = get(), notificationPrefs = get(), locations = get()) }
+    single { DraftWriter(tasks = get(), labels = get(), notificationPrefs = get(), locations = get(), workMode = get()) }
     single { PlanWriter(projects = get(), drafts = get()) }
     single { Proposals(tasks = get(), labels = get(), drafts = get()) }
     single<OrganizeSuggester> { OrganizeService(providers = get(), settings = get(), backend = get(), dictation = get()) }
@@ -175,6 +180,7 @@ val aiModule = module {
             auth = get(),
             dayClock = get(),
             dictation = get(),
+            workMode = get(),
         )
     }
 }

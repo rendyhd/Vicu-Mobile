@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.settings
 
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.work_project_menu
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -90,6 +93,7 @@ internal fun ProjectsTab(
 ) {
     val haptic = LocalHapticFeedback.current
     val sharedRoutines = rememberSharedRoutineLookup()
+    val work = rememberWorkMarking()
     var liveItems by remember { mutableStateOf<List<ProjectListItem>?>(null) }
     val items = liveItems ?: projectItems
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
@@ -129,6 +133,7 @@ internal fun ProjectsTab(
             viewModel = viewModel,
             openDialog = openDialog,
             sharedRoutines = sharedRoutines,
+            work = work,
         )
         archivedProjectsSection(state, archivedExpanded, onArchivedExpandedChange, viewModel, openDialog, sharedRoutines)
         item(key = "projects_divider") {
@@ -166,6 +171,9 @@ private fun deleteProject(
  * What a project's "more" menu offers. The Inbox can be edited and given subprojects, nothing else.
  * [onMoveToCategory] and [onAddCategoryAbove] are there for a top-level project (section 13).
  */
+/** The "Work project" tick of a project row's menu. */
+internal class WorkProjectChoice(val label: String, val isWork: Boolean, val onToggle: () -> Unit)
+
 internal fun projectMenuItems(
     project: Project,
     isInbox: Boolean,
@@ -176,8 +184,11 @@ internal fun projectMenuItems(
     onDelete: () -> Unit,
     onMoveToCategory: (() -> Unit)? = null,
     onAddCategoryAbove: (() -> Unit)? = null,
+    /** "Work project" (contract 22.7): its label and whether it is ticked, and what a tap does; none while Work and Personal is off. */
+    workProject: WorkProjectChoice? = null,
 ): List<RowMenuItem> = buildList {
     add(RowMenuItem("Edit", onClick = onEdit))
+    workProject?.let { add(RowMenuItem(it.label, checked = it.isWork, onClick = it.onToggle)) }
     add(RowMenuItem("Add subproject", onClick = onAddSubproject))
     onMoveToCategory?.let { add(RowMenuItem(CategoryLabels.MOVE_TO, onClick = it)) }
     onAddCategoryAbove?.let { add(RowMenuItem(CategoryLabels.ADD_ABOVE, onClick = it)) }
@@ -198,6 +209,7 @@ private fun LazyListScope.projectsSection(
     viewModel: SettingsViewModel,
     openDialog: (SettingsDialog) -> Unit,
     sharedRoutines: (Long) -> List<String>,
+    work: WorkMarking,
 ) {
     item(key = "projects_header") {
         SectionTitle(
@@ -267,6 +279,8 @@ private fun LazyListScope.projectsSection(
                 val isInbox = project.id == state.inboxProjectId
                 val levelIds = siblings[project.id].orEmpty()
                 val topLevel = ProjectCategories.isTopLevel(project, state.projects, state.inboxProjectId)
+                val workLabel = stringResource(Res.string.work_project_menu)
+                val isWork = work.enabled && project.id in work.projects
                 LongPressReorderableRow(
                     reorderState = reorderState,
                     key = settingsProjectKey(project.id),
@@ -277,6 +291,7 @@ private fun LazyListScope.projectsSection(
                         project = project,
                         depth = row.depth,
                         isInbox = isInbox,
+                        isWork = isWork,
                         onEdit = clickGuard.guarded { openDialog(SettingsDialog.ProjectEditor(project.id)) },
                         menuItems = projectMenuItems(
                             project = project,
@@ -289,6 +304,11 @@ private fun LazyListScope.projectsSection(
                             onMoveToCategory = if (topLevel) ({ openDialog(SettingsDialog.MoveToCategory(project.id)) }) else null,
                             onAddCategoryAbove = if (topLevel && ProjectCategories.canSplitAt(groups, project.id)) {
                                 { openDialog(SettingsDialog.AddCategoryAbove(project.id)) }
+                            } else {
+                                null
+                            },
+                            workProject = if (work.enabled && !isInbox) {
+                                WorkProjectChoice(workLabel, isWork) { work.setProject(project.id, !isWork, state.projects) }
                             } else {
                                 null
                             },

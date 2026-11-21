@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.share
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.auth.TokenStorage
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.AttachmentRepository
@@ -51,6 +52,8 @@ class IosShareInbox(
     private val appMessages: AppMessages,
     private val syncRequester: () -> SyncRequester,
     private val folder: () -> String? = { IosPaths.appGroupFolder("share-inbox") },
+    /** Work and Personal (contract 22.6): a new task gets the work label in Work mode when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
@@ -124,7 +127,7 @@ class IosShareInbox(
         var added = false
         val taskId = read(progressPath)?.let { json.decodeFromString(SharedInboxProgress.serializer(), it).taskId } ?: run {
             if (files.isNotEmpty() && !networkMonitor.isOnline.value) return Outcome.Waiting
-            when (val result = taskRepository.create(Task(id = 0, title = title, description = item.notes.trim(), projectId = inbox))) {
+            when (val result = taskRepository.create(Task(id = 0, title = title, description = item.notes.trim(), projectId = inbox).let { workMode?.forNewTask(it) ?: it })) {
                 is NetworkResult.Success -> {
                     write(progressPath, json.encodeToString(SharedInboxProgress.serializer(), SharedInboxProgress(result.data.id)))
                     added = true

@@ -117,7 +117,7 @@ class ProLedgerRepository(
     val syncStatus: StateFlow<SyncedDocumentStatus> = _syncStatus
 
     /** Pro is on on this device. */
-    val proOn: Flow<Boolean> = behaviorPrefs.getPrefs().map { it.isProEnabled() }.distinctUntilChanged()
+    val proOn: Flow<Boolean> = behaviorPrefs.getPrefs().map { it.isProSwitchedOn() }.distinctUntilChanged()
 
     /** The device's copy; empty until something is kept. */
     val ledger: Flow<ProLedger> = store.state.map(::documentOf).distinctUntilChanged()
@@ -158,7 +158,7 @@ class ProLedgerRepository(
     private suspend fun loadState(): ProLedgerLocalState =
         store.load() ?: ProLedgerLocalState(deviceId = randomUuid()).also { store.save(it) }
 
-    suspend fun isProOn(): Boolean = behaviorPrefs.getPrefs().first().isProEnabled()
+    suspend fun isProOn(): Boolean = behaviorPrefs.getPrefs().first().isProSwitchedOn()
 
     /** The device's copy now. */
     suspend fun current(): ProLedger = documentOf(store.load())

@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.rendyhd.vicu.util.WorkMode
+import com.rendyhd.vicu.util.WorkModeSwitches
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.util.pro.Focus
 import com.rendyhd.vicu.util.pro.FollowUps
 import com.rendyhd.vicu.util.pro.ProFocus
@@ -100,12 +103,32 @@ data class BehaviorPrefs(
     val proOnboardingSeen: Boolean = false,
     /** "Dismiss for today" of the follow-up lines (contract 21.18): a line's key and the local day it shows again. */
     val proFollowUpDismissed: Map<String, String> = emptyMap(),
+    /** Work and Personal (contract section 22), per device and never synced; off by default. */
+    val workModeEnabled: Boolean = false,
+    /** The mode last chosen: `all`, `work` or `personal` (only read while the feature is on). */
+    val workMode: String = "all",
+    /** With the feature on, Pro shows only in All and Work mode (contract 22.8). */
+    val proOnlyInWork: Boolean = false,
 ) {
+    /** The device settings the work rules read. This app has no standalone mode. */
+    val workSwitches: WorkModeSwitches
+        get() = WorkModeSwitches(workModeEnabled = workModeEnabled, workMode = workMode, proOnlyInWork = proOnlyInWork)
+
+    /** The mode in effect: [WorkMode.ALL] while the feature is off. */
+    val effectiveWorkMode: WorkMode get() = WorkScopeRules.effectiveWorkMode(workSwitches)
+
     /** The switch and layers as the Pro rules read them. This app has no standalone mode. */
     val proSwitches: ProSwitches get() = ProSwitches(proEnabled = proEnabled, proLayers = proLayers)
 
-    /** Pro is on, and with a [layer], that layer too. */
-    fun isProEnabled(layer: ProLayer? = null): Boolean = ProSettings.isEnabled(proSwitches, layer)
+    /**
+     * Pro shows: it is switched on (and with a [layer], that layer too) and the work mode lets it
+     * (contract 22.8: "Pro only in Work" makes Personal mode act as Pro off). Everything Pro shows asks this.
+     */
+    fun isProEnabled(layer: ProLayer? = null): Boolean =
+        WorkScopeRules.proAllowedInWorkMode(workSwitches) && ProSettings.isEnabled(proSwitches, layer)
+
+    /** Pro's own switch alone: the ledger keeps syncing in Personal mode, so sync and clean-up ask this. */
+    fun isProSwitchedOn(layer: ProLayer? = null): Boolean = ProSettings.isEnabled(proSwitches, layer)
 }
 
 /** What a list shows while Pro's availability layer is on (contract 21.2). */
@@ -170,6 +193,9 @@ class BehaviorPrefsStore(
         private val KEY_PRO_VERDICT_SNOOZE = stringPreferencesKey("pro_verdict_snooze")
         private val KEY_PRO_ONBOARDING_SEEN = booleanPreferencesKey("pro_onboarding_seen")
         private val KEY_PRO_FOLLOWUP_DISMISSED = stringPreferencesKey("pro_followup_dismissed")
+        private val KEY_WORK_MODE_ENABLED = booleanPreferencesKey("work_mode_enabled")
+        private val KEY_WORK_MODE = stringPreferencesKey("work_mode")
+        private val KEY_PRO_ONLY_IN_WORK = booleanPreferencesKey("pro_only_in_work")
 
         /** A stored JSON value, or null when there is none or it does not read. */
         private fun parseJson(raw: String?): JsonElement? =
@@ -234,6 +260,9 @@ class BehaviorPrefsStore(
                 proVerdictSnooze = readVerdictSnooze(prefs[KEY_PRO_VERDICT_SNOOZE]),
                 proOnboardingSeen = prefs[KEY_PRO_ONBOARDING_SEEN] ?: false,
                 proFollowUpDismissed = readFollowUpDismissed(prefs[KEY_PRO_FOLLOWUP_DISMISSED]),
+                workModeEnabled = prefs[KEY_WORK_MODE_ENABLED] ?: false,
+                workMode = WorkScopeRules.parseWorkMode(prefs[KEY_WORK_MODE]).key,
+                proOnlyInWork = prefs[KEY_PRO_ONLY_IN_WORK] ?: false,
             )
         }
 
@@ -314,6 +343,19 @@ class BehaviorPrefsStore(
 
     suspend fun setPlannerNudge(time: String?) {
         dataStore.edit { if (time == null) it.remove(KEY_PLANNER_NUDGE) else it[KEY_PLANNER_NUDGE] = time }
+    }
+
+    /** Work and Personal on or off on this device (contract 22.1); the chosen mode is kept. */
+    suspend fun setWorkModeEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_WORK_MODE_ENABLED] = enabled }
+    }
+
+    suspend fun setWorkMode(mode: WorkMode) {
+        dataStore.edit { it[KEY_WORK_MODE] = mode.key }
+    }
+
+    suspend fun setProOnlyInWork(enabled: Boolean) {
+        dataStore.edit { it[KEY_PRO_ONLY_IN_WORK] = enabled }
     }
 
     /** Turns Pro on or off here. Only this switch changes: turning Pro off writes nothing else. */

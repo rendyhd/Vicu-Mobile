@@ -146,4 +146,28 @@
         <item quantity="one">%1$d taak toegevoegd</item>
         <item quantity="other">%1$d taken toegevoegd</item>
     </plurals>
+
+    <string name="work_mode_all">Alles</string>
+    <string name="work_mode_work">Werk</string>
+    <string name="work_mode_personal">Persoonlijk</string>
+    <string name="work_mode_control">Toon alle taken, werk of persoonlijk</string>
+    <string name="work_project_menu">Werkproject</string>
+    <string name="work_project_mark">Werkproject</string>
+    <string name="work_settings_title">Werk en persoonlijk</string>
+    <string name="work_settings_switch">Werk en persoonlijk op dit apparaat</string>
+    <string name="work_settings_switch_description">Bekijk werk of privé om beurten. Herinneringen komen nog steeds en zoeken vindt alles. Deze keuze geldt voor dit apparaat.</string>
+    <string name="work_settings_label">Werklabel</string>
+    <string name="work_settings_label_none">Geen</string>
+    <string name="work_settings_label_description">Een taak met dit label is werk, in elk project. Gedeeld met je andere apparaten.</string>
+    <string name="work_settings_pro_only">Pro alleen bij Werk</string>
+    <string name="work_settings_pro_only_description">In de stand Persoonlijk is Pro op dit apparaat verborgen, alsof het uit staat.</string>
+    <string name="work_settings_no_label_note">Zonder werklabel blijft een taak die je in de stand Werk maakt buiten een werkproject Persoonlijk.</string>
+    <string name="work_settings_projects_note">Markeer werkprojecten in hun menu, bij Instellingen, Projecten of in het menu.</string>
+    <string name="work_pro_area_work">Werkprojecten</string>
+    <string name="work_pro_area_work_note">Beloften en mensen gelden voor de projecten die als werk zijn gemarkeerd.</string>
+    <string name="work_hidden_in_personal">%1$d meer in Persoonlijk</string>
+    <string name="work_hidden_in_work">%1$d meer in Werk</string>
+    <string name="work_hidden_show">Toon</string>
+    <string name="work_hidden_hide">Verberg</string>
+    <string name="work_added_to_personal">Toegevoegd aan Persoonlijk</string>
 </resources>

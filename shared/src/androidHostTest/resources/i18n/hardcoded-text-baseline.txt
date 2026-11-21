@@ -92,7 +92,7 @@
 31	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanMyDayScreen.kt
 1	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanMyDayViewModel.kt
 11	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanScreen.kt
-5	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanTimeline.kt
+4	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanTimeline.kt
 2	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanTopRow.kt
 11	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlanViewModel.kt
 11	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/plan/PlannerOptions.kt

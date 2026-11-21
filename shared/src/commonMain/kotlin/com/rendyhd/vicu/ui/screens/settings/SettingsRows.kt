@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.settings
 
+import androidx.compose.material.icons.outlined.Check
+import com.rendyhd.vicu.ui.components.WorkModeMark
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -243,6 +245,8 @@ internal fun SubsectionHeading(title: String) {
 internal class RowMenuItem(
     val label: String,
     val destructive: Boolean = false,
+    /** A tick in front of the label: a choice that is on (the work project mark); null for a plain entry. */
+    val checked: Boolean? = null,
     val onClick: () -> Unit,
 )
 
@@ -270,6 +274,7 @@ internal fun RowOverflowMenu(
                             color = if (item.destructive) MaterialTheme.colorScheme.error else Color.Unspecified,
                         )
                     },
+                    leadingIcon = if (item.checked == true) ({ Icon(Icons.Outlined.Check, contentDescription = null) }) else null,
                     onClick = {
                         open = false
                         item.onClick()
@@ -312,6 +317,8 @@ internal fun SettingsProjectRow(
     onEdit: () -> Unit,
     menuItems: List<RowMenuItem>,
     modifier: Modifier = Modifier,
+    /** A work project (contract 22.7): a small mark after its title. */
+    isWork: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -342,6 +349,10 @@ internal fun SettingsProjectRow(
             if (isInbox) {
                 Spacer(modifier = Modifier.width(8.dp))
                 InboxChip()
+            }
+            if (isWork) {
+                Spacer(modifier = Modifier.width(8.dp))
+                WorkModeMark(work = true)
             }
         }
         RowOverflowMenu(contentDescription = moreOptionsDescription(project.title), items = menuItems)

@@ -412,11 +412,18 @@ class TaskRefresher(
      * tasks that are newer than its oldest row and no longer on the server (deleted or reopened
      * elsewhere): everything newer than the page's last row must be on the page.
      */
-    suspend fun loadCompletedPage(page: Int, pageSize: Int, completedSince: String?): CompletedPage = mutex.withLock {
+    suspend fun loadCompletedPage(
+        page: Int,
+        pageSize: Int,
+        completedSince: String?,
+        /** Work and Personal (contract 22.9): a clause that leaves out nothing the mode shows; the device still applies the mode. */
+        extraClause: String? = null,
+    ): CompletedPage = mutex.withLock {
         startRun()
         val filter = buildString {
             append("done = true")
             if (!completedSince.isNullOrBlank()) append(" && done_at >= '${completedSince}'")
+            if (!extraClause.isNullOrBlank()) append(" && ${extraClause}")
         }
         val response = api.getTasksPage(
             mapOf(
@@ -434,7 +441,8 @@ class TaskRefresher(
         val acc = Accumulator()
         merge(dtos, acc)
         storeSignals(dtos)
-        if (page == 1) reconcileCompletedHead(dtos, hasMore, completedSince, acc)
+        // A narrowed page does not hold every completed task, so it cannot say which cached ones are gone.
+        if (page == 1 && extraClause.isNullOrBlank()) reconcileCompletedHead(dtos, hasMore, completedSince, acc)
         finish(acc)
         CompletedPage(loaded = dtos.size, hasMore = hasMore)
     }

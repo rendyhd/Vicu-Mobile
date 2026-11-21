@@ -37,6 +37,7 @@ internal fun GeneralTab(
         accountSection(state, openDialog)
         appearanceSection(state, useDeviceColors, pureBlack, viewModel)
         bottomBarSection(state, viewModel, openDialog)
+        workModeSection()
         // Plan sits with Pro's tools, as on the desktop, and works whether Pro is on or off.
         proSection()
         plannerSection(state, viewModel)

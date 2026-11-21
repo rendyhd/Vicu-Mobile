@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.data.repository
 
 import com.rendyhd.vicu.domain.model.SyncedPrefKeys
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.util.pro.ProPrefs
 import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.ProjectMode
@@ -66,6 +67,9 @@ class ProPreferences(private val synced: SyncedEntries) {
     /** The area's categories; none is every project and writes null. */
     suspend fun setArea(categoryIds: List<String>): Boolean =
         write(SyncedPrefKeys.PRO_AREA, categoryIds.distinct().takeIf { it.isNotEmpty() }?.let { ids -> JsonArray(ids.map(::JsonPrimitive)) })
+
+    /** The area is the work projects (section 22.8); written as the string `"work"`. */
+    suspend fun setAreaWork(): Boolean = write(SyncedPrefKeys.PRO_AREA, JsonPrimitive(WorkScopeRules.PRO_AREA_WORK))
 
     /** Writes one key; false (and nothing written) for a value the registry does not allow. */
     private suspend fun write(key: String, value: JsonElement?): Boolean {

@@ -3,6 +3,8 @@ package com.rendyhd.vicu.ai.ask
 import com.rendyhd.vicu.ai.AiContract
 import com.rendyhd.vicu.ai.AiText
 import com.rendyhd.vicu.ai.dictation.ContextProject
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.data.repository.parentTaskOf
 import com.rendyhd.vicu.domain.model.CollabState
 import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.CustomListFilter
@@ -22,6 +24,8 @@ import com.rendyhd.vicu.util.ReviewMetadata
 import com.rendyhd.vicu.util.ReviewState
 import com.rendyhd.vicu.util.TimeBlocks
 import com.rendyhd.vicu.util.WeekStart
+import com.rendyhd.vicu.util.WorkProject
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.util.isRecurring
 import com.rendyhd.vicu.util.sortProjectTasks
 import kotlin.time.Instant
@@ -62,6 +66,11 @@ class AskSnapshot(
     val reviewExcludeInbox: Boolean,
     /** The day the account's weeks start on (contract section 2.1): the `this_week` window and `week_starts`. */
     val weekStart: WeekStart = WeekStart.DEFAULT,
+    /**
+     * The device's mode and what work is (contract 22.4: the tools answer as the screens do): the
+     * overview's counts and the list views follow it, `find_tasks` and `get_task` search across both.
+     */
+    val work: WorkState = WorkState.OFF,
 ) {
     val tasks: List<Task> = tasks.filterNot { HiddenTasks.isHidden(it.description) }
     val byId: Map<Long, Task> = this.tasks.associateBy { it.id }
@@ -108,6 +117,9 @@ class AskSnapshot(
         .sortedWith(compareBy({ it.path.lowercase() }, { it.path }, { it.id }))
 
     private val activeProjectIds: Set<Long> = projects.filter { !isArchived(it.id) }.mapTo(HashSet()) { it.id }
+
+    /** [list] as the mode shows it (all of it in All or with the feature off); subtasks stay under a shown row. */
+    private fun inMode(list: List<Task>): List<Task> = work.filter(list, ::parentTaskOf)
 
     // --- Task summaries (section 5.2) --------------------------------------------------------
 
@@ -158,7 +170,7 @@ class AskSnapshot(
     // --- get_overview ------------------------------------------------------------------------
 
     fun overview(): JsonObject {
-        val open = tasks.filter { !it.done && it.projectId in activeProjectIds }
+        val open = inMode(tasks.filter { !it.done && it.projectId in activeProjectIds })
         val overdue = open.count { DueDates.isOverdue(it.dueDate, today, zone) }
         // The Today list's own rule (contract section 2): a block starting today counts too.
         val dueToday = TimeBlocks.splitToday(open, today, zone).today.size
@@ -175,8 +187,13 @@ class AskSnapshot(
             }
             putJsonArray("review_due") {
                 if (reviewEnabled) {
+                    val listed = if (work.filtering) {
+                        WorkScopeRules.projectsShownInMode(projects.map { WorkProject(it.id, it.parentProjectId.takeIf { p -> p > 0 }) }, work.scope.projects, work.mode, inboxId)
+                    } else {
+                        null
+                    }
                     projects.asSequence()
-                        .filter { !isArchived(it.id) }
+                        .filter { !isArchived(it.id) && (listed == null || it.id in listed) }
                         .filterNot { reviewExcludeInbox && it.id == inboxId }
                         .map { it to ReviewMetadata.computeStatus(ReviewMetadata.parse(it.description), reviewCadenceDays, today) }
                         .filter { (_, status) -> status.metadata.state != ReviewState.EXCLUDED && status.isOverdue }
@@ -269,7 +286,7 @@ class AskSnapshot(
     fun listView(args: JsonObject, logbook: List<Task>): JsonObject {
         val view = (args["view"] as? JsonPrimitive)?.contentOrNull ?: return invalid("view is missing")
         val page = ((args["page"] as? JsonPrimitive)?.intOrNull ?: 1).coerceAtLeast(1)
-        val open = tasks.filter { !it.done }
+        val open = inMode(tasks.filter { !it.done })
         val rows: List<Task> = when (view) {
             "inbox" -> {
                 val id = inboxId ?: return error("not_found", "No Inbox is chosen.")
@@ -284,7 +301,7 @@ class AskSnapshot(
             "anytime" -> projects.filter { !isArchived(it.id) && it.id != inboxId }
                 .sortedWith(compareBy({ path(it.id).lowercase() }, { it.id }))
                 .flatMap { p -> sortProjectTasks(open.filter { it.projectId == p.id }, order.orderFor(p.id, projects)) }
-            "logbook" -> logbook.filterNot { HiddenTasks.isHidden(it.description) }
+            "logbook" -> inMode(logbook.filterNot { HiddenTasks.isHidden(it.description) })
                 .sortedByDescending { it.doneAt }
             "project" -> {
                 val id = (args["project_id"] as? JsonPrimitive)?.longOrNull ?: return invalid("project_id is missing")
@@ -294,7 +311,7 @@ class AskSnapshot(
             "custom_list" -> {
                 val id = (args["custom_list_id"] as? JsonPrimitive)?.contentOrNull ?: return invalid("custom_list_id is missing")
                 val list = customLists.firstOrNull { it.id == id } ?: return error("not_found", "No custom list $id.")
-                CustomListFilterBuilder.visibleTasks(tasks, list.filter, today, zone, activeProjectIds, CustomListContext.of(collab, signals, weekStart))
+                CustomListFilterBuilder.visibleTasks(inMode(tasks), list.filter, today, zone, activeProjectIds, CustomListContext.of(collab, signals, weekStart))
             }
             else -> return invalid("unknown view $view")
         }

@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.today
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
+import com.rendyhd.vicu.data.repository.stateOrOff
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,6 +127,8 @@ class TodayDayViewModel(
     navigationTicker: NavigationTicker = NavigationTicker(),
     completionToast: CompletionToast = NoCompletionToast,
     private val time: TimeSource = SystemTimeSource,
+    /** Work and Personal (contract 22): the list follows the mode, blocks of the other mode stay as busy time; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     val completions = CompletionHold(viewModelScope, navigationTicker = navigationTicker, toast = completionToast)
@@ -146,8 +151,8 @@ class TodayDayViewModel(
         projectRepository.getAll(),
         routines,
         plannerPreferences.hours,
-        combine(dayClock.day, completions.state) { day, held -> day to held },
-    ) { tasks, projects, routines, hours, (day, held) ->
+        combine(dayClock.day, completions.state, workMode.stateOrOff()) { day, held, work -> Triple(day, held, work) },
+    ) { tasks, projects, routines, hours, (day, held, work) ->
         val byId = projects.associateBy { it.id }
         val content = planDayContent(
             tasks.filter { it.projectId in byId },
@@ -157,7 +162,7 @@ class TodayDayViewModel(
             day.zone,
         ) { it.id in held }
         TodayDayUiState(
-            content = content.copy(withoutTime = completions.merge(content.withoutTime)),
+            content = content.copy(withoutTime = completions.merge(work.filter(content.withoutTime))),
             routines = routines,
             hours = hours,
             projects = byId,

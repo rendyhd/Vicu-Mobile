@@ -200,7 +200,7 @@ class ProLedgerRepositoryTest {
     }
 
     @Test
-    fun `a change for another reason keeps who a promise was made to, its checks and the fields of meetings and rounds`() = runTest {
+    fun `a change for another reason keeps who a promise was made to and its checks and the fields of meetings and rounds`() = runTest {
         val rig = rig()
         val to = JsonObject(mapOf("group" to JsonPrimitive(70)))
         val promise = JsonObject(

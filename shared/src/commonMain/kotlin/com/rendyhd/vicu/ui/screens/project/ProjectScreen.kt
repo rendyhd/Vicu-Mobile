@@ -89,12 +89,17 @@ import com.rendyhd.vicu.ui.components.task.ReorderableTaskRow
 import com.rendyhd.vicu.ui.components.task.SwipeableTaskItem
 import com.rendyhd.vicu.ui.screens.shared.ProjectActions
 import com.rendyhd.vicu.domain.model.TaskOrder
+
 import com.rendyhd.vicu.resources.Res
 import com.rendyhd.vicu.resources.pro_plan_open
 import com.rendyhd.vicu.ui.components.pro.LocalPro
 import com.rendyhd.vicu.ui.components.pro.ProjectStatusDialog
 import com.rendyhd.vicu.ui.components.pro.ProjectTypeDialog
 import com.rendyhd.vicu.ui.components.pro.proHiddenItem
+import com.rendyhd.vicu.ui.components.workHiddenItem
+
+import com.rendyhd.vicu.resources.work_project_menu
+import androidx.compose.material.icons.outlined.Check
 import com.rendyhd.vicu.ui.components.pro.proViewSwitchItem
 import com.rendyhd.vicu.util.pro.AvailabilityView
 import com.rendyhd.vicu.util.isManuallyOrdered
@@ -205,6 +210,8 @@ fun ProjectScreen(
                             ProjectOptionsMenu(
                                 entries = menu.entries(),
                                 extra = proEntries,
+                                workProject = menu.workProject,
+                                onWorkProject = viewModel::setWorkProject,
                                 onChoose = { entry ->
                                     when (entry) {
                                         ProjectMenuEntry.SORT -> openDialog = ProjectDialog.SORT.name
@@ -253,7 +260,7 @@ fun ProjectScreen(
 
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().listScrollbar(listState), contentPadding = PaddingValues(bottom = FabClearance)) {
                 proViewSwitchItem(state.proView, viewModel::setProView)
-                if (allEmpty && !state.isLoading && state.proHidden == 0) {
+                if (allEmpty && !state.isLoading && state.proHidden == 0 && state.workHidden.count == 0) {
                     item {
                         EmptyState(
                             icon = Icons.Outlined.Folder,
@@ -352,6 +359,7 @@ fun ProjectScreen(
                     )
                 }
                 proHiddenItem(state.proView, state.proHidden) { viewModel.setProView(AvailabilityView.REMAINING) }
+                workHiddenItem(state.workHidden, viewModel::setShowWorkHidden)
             }
         }
     }
@@ -494,6 +502,9 @@ private fun ProjectOptionsMenu(
     onChoose: (ProjectMenuEntry) -> Unit,
     /** Pro's entries (Type, Status), after the project's own. */
     extra: List<Pair<String, () -> Unit>> = emptyList(),
+    /** The "Work project" tick (contract 22.7): null when Work and Personal is off. */
+    workProject: Boolean? = null,
+    onWorkProject: (Boolean) -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -512,6 +523,16 @@ private fun ProjectOptionsMenu(
                     onClick = {
                         open = false
                         onChoose(entry)
+                    },
+                )
+            }
+            if (workProject != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.work_project_menu)) },
+                    leadingIcon = { if (workProject) Icon(Icons.Outlined.Check, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        onWorkProject(!workProject)
                     },
                 )
             }

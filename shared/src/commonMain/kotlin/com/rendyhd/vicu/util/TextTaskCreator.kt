@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.util
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.auth.AuthState
 import com.rendyhd.vicu.data.local.NlpPrefsStore
@@ -54,6 +55,8 @@ class TextTaskCreator(
     private val proCapture: ProCaptureSource? = null,
     /** Where a captured promise and estimate are kept (contract 21.7); none in tests. */
     private val proLedger: ProLedgerRepository? = null,
+    /** Work and Personal (contract 22.6): in Work mode the task gets the work label when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     sealed interface Result {
         /**
@@ -156,10 +159,11 @@ class TextTaskCreator(
         )
         // Pro on: `starts monday` and `!flag` set their fields, `Jan:` adds that person's label.
         val task = pro.applyToNew(plainTask, parsed, day.zone)
+        val workLabel = workMode?.labelIdForNewTask(task.projectId, labelIds + listOfNotNull(personLabel))
         return when (val result = taskRepository.createQueued(task)) {
             is NetworkResult.Success -> {
                 val created = result.data
-                for (labelId in labelIds + listOfNotNull(personLabel)) labelRepository.addToTask(created.id, labelId)
+                for (labelId in labelIds + listOfNotNull(personLabel, workLabel)) labelRepository.addToTask(created.id, labelId)
                 // Pro on: `Jan:` makes the task that person's promise, `~45m` gives its estimate.
                 proLedger?.recordCapture(created.id, pro.promiseOf(parsed, labelIds = labelIds), pro.estimateOf(parsed))
                 placePhrase?.let { phrase ->

@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.plan
 
+import com.rendyhd.vicu.data.repository.otherModeOf
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -837,6 +839,7 @@ private fun ArrangeStep(state: PlanMyDayUiState, viewModel: PlanMyDayViewModel, 
             // Events are busy time here too (contract 20.2), drawn read only beside the draft.
             events = state.events,
             eventColor = { id -> calendarColor(state.eventColors[id] ?: PlanEvents.MY_EVENTS_COLOR) },
+            otherModeOf = state.work::otherModeOf,
         )
     }
 

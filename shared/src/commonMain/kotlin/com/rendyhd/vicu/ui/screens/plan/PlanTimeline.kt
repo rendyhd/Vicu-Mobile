@@ -45,7 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.work_mode_personal
+import com.rendyhd.vicu.resources.work_mode_work
+import com.rendyhd.vicu.util.WorkMode
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -90,6 +96,9 @@ private val GutterWidth12h = 62.dp
 
 /** How far the hour labels and the width kept for them follow the text size. */
 private const val HourLabelMaxScale = 1.5f
+
+/** A block of the mode that is not on screen: still busy time, drawn quieter (contract 22.4). */
+private const val OTHER_MODE_ALPHA = 0.5f
 
 /** How far the day strip's labels follow the text size. */
 internal const val StripLabelMaxScale = 1.2f
@@ -244,7 +253,11 @@ internal fun PlanTimeline(
     onEventChange: (CalendarEvent, GestureRange) -> Unit = { _, _ -> },
     /** A press and hold on an empty time: something new there (a task or an Event). */
     onLongPressTime: ((Int) -> Unit)? = null,
+    /** The mode a block's task belongs to when it is the other one (contract 22.4): drawn muted and named. */
+    otherModeOf: (Task) -> WorkMode? = { null },
 ) {
+    val workName = stringResource(Res.string.work_mode_work)
+    val personalName = stringResource(Res.string.work_mode_personal)
     val density = LocalDensity.current
     val zone = LocalClockDay.current.zone
     val format = LocalDateFormat.current
@@ -541,6 +554,7 @@ internal fun PlanTimeline(
                         dashed = task.id in dashedIds,
                         showCheck = !draft && height >= BlockTooShortForCheck,
                         reason = reasonOf(task),
+                        otherModeName = otherModeOf(task)?.let { if (it == WorkMode.WORK) workName else personalName },
                         lifted = current != null,
                         onToggleDone = { onToggleDone(task) },
                         onClick = { onBlockClick(task) },
@@ -752,6 +766,8 @@ private fun TimelineBlock(
     dashed: Boolean,
     showCheck: Boolean,
     reason: String?,
+    /** "Work" or "Personal" for a block of the mode that is not on screen (contract 22.4). */
+    otherModeName: String?,
     lifted: Boolean,
     onToggleDone: () -> Unit,
     onClick: () -> Unit,
@@ -764,6 +780,7 @@ private fun TimelineBlock(
     val tiny = height < BlockTooShortForCheck
     Row(
         modifier = modifier
+            .then(if (otherModeName != null) Modifier.alpha(OTHER_MODE_ALPHA) else Modifier)
             .clip(shape)
             // The tint lies on the page colour, so the grid's lines do not run through the text.
             .background(colors.background)
@@ -778,7 +795,7 @@ private fun TimelineBlock(
             .clickable(onClickLabel = "Open") { onClick() }
             // Inside the click, so a press and hold sees the gesture first and its end is no tap.
             .then(gestures)
-            .semantics { contentDescription = "${task.title}, $timeText" }
+            .semantics { contentDescription = if (otherModeName != null) "${task.title}, $timeText, $otherModeName" else "${task.title}, $timeText" }
             .padding(end = 4.dp),
         verticalAlignment = if (tall) Alignment.Top else Alignment.CenterVertically,
     ) {

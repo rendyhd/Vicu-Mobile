@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui.screens.taskdetail
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.util.Logger
 import com.rendyhd.vicu.util.PlatformFiles
 import androidx.lifecycle.ViewModel
@@ -120,6 +121,8 @@ class TaskDetailViewModel(
     private val subtaskOrders: SubtaskOrderPreferences? = null,
     /** Pro's phrases while Pro is on; none in tests. */
     private val proCaptureSource: ProCaptureSource? = null,
+    /** Work and Personal (contract 22.6): a new task gets the work label in Work mode when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     companion object {
@@ -656,7 +659,7 @@ class TaskDetailViewModel(
                 id = 0,
                 title = title,
                 projectId = task.projectId,
-            )
+            ).let { workMode?.forNewTask(it) ?: it }
             when (val result = taskRepository.createSubtask(task.id, subtask)) {
                 is NetworkResult.Error -> _uiState.update { it.copy(error = result.message) }
                 else -> {}

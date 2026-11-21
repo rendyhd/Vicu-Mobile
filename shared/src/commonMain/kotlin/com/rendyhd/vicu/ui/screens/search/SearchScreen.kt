@@ -1,5 +1,10 @@
 package com.rendyhd.vicu.ui.screens.search
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.domain.model.Task
+import com.rendyhd.vicu.ui.components.WorkModeMark
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -48,6 +53,26 @@ import com.rendyhd.vicu.ui.components.task.TaskItem
 import com.rendyhd.vicu.ui.components.task.RowView
 import com.rendyhd.vicu.ui.components.task.projectMetas
 
+/**
+ * A search result with the small word of its mode when the mode in effect would have left it out
+ * (contract 22.4): search finds everything and says which side a task is on.
+ */
+@Composable
+private fun WorkMarked(task: Task, work: WorkState, modifier: Modifier, content: @Composable () -> Unit) {
+    val other = work.filtering && !work.passes(task)
+    if (!other) {
+        Box(modifier) { content() }
+        return
+    }
+    Box(modifier) {
+        content()
+        WorkModeMark(
+            work = work.isWork(task),
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 2.dp),
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -58,6 +83,7 @@ fun SearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val projects by viewModel.projects.collectAsStateWithLifecycle()
     val labels by viewModel.labels.collectAsStateWithLifecycle()
+    val work by viewModel.work.collectAsStateWithLifecycle()
     val rowView = remember(projects) { RowView(projects = projectMetas(projects)) }
 
     // Rows kept on screen after completing them are let go when the screen is left.
@@ -144,6 +170,7 @@ fun SearchScreen(
                 }
             } else {
                 items(state.results, key = { it.id }, contentType = { "task" }) { task ->
+                    WorkMarked(task, work, Modifier.animateItem()) {
                     TaskItem(
                         task = if (task.id in state.completedTaskIds) task.copy(done = true) else task,
                         onToggleDone = {
@@ -157,14 +184,15 @@ fun SearchScreen(
                         onSubtaskToggleDone = viewModel::toggleDone,
                         onSubtaskClick = { child -> onTaskClick(child.id) },
                         rowView = rowView,
-                        modifier = Modifier.animateItem(),
                     )
+                    }
                 }
                 if (state.completedResults.isNotEmpty()) {
                     item(key = "completed_header", contentType = "header") {
                         SectionHeader(title = "Completed")
                     }
                     items(state.completedResults, key = { it.id }, contentType = { "task" }) { task ->
+                        WorkMarked(task, work, Modifier.animateItem()) {
                         TaskItem(
                             task = task,
                             onToggleDone = { viewModel.toggleDone(task) },
@@ -172,8 +200,8 @@ fun SearchScreen(
                             onSubtaskToggleDone = viewModel::toggleDone,
                             onSubtaskClick = { child -> onTaskClick(child.id) },
                             rowView = rowView,
-                            modifier = Modifier.animateItem(),
                         )
+                        }
                     }
                 }
             }

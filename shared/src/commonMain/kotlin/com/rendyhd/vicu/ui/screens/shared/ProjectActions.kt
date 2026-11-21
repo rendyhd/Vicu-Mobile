@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui.screens.shared
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.auth.AuthManager
 import com.rendyhd.vicu.data.repository.ProjectCategoryPreferences
 import com.rendyhd.vicu.data.repository.ProjectIconPreferences
@@ -80,6 +81,8 @@ class ProjectActions(
     private val appScope: CoroutineScope? = null,
     /** Which projects are drawn without an icon (section 11.3); null in tests that do not use it. */
     private val iconPreferences: ProjectIconPreferences? = null,
+    /** Work and Personal (contract 22.1): a deleted project's own entry goes with it; null in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     /** The Inbox project's id, null until one is chosen. */
     val inboxProjectId: Flow<Long?> get() = authManager.inboxProjectId
@@ -130,8 +133,11 @@ class ProjectActions(
     }
 
     /** Deletes the project and its tasks. */
-    suspend fun delete(projectId: Long): ProjectActionResult =
-        projectRepository.delete(projectId).toResult("Project deleted")
+    suspend fun delete(projectId: Long): ProjectActionResult {
+        val result = projectRepository.delete(projectId)
+        if (result !is NetworkResult.Error) workMode?.forgetProject(projectId)
+        return result.toResult("Project deleted")
+    }
 
     /**
      * Records a review of [project] today, keeping a cadence of its own. The confirmation is the

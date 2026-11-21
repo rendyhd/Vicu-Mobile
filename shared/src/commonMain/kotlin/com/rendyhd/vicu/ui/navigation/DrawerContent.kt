@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.navigation
 
+import com.rendyhd.vicu.data.repository.WorkSettings
+import com.rendyhd.vicu.ui.components.WorkModeControl
+import com.rendyhd.vicu.util.WorkMode
 import com.rendyhd.vicu.ui.components.pro.ProIcons
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -150,6 +153,9 @@ fun DrawerContent(
     /** Smart dictation is ready, so notes can be made into tasks (docs/ai-assistant-v1.md, 4.9). */
     showNotes: Boolean = false,
     onOpenNotes: () -> Unit = {},
+    /** Work and Personal (contract 22): the control at the top shows only while the feature is on. */
+    workSettings: WorkSettings = WorkSettings(),
+    onWorkMode: (WorkMode) -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
@@ -213,6 +219,13 @@ fun DrawerContent(
 
     ModalDrawerSheet {
         Column(modifier = Modifier.fillMaxHeight()) {
+            if (workSettings.enabled) {
+                WorkModeControl(
+                    mode = workSettings.chosen,
+                    onMode = onWorkMode,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                )
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f),

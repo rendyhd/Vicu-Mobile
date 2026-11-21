@@ -144,6 +144,7 @@ val iosModule = module {
             networkMonitor = get(),
             appMessages = get(),
             syncRequester = { get() },
+            workMode = get(),
         )
     }
     single {

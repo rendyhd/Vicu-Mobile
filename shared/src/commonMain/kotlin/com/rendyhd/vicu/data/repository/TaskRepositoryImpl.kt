@@ -88,6 +88,8 @@ class TaskRepositoryImpl(
     private val mappingDispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** Says once that notes changed on two devices were merged. */
     private val messages: AppMessages? = null,
+    /** Work and Personal (contract 22): narrows the Logbook's server listing to the mode; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : TaskRepository {
 
     private val carrierWriter = RoutineCarrierWriter(api, json)
@@ -1420,7 +1422,10 @@ class TaskRepositoryImpl(
             } else {
                 null
             }
-            val loaded = refresher.loadCompletedPage(page, LOGBOOK_PAGE_SIZE, completedSince)
+            // In Work or Personal the listing is narrowed (22.9); when the mode shows nothing nothing is asked.
+            val clause = workMode?.currentState()?.takeIf { it.filtering }?.clause
+            if (clause?.empty == true) return NetworkResult.Success(LogbookPage(page, false))
+            val loaded = refresher.loadCompletedPage(page, LOGBOOK_PAGE_SIZE, completedSince, clause?.clause)
             NetworkResult.Success(LogbookPage(page, loaded.hasMore))
         } catch (e: CancellationException) {
             throw e

@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ui.screens.tag
 
 import com.rendyhd.vicu.ui.components.pro.LabelProMenu
 import com.rendyhd.vicu.ui.components.pro.proHiddenItem
+import com.rendyhd.vicu.ui.components.workHiddenItem
 import com.rendyhd.vicu.ui.components.pro.proViewSwitchItem
 import com.rendyhd.vicu.util.pro.AvailabilityView
 import com.rendyhd.vicu.ui.components.shared.listScrollbar
@@ -135,7 +136,7 @@ fun TagScreen(
         ) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().listScrollbar(listState), contentPadding = PaddingValues(bottom = FabClearance)) {
                 proViewSwitchItem(state.proView, viewModel::setProView)
-                if (state.tasks.isEmpty() && !state.isLoading && state.proHidden == 0) {
+                if (state.tasks.isEmpty() && !state.isLoading && state.proHidden == 0 && state.workHidden.count == 0) {
                     item {
                         EmptyState(
                             icon = Icons.AutoMirrored.Outlined.Label,
@@ -182,6 +183,7 @@ fun TagScreen(
                         }
                     }
                 }
+                workHiddenItem(state.workHidden, viewModel::setShowWorkHidden)
                 proHiddenItem(state.proView, state.proHidden) { viewModel.setProView(AvailabilityView.REMAINING) }
             }
         }

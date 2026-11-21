@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui.screens.settings
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.util.countOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -193,6 +194,8 @@ class SettingsViewModel(
     private val syncCursor: SyncCursorStore,
     private val projectActions: ProjectActions,
     private val taskOrderPreferences: TaskOrderPreferences,
+    /** Work and Personal (contract 22.1): deleting the work label clears it; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<Pair<String?, String?>>(null to null)
@@ -623,6 +626,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             when (val result = labelRepository.delete(labelId)) {
                 is NetworkResult.Success -> {
+                    workMode?.forgetLabel(labelId)
                     _messages.update { null to "Label deleted" }
                 }
                 is NetworkResult.Error -> {

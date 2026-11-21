@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.anytime
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.auth.AuthManager
@@ -54,6 +56,8 @@ class AnytimeViewModel(
     /** Pro's Available / Remaining / All (contract 21.2); none in tests. */
     private val proWorld: ProWorldSource? = null,
     private val proActions: ProActions? = null,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnytimeUiState())
@@ -73,7 +77,7 @@ class AnytimeViewModel(
             authManager.inboxProjectId.collectLatest { inboxId ->
                 // With no Inbox chosen yet nothing is left out: no project has id 0.
                 combine(
-                    taskRepository.getAnytimeTasks(inboxId ?: NO_PROJECT_ID),
+                    taskRepository.getAnytimeTasks(inboxId ?: NO_PROJECT_ID).inWorkMode(workMode),
                     projectRepository.getAll(),
                     completions.state,
                     collapsedProjectIds,

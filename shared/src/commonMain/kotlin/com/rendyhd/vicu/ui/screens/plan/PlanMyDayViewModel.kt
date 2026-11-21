@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.plan
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
+import com.rendyhd.vicu.data.repository.stateOrOff
 import com.rendyhd.vicu.calendar.PlanCalendarDays
 import com.rendyhd.vicu.calendar.PlanCalendars
 import androidx.lifecycle.ViewModel
@@ -85,6 +88,8 @@ class PlanMyDayViewModel(
     private val appMessages: AppMessages,
     planCalendars: PlanCalendars,
     private val time: TimeSource = SystemTimeSource,
+    /** Work and Personal (contract 22): the lists follow the mode, blocks of the other mode stay as busy time; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val choices = MutableStateFlow(PlanChoices())
@@ -104,14 +109,17 @@ class PlanMyDayViewModel(
     /** A project's open tasks in its order, each a row of its own only when it is not nested. */
     private fun projectList(id: Long?): Flow<List<Task>> {
         if (id == null) return flowOf(emptyList())
-        return combine(taskRepository.getByProjectId(id), taskOrders, projects) { tasks, orders, all ->
+        return combine(taskRepository.getByProjectId(id).inWorkMode(workMode), taskOrders, projects) { tasks, orders, all ->
             sortProjectTasks(tasks.filter { !it.done }, orders.orderFor(id, all))
                 .withoutNestedSubtasks(hideChildrenOfCompletedParents = false)
         }
     }
 
     private val dayList: Flow<Pair<LocalDate, List<Task>>> = day.flatMapLatest { d ->
-        taskRepository.getPlanTasks(d, d).map { d to it }
+        // The mode leaves out the tasks of the other mode, but its time blocks stay: they are busy time (contract 22.4).
+        combine(taskRepository.getPlanTasks(d, d), workMode.stateOrOff(), dayClock.day) { tasks, work, clock ->
+            d to (if (!work.filtering) tasks else tasks.filter { work.passes(it) || TimeBlocks.blockOf(it, clock.zone) != null })
+        }
     }
     private val inboxList = authManager.inboxProjectId.distinctUntilChanged().flatMapLatest { id ->
         projectList(id).map { id to it }
@@ -154,7 +162,7 @@ class PlanMyDayViewModel(
         val picked: List<Task>,
     )
 
-    private val lists = combine(dayList, taskRepository.getAllOpenTasksFlat(), inboxList, pickedList) { d, open, inbox, picked ->
+    private val lists = combine(dayList, taskRepository.getAllOpenTasksFlat().inWorkMode(workMode), inboxList, pickedList) { d, open, inbox, picked ->
         Lists(d, open, inbox, picked)
     }
 
@@ -167,7 +175,7 @@ class PlanMyDayViewModel(
         .distinctUntilChanged()
         .flatMapLatest { (d, zone) -> planCalendars.observe(d, d, zone).map { d to it } }
 
-    private val session: Flow<PlanSessionData> = combine(lists, routines, settings, sharing, calendar) { l, routineList, s, share, read ->
+    private val session: Flow<PlanSessionData> = combine(lists, combine(routines, workMode.stateOrOff()) { r, w -> r to w }, settings, sharing, calendar) { l, (routineList, work), s, share, read ->
         val events = read.second.takeIf { read.first == l.day.first } ?: PlanCalendarDays()
         PlanSessionData(
             day = l.day.first,
@@ -188,6 +196,7 @@ class PlanMyDayViewModel(
             countingCalendars = events.counting,
             eventColors = (events.events.map { it.calendarId }.toSet()).associateWith(events::colorOf),
             eventsRead = read.first == l.day.first,
+            work = work,
         )
     }
 

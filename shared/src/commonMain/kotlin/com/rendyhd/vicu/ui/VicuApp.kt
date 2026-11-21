@@ -702,6 +702,7 @@ fun VicuApp(
 
     val drawerViewModel: DrawerViewModel = koinViewModel()
     val drawerUiState by drawerViewModel.uiState.collectAsStateWithLifecycle()
+    val workSettings by drawerViewModel.workSettings.collectAsStateWithLifecycle()
 
     // Collaboration (assignees and comments) for the rows, the editor and the Comments screen.
     val collabViewModel: CollabViewModel = koinViewModel()
@@ -799,7 +800,7 @@ fun VicuApp(
         LocalTaskRowActions provides taskRowActions,
         LocalCollab provides collabUi,
         LocalPro provides proUi,
-        LocalProjectCategories provides drawerUiState.categories,
+        LocalProjectCategories provides drawerUiState.pickerCategories,
         LocalOpenAsk provides openAsk,
     )
 
@@ -860,6 +861,8 @@ fun VicuApp(
         drawerContent = {
             CompositionLocalProvider(*appLocals) {
                 DrawerContent(
+                    workSettings = workSettings,
+                    onWorkMode = drawerViewModel::setWorkMode,
                     showAsk = aiSettings.askReady,
                     showNotes = aiSettings.dictationReady,
                     onOpenNotes = {

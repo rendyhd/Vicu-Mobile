@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.today
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.auth.AuthManager
@@ -75,6 +77,8 @@ class TodayViewModel(
     completionToast: CompletionToast = NoCompletionToast,
     /** Pro's promises; none in tests. */
     private val proWorld: ProWorldSource? = null,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TodayUiState())
@@ -123,14 +127,14 @@ class TodayViewModel(
             }
         }
         viewModelScope.launch {
-            combine(taskRepository.getUpcomingTasks(), projectRepository.getAll(), dayClock.day) { tasks, projects, day ->
+            combine(taskRepository.getUpcomingTasks().inWorkMode(workMode), projectRepository.getAll(), dayClock.day) { tasks, projects, day ->
                 nextUpcomingTask(tasks, projects, day.date, day.zone)
             }.distinctUntilChanged().collect { next -> _uiState.update { it.copy(nextUpcoming = next) } }
         }
         viewModelScope.launch {
             authManager.inboxProjectId.collectLatest { inboxId ->
                 combine(
-                    taskRepository.getTodayTasks(),
+                    taskRepository.getTodayTasks().inWorkMode(workMode),
                     projectRepository.getAll(),
                     completions.state,
                     // The sections follow the day: a task due today is overdue once it is tomorrow.

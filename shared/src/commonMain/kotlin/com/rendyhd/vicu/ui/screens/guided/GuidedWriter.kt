@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui.screens.guided
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.ai.ask.Proposal
 import com.rendyhd.vicu.ai.ask.Proposals
 import com.rendyhd.vicu.ai.ask.TaskChange
@@ -19,6 +20,8 @@ class GuidedWriter(
     private val tasks: TaskRepository,
     private val proposals: Proposals,
     private val dayClock: DayClock,
+    /** Work and Personal (contract 22.6): a new task gets the work label in Work mode when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     /** Writes [change]; false when it did not go through. */
     suspend fun write(change: TaskChange): Boolean {
@@ -32,7 +35,7 @@ class GuidedWriter(
 
     /** A new task named [title] in [projectId] (a review's next step); null when it was refused. */
     suspend fun create(title: String, projectId: Long): Task? =
-        (tasks.createQueued(Task(id = 0, title = title, projectId = projectId)) as? NetworkResult.Success)?.data
+        (tasks.createQueued(Task(id = 0, title = title, projectId = projectId).let { workMode?.forNewTask(it) ?: it }) as? NetworkResult.Success)?.data
 
     /** Undo all of a task [create] made. */
     suspend fun deleteCreated(taskId: Long) {

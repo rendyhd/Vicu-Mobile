@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.upcoming
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.domain.model.Task
@@ -37,6 +39,8 @@ class UpcomingViewModel(
     private val dayClock: DayClock,
     navigationTicker: NavigationTicker = NavigationTicker(),
     completionToast: CompletionToast = NoCompletionToast,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UpcomingUiState())
@@ -50,7 +54,7 @@ class UpcomingViewModel(
         }
         viewModelScope.launch {
             combine(
-                taskRepository.getUpcomingTasks(),
+                taskRepository.getUpcomingTasks().inWorkMode(workMode),
                 projectRepository.getAll(),
                 completions.state,
                 // The days follow the local day: tomorrow's heading moves up at midnight.

@@ -9,6 +9,13 @@ import com.rendyhd.vicu.data.local.LabelOrderPrefsStore
 import com.rendyhd.vicu.data.local.ReviewPrefs
 import com.rendyhd.vicu.data.local.ReviewPrefsStore
 import com.rendyhd.vicu.data.local.RoutinePrefsStore
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.WorkSettings
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.data.repository.stateOrOff
+import com.rendyhd.vicu.util.WorkMode
+import com.rendyhd.vicu.util.WorkProject
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.domain.model.BottomBarSlot
 import com.rendyhd.vicu.domain.model.CustomList
 import com.rendyhd.vicu.domain.model.Label
@@ -46,6 +53,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -77,6 +85,8 @@ data class DrawerUiState(
     val collapsedProjectIds: Set<Long> = emptySet(),
     /** The user's project categories (section 13); empty when there are none. */
     val categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
+    /** Every category, whatever the Work and Personal mode lists: the project pickers reach every project (22.5). */
+    val pickerCategories: ProjectCategoryState = ProjectCategoryState.EMPTY,
     val collapsedCategoryIds: Set<String> = emptySet(),
     /** [projectRows] with the category headers between them: what the drawer lists. */
     val projectItems: List<ProjectListItem> = emptyList(),
@@ -163,7 +173,17 @@ class DrawerViewModel(
     private val appMessages: AppMessages,
     private val progressSource: ProjectProgressSource,
     private val projectActions: ProjectActions,
+    /** Work and Personal (contract 22): the project list follows the mode and the switch sits at the top; none in tests. */
+    private val workModeSource: WorkModeSource? = null,
 ) : ViewModel() {
+
+    /** The device's Work and Personal switches: the control shows only while the feature is on. */
+    val workSettings: StateFlow<WorkSettings> = (workModeSource?.settings ?: flowOf(WorkSettings()))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkSettings())
+
+    fun setWorkMode(mode: WorkMode) {
+        viewModelScope.launch { workModeSource?.setMode(mode) }
+    }
 
     /** Exposed for the app-root CompositionLocal that positions the FAB. */
     val fabAlignStart: StateFlow<Boolean> = behaviorPrefsStore.getPrefs()
@@ -198,13 +218,13 @@ class DrawerViewModel(
     private val _sectionsExpanded = MutableStateFlow(DrawerSectionsExpanded())
 
     private val sources: Flow<DrawerSources> = combine(
-        combine(projectRepository.getAll(), projectActions.categories) { projects, categories -> projects to categories },
+        combine(projectRepository.getAll(), projectActions.categories, workModeSource.stateOrOff()) { projects, categories, work -> Triple(projects, categories, work) },
         labelRepository.getAll(),
         customListRepository.lists,
         _sectionsExpanded,
         authManager.inboxProjectId,
-    ) { (projects, categories), labels, customLists, expanded, inboxId ->
-        DrawerSources(projects, labels, customLists, expanded, inboxId, categories)
+    ) { (projects, categories, work), labels, customLists, expanded, inboxId ->
+        DrawerSources(projects, labels, customLists, expanded, inboxId, categories, work)
     }
 
     /**
@@ -609,6 +629,8 @@ internal data class DrawerSources(
     val expanded: DrawerSectionsExpanded,
     val inboxProjectId: Long?,
     val categories: ProjectCategoryState = ProjectCategoryState.EMPTY,
+    /** The mode in effect and what work is (contract 22.5); [WorkState.OFF] while the feature is off or in All. */
+    val work: WorkState = WorkState.OFF,
 )
 
 /** The drawer's state: pure, so it can run on any thread and be tested without a view model. */
@@ -630,11 +652,25 @@ internal fun buildDrawerState(
     val inboxId = sources.inboxProjectId
     val projects = sources.projects
 
+    val active = projects.filter { !it.isArchived }
+    // Work and Personal (22.5): the listed projects, ancestors of a listed one included; the Inbox always.
+    val work = sources.work
+    val listed = if (work.filtering) {
+        val shown = WorkScopeRules.projectsShownInMode(
+            active.map { WorkProject(it.id, it.parentProjectId.takeIf { parent -> parent > 0 }) },
+            work.scope.projects,
+            work.mode,
+            inboxId,
+        )
+        active.filter { it.id in shown }
+    } else {
+        active
+    }
+
     // The badge is only worked out when reviews are on: it parses every project's description.
     val reviewOverdue = if (reviewPrefs.enabled) {
-        projects
+        listed
             .asSequence()
-            .filterNot { it.isArchived }
             .filterNot { reviewPrefs.excludeInbox && inboxId != null && it.id == inboxId }
             .map {
                 ReviewMetadata.computeStatus(ReviewMetadata.parse(it.description), reviewPrefs.defaultCadenceDays, today)
@@ -647,17 +683,18 @@ internal fun buildDrawerState(
 
     // The Inbox has its own place in the drawer and the bar, so the tree leaves it out; the project
     // pickers (a custom list's projects) still need it.
-    val active = projects.filter { !it.isArchived }
-    val tree = buildProjectTree(active.filter { it.id != inboxId })
+    val tree = buildProjectTree(listed.filter { it.id != inboxId })
+    val categories = if (work.filtering) workCategories(sources.categories, buildProjectTree(active.filter { it.id != inboxId }), tree, work.mode) else sources.categories
     val collapsed = sources.expanded.collapsedProjectIds
     val collapsedCategories = sources.expanded.collapsedCategoryIds
-    val items = projectListItems(tree, collapsed, sources.categories, collapsedCategories)
+    val items = projectListItems(tree, collapsed, categories, collapsedCategories)
 
     return DrawerUiState(
         projectTree = tree,
         projectRows = items.projectRows(),
         collapsedProjectIds = collapsed,
-        categories = sources.categories,
+        categories = categories,
+        pickerCategories = sources.categories,
         collapsedCategoryIds = collapsedCategories,
         projectItems = items,
         allProjects = active,
@@ -678,6 +715,23 @@ internal fun buildDrawerState(
         plannerEnabled = plannerEnabled,
         proAvailability = proAvailability,
         proPromises = proPromises,
+    )
+}
+
+/**
+ * The categories a mode lists (contract 22.5): a category shows when one of its top-level projects
+ * is listed; one without any project is nobody's work yet, so it shows in All and Personal only.
+ */
+internal fun workCategories(
+    categories: ProjectCategoryState,
+    fullTree: List<ProjectNode>,
+    listedTree: List<ProjectNode>,
+    mode: WorkMode,
+): ProjectCategoryState {
+    val owned = fullTree.mapNotNullTo(HashSet()) { categories.categoryOf(it.project.id)?.id }
+    val listed = listedTree.mapNotNullTo(HashSet()) { categories.categoryOf(it.project.id)?.id }
+    return categories.copy(
+        categories = categories.categories.filter { it.id in listed || (it.id !in owned && mode != WorkMode.WORK) },
     )
 }
 

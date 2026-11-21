@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.logbook
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.domain.model.Task
@@ -37,6 +39,8 @@ class LogbookViewModel(
     private val labelRepository: LabelRepository,
     private val refresher: ScreenRefresher,
     navigationTicker: NavigationTicker = NavigationTicker(),
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LogbookUiState())
@@ -54,7 +58,7 @@ class LogbookViewModel(
         }
         viewModelScope.launch {
             combine(
-                taskRepository.getLogbookTasks(),
+                taskRepository.getLogbookTasks().inWorkMode(workMode),
                 projectRepository.getAll(),
                 completions.state,
             ) { tasks, projects, _ ->

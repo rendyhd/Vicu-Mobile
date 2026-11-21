@@ -1,5 +1,12 @@
 package com.rendyhd.vicu.widget
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.WorkState
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import com.rendyhd.vicu.auth.TokenStorage
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.data.local.CustomListStore
@@ -16,6 +23,7 @@ import com.rendyhd.vicu.domain.repository.customListTasks
 import com.rendyhd.vicu.util.ClockDay
 import com.rendyhd.vicu.util.CustomListContext
 import com.rendyhd.vicu.util.DueDates
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.util.TimeBlocks
 import com.rendyhd.vicu.util.TimeSource
 import com.rendyhd.vicu.util.WeekStart
@@ -46,6 +54,8 @@ class TaskWidgetStates(
      * that has only just started, before the day clock has caught up with the setting.
      */
     private val weekStart: suspend () -> WeekStart = { WeekStart.DEFAULT },
+    /** Work and Personal (contract 22.4): widgets and the app icon count follow the mode; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     /** Signed in with a token the widget's data can belong to. */
     suspend fun isSignedIn(): Boolean =
@@ -72,6 +82,7 @@ class TaskWidgetStates(
             contextNav = widgetPrefsStore.contextNav.first(),
             voiceButton = widgetPrefsStore.voiceButton.first(),
             inboxId = tokenStorage.getInboxProjectId() ?: 0L,
+            work = workMode?.currentState() ?: WorkState.OFF,
         )
     }
 
@@ -88,6 +99,8 @@ class TaskWidgetStates(
         private val contextNav: Boolean,
         private val voiceButton: Boolean,
         private val inboxId: Long,
+        /** The mode in effect when the batch was read; [WorkState.OFF] in All. */
+        private val work: WorkState = WorkState.OFF,
     ) {
         private val activeProjectIds: Set<Long> get() = projectNames.keys
 
@@ -97,7 +110,7 @@ class TaskWidgetStates(
         suspend fun build(config: WidgetConfig): TaskWidgetState {
             val projectUnavailable = config.viewType == WidgetViewType.PROJECT &&
                 config.viewId.toLongOrNull() !in activeProjectIds
-            val rows = query(config).filter { it.projectId in activeProjectIds }
+            val rows = query(config).filter { it.projectId in activeProjectIds && inMode(it) }
             val addToProjectId = if (config.viewType == WidgetViewType.CUSTOM_LIST) {
                 customListStore.getById(config.viewId).first()?.filter?.addToProjectId?.takeIf { it in activeProjectIds } ?: 0L
             } else {
@@ -132,7 +145,14 @@ class TaskWidgetStates(
          * Today widget's count, and the count on the app icon (`TodayBadge`).
          */
         suspend fun todayCount(): Int =
-            query(WidgetConfig(WidgetViewType.TODAY)).count { it.projectId in activeProjectIds }
+            query(WidgetConfig(WidgetViewType.TODAY)).count { it.projectId in activeProjectIds && inMode(it) }
+
+        /** Whether the mode lists the row (contract 22.4); always in All. */
+        private fun inMode(row: WidgetRow): Boolean =
+            !work.filtering || WorkScopeRules.passesWorkMode(row.projectId, row.labelIds, work.scope, work.mode)
+
+        /** A narrowed listing reads every row, because the mode is applied after the limit would cut. */
+        private val upcomingLimit: Int get() = if (work.filtering) NO_LIMIT else MAX_WIDGET_TASKS
 
         private suspend fun query(config: WidgetConfig): List<WidgetRow> {
             // The same boundary as the Today and Upcoming screens: the start of the local tomorrow.
@@ -147,8 +167,8 @@ class TaskWidgetStates(
                     taskDao.getInboxTasksSync(inboxId, NO_LIMIT, includeDated = !behaviorPrefsStore.getPrefs().first().inboxExcludeDated),
                     inboxId,
                 )
-                WidgetViewType.UPCOMING -> taskDao.getUpcomingTasksSync(startOfTomorrow, MAX_WIDGET_TASKS).map { it.toRow() }
-                WidgetViewType.ANYTIME -> taskDao.getAnytimeTasksSync(inboxId, MAX_WIDGET_TASKS).map { it.toRow() }
+                WidgetViewType.UPCOMING -> taskDao.getUpcomingTasksSync(startOfTomorrow, upcomingLimit).map { it.toRow() }
+                WidgetViewType.ANYTIME -> taskDao.getAnytimeTasksSync(inboxId, upcomingLimit).map { it.toRow() }
                 WidgetViewType.PROJECT -> {
                     val projectId = config.viewId.toLongOrNull() ?: 0L
                     inProjectOrder(taskDao.getByProjectIdSync(projectId, NO_LIMIT), projectId)
@@ -182,11 +202,22 @@ class TaskWidgetStates(
         val dueDate: String,
         val priority: Int,
         val done: Boolean,
+        /** The label ids, read only for the work mode. */
+        val labelIds: List<Long> = emptyList(),
     )
 
-    private fun TaskEntity.toRow() = WidgetRow(id, title, projectId, dueDate, priority, done)
+    private fun TaskEntity.toRow() = WidgetRow(id, title, projectId, dueDate, priority, done, labelIdsOf(labelsJson))
 
-    private fun Task.toRow() = WidgetRow(id, title, projectId, dueDate, priority, done)
+    private fun Task.toRow() = WidgetRow(id, title, projectId, dueDate, priority, done, labels.map { it.id })
+
+    private fun labelIdsOf(labelsJson: String): List<Long> =
+        if (labelsJson.length <= 2) {
+            emptyList()
+        } else {
+            runCatching {
+                Json.parseToJsonElement(labelsJson).jsonArray.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.longOrNull }
+            }.getOrDefault(emptyList())
+        }
 
     /** What sorting a project's tasks reads of a stored task. */
     private fun TaskEntity.toSortable() = Task(

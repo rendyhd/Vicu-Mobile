@@ -201,6 +201,11 @@ class ProActions(
         scope.launch { proPreferences.setArea(categoryIds) }
     }
 
+    /** The area is the work projects (contract 22.8). */
+    fun setAreaWork() {
+        scope.launch { proPreferences.setAreaWork() }
+    }
+
     /** What a list shows (Available, Remaining or All), per device and list. */
     fun setListView(listKey: String, view: ProListView) {
         scope.launch { behaviorPrefs.setProListView(listKey, view) }

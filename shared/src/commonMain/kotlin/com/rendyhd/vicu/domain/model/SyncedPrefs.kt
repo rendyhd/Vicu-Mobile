@@ -4,6 +4,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.rendyhd.vicu.util.WorkScopeRules
 import com.rendyhd.vicu.util.pro.ProPrefs
 import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.ProjectPlans
@@ -69,6 +70,14 @@ object SyncedPrefKeys {
     /** The project of a `task_order.project.<id>` key, or null for any other key. */
     fun taskOrderProject(key: String): Long? =
         if (key.startsWith(TASK_ORDER_PROJECT_PREFIX)) key.removePrefix(TASK_ORDER_PROJECT_PREFIX).toLongOrNull() else null
+
+    // Work and Personal (sections 11.3 and 22): which projects and tasks are work.
+
+    /** The work label's id, or no entry (section 22.1). */
+    const val WORK_LABEL = WorkScopeRules.WORK_LABEL_KEY
+
+    /** `true` (work) or `false` (not work) for one project, or no entry (section 22.1). */
+    fun workProjectOf(projectId: Long): String = WorkScopeRules.workProjectKey(projectId)
 
     private const val PROJECT_ICON_PREFIX = "project_icon."
 
@@ -152,7 +161,8 @@ object SyncedPrefKeys {
         if (value == null || value is JsonNull) return true
         val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
         return when {
-            key == PRO_AREA -> value is JsonArray && ProSettings.readArea(value).size == value.size
+            key == PRO_AREA ->
+                WorkScopeRules.isWorkProArea(value) || (value is JsonArray && ProSettings.readArea(value).size == value.size)
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_MODE_PREFIX) != null -> text == "sequential" || text == "single"
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_STATUS_PREFIX) != null ||
                 ProPrefs.idOfKey(key, ProPrefs.LABEL_STATUS_PREFIX) != null -> text == "on_hold"

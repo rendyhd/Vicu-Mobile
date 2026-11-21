@@ -176,6 +176,7 @@ val repositoryModule = module {
             positioner = get(),
             writeGate = get(),
             messages = get(),
+            workMode = get(),
         )
     }
     single<ProjectRepository> {
@@ -258,6 +259,18 @@ val repositoryModule = module {
     // The app start makes DayClock follow it (VicuApplication, IosApp), so every ClockDay carries it.
     single { WeekStartPreferences(synced = get<SyncedPreferences>()) }
     single { PlannerPreferences(synced = get<SyncedPreferences>()) }
+    // Work and Personal (contract 22): the device's mode, what work is, and the rule lists apply.
+    single {
+        WorkModeSource(
+            synced = get<SyncedPreferences>(),
+            behaviorPrefs = get(),
+            projectRepository = get(),
+            labelRepository = get(),
+            authManager = get(),
+            hooks = get(),
+            messages = get(),
+        )
+    }
     // Pro (contract 21): its synced keys, and the ledger, which syncs only while Pro is on.
     single { ProPreferences(synced = get<SyncedPreferences>()) }
     single { ProCaptureSource(behaviorPrefs = get(), proPreferences = get(), labelRepository = get(), proLedger = get()) }
@@ -338,6 +351,7 @@ val repositoryModule = module {
             notificationPrefs = get(),
             dayClock = get(),
             time = get(),
+            workMode = get(),
         )
     }
     single {
@@ -382,6 +396,7 @@ val commonModule = module {
             locationPermission = get(),
             proCapture = get(),
             proLedger = get(),
+            workMode = get(),
         )
     }
     single { FabHint(store = get(), scope = get()) }
@@ -443,6 +458,7 @@ val commonModule = module {
             },
             taskOrders = get(),
             weekStart = { get<WeekStartPreferences>().current() },
+            workMode = get(),
         )
     }
     single { AppIconCount(states = get(), notificationPrefs = get(), dayClock = get()) }
@@ -531,9 +547,10 @@ val commonModule = module {
             taskOrder = get(),
             collabState = get<CollaborationRepository>().state,
             dayClock = get(),
+            workMode = get(),
         )
     }
-    single { GuidedWriter(tasks = get(), proposals = get(), dayClock = get()) }
+    single { GuidedWriter(tasks = get(), proposals = get(), dayClock = get(), workMode = get()) }
     single { GuidedProgress() }
     single {
         ProjectActions(
@@ -547,6 +564,7 @@ val commonModule = module {
             appMessages = get(),
             appScope = get(),
             iconPreferences = get(),
+            workMode = get(),
         )
     }
     single {

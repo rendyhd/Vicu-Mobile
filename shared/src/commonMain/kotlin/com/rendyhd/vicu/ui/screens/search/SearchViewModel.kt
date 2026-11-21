@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.search
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.data.repository.stateOrOff
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.domain.model.Task
@@ -71,7 +74,13 @@ class SearchViewModel(
     private val time: TimeSource = SystemTimeSource,
     /** Where "this week" ends: the week start the day clock carries (contract section 2.1); Monday without it. */
     private val dayClock: DayClock? = null,
+    /** Work and Personal (contract 22.4): search finds everything and marks the tasks of the other mode; none in tests. */
+    workMode: WorkModeSource? = null,
 ) : ViewModel() {
+
+    /** The mode in effect and what work is: only used to mark results, never to leave one out. */
+    val work: StateFlow<WorkState> = workMode.stateOrOff()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkState.OFF)
 
     private val weekStart: WeekStart get() = dayClock?.day?.value?.weekStart ?: WeekStart.DEFAULT
 

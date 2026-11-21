@@ -30,7 +30,12 @@ import com.rendyhd.vicu.data.local.BehaviorPrefs
 import com.rendyhd.vicu.data.local.BehaviorPrefsStore
 import com.rendyhd.vicu.ui.components.pro.LocalPro
 import com.rendyhd.vicu.ui.screens.shared.ProjectActions
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.work_pro_area_work
+import com.rendyhd.vicu.resources.work_pro_area_work_note
 import com.rendyhd.vicu.util.ProjectCategoryState
+import com.rendyhd.vicu.util.WorkScopeRules
+import org.jetbrains.compose.resources.stringResource
 import com.rendyhd.vicu.util.pro.ProLayer
 import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.StartDates
@@ -122,7 +127,7 @@ private fun ProSettingsSection() {
             checked = behavior.proAssistant,
         ) { on -> scope.launch { store.setProAssistant(on) } }
         if (!behavior.proOnboardingSeen) StartDateNotice(onSeen = { scope.launch { store.setProOnboardingSeen(true) } })
-        if (behavior.isProEnabled(ProLayer.PROMISES)) WorkArea()
+        if (behavior.isProEnabled(ProLayer.PROMISES)) WorkArea(workModeEnabled = behavior.workModeEnabled)
     }
 }
 
@@ -162,8 +167,10 @@ private fun StartDateNotice(onSeen: () -> Unit) {
 
 /** The work area (contract 21.1): the categories promises apply in; none ticked is every project. Synced. */
 @Composable
-private fun WorkArea() {
+private fun WorkArea(workModeEnabled: Boolean) {
     val pro = LocalPro.current
+    // The area may be the work projects (contract 22.8): offered while Work and Personal is on, and kept visible once chosen.
+    val areaIsWork = WorkScopeRules.isWorkProArea(pro.world.prefs[ProSettings.AREA_KEY])
     val categories by koinInject<ProjectActions>().categories.collectAsStateWithLifecycle(ProjectCategoryState.EMPTY)
     val chosen = remember(pro.world) { ProSettings.readArea(pro.world.prefs[ProSettings.AREA_KEY]).toSet() }
     Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -172,6 +179,13 @@ private fun WorkArea() {
             "Promises and people apply to projects in these categories. With none ticked they apply to every project. " +
                 "Shared with your other devices.",
         )
+        if (workModeEnabled || areaIsWork) {
+            CheckRow(
+                label = stringResource(Res.string.work_pro_area_work),
+                note = stringResource(Res.string.work_pro_area_work_note),
+                checked = areaIsWork,
+            ) { on -> if (on) pro.actions?.setAreaWork() else pro.actions?.setArea(emptyList()) }
+        }
         if (categories.categories.isEmpty()) {
             Note("You have no project categories. Add one in Settings, Projects to limit Pro to it.")
         } else {

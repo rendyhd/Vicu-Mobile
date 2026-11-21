@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.plan
 
+import com.rendyhd.vicu.data.repository.otherModeOf
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -514,6 +516,7 @@ fun PlanScreen(
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 events = neighbour.events,
                                 eventColor = eventColor,
+                                otherModeOf = state.work::otherModeOf,
                             )
                         }
                     }
@@ -605,6 +608,7 @@ fun PlanScreen(
                                 onEventClick = { eventSheet = it },
                                 canEditEvent = isOwnEvent,
                                 onEventChange = { occurrence, range -> changeEvent(occurrence, null, range) },
+                                otherModeOf = state.work::otherModeOf,
                                 onLongPressTime = if (activePick == null && drag == null) {
                                     { minute: Int ->
                                         newAsEvent = false

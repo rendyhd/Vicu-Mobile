@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.ui.screens.inbox
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
 import com.rendyhd.vicu.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -61,6 +63,8 @@ class InboxViewModel(
     private val taskOrderPreferences: TaskOrderPreferences,
     navigationTicker: NavigationTicker = NavigationTicker(),
     completionToast: CompletionToast = NoCompletionToast,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     companion object {
@@ -94,7 +98,7 @@ class InboxViewModel(
                     return@collectLatest
                 }
                 combine(
-                    taskRepository.getInboxTasks(inboxId),
+                    taskRepository.getInboxTasks(inboxId).inWorkMode(workMode),
                     projectRepository.getAll(),
                     taskOrderPreferences.settings,
                     completions.state,

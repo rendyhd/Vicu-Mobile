@@ -1,6 +1,8 @@
 package com.rendyhd.vicu.ui.screens.customlist
 
 import com.rendyhd.vicu.data.repository.ProActions
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.stateOrOff
 import com.rendyhd.vicu.data.repository.ProListState
 import com.rendyhd.vicu.data.repository.ProWorldSource
 import com.rendyhd.vicu.ui.screens.pro.toListView
@@ -87,6 +89,8 @@ class CustomListViewModel(
     /** Pro's Available / Remaining / All (contract 21.2); none in tests. */
     private val proWorld: ProWorldSource? = null,
     private val proActions: ProActions? = null,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val listId: String = savedStateHandle["listId"]!!
@@ -138,7 +142,10 @@ class CustomListViewModel(
                                 )
                             },
                             proWorld?.listState(ProListKeys.customList(listId)) ?: flowOf(ProListState.OFF),
-                        ) { visible, pro ->
+                            workMode.stateOrOff(),
+                        ) { matching, pro, work ->
+                            // The mode applies after the list's own conditions, before Pro's view and the count (contract 22.4).
+                            val visible = work.filter(matching)
                             // With Pro off the filter keeps every task (contract 21.1, O1).
                             val viewed = pro.filter(visible)
                             CustomListShown(customList, completions.merge(viewed.tasks), pro.view, viewed.hidden)

@@ -1,5 +1,6 @@
 package com.rendyhd.vicu.ui.screens.taskentry
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.util.AppMessages
 import com.rendyhd.vicu.util.Logger
 import com.rendyhd.vicu.util.randomUuid
@@ -157,6 +158,8 @@ class TaskEntryViewModel(
     private val proCaptureSource: ProCaptureSource? = null,
     /** Where a captured promise and estimate are kept (contract 21.7); none in tests. */
     private val proLedger: ProLedgerRepository? = null,
+    /** Work and Personal (contract 22.6): a new task gets the work label in Work mode when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TaskEntryUiState())
@@ -816,6 +819,9 @@ class TaskEntryViewModel(
                     repeatMode = recurrence.repeatMode,
                 )
                 val task = proCapture.applyToNew(plainTask, proParsed, day.zone)
+                // Work mode (contract 22.6): the work label goes with the create like any label the task names.
+                workMode?.labelIdForNewTask(task.projectId, resolvedLabelIds)?.let { resolvedLabelIds += it }
+                val subtaskWorkLabel = if (subtasks.isEmpty()) null else workMode?.labelIdForNewTask(task.projectId, emptyList(), announce = false)
 
                 // Synthesize a default reminder when the user set a due date but no
                 // manual reminder (desktop parity).
@@ -855,6 +861,9 @@ class TaskEntryViewModel(
                                 createdTask.id,
                                 Task(id = 0, title = subtask, projectId = createdTask.projectId),
                             )
+                            (made as? NetworkResult.Success)?.data?.id?.let { subtaskId ->
+                                subtaskWorkLabel?.let { labelRepository.addToTask(subtaskId, it) }
+                            }
                             if (made is NetworkResult.Error) {
                                 appMessages.post(made.message)
                                 somethingToSay = true

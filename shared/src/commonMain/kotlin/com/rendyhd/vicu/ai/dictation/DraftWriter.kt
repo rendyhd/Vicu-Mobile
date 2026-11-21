@@ -2,6 +2,7 @@ package com.rendyhd.vicu.ai.dictation
 
 import com.rendyhd.vicu.ai.AiText
 import com.rendyhd.vicu.data.local.NotificationPrefsStore
+import com.rendyhd.vicu.data.repository.WorkModeSource
 import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.model.TaskReminder
@@ -35,6 +36,8 @@ class DraftWriter(
     private val labels: LabelRepository,
     private val notificationPrefs: NotificationPrefsStore,
     private val locations: LocationRepository?,
+    /** Work and Personal (contract 22.6): in Work mode a draft that would not be work gets the work label; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     /** Creates [drafts] in their order; [parentTaskId] makes them subtasks of that task (Break into steps). */
     suspend fun add(drafts: List<CheckedDraft>, zone: TimeZone, parentTaskId: Long? = null): AddedDrafts {
@@ -58,6 +61,7 @@ class DraftWriter(
                 if (id != null) labelIds += id
             }
             val task = taskOf(draft, zone, prefs.defaultReminderOffset, prefs.defaultReminderRelativeTo)
+            workMode?.labelIdForNewTask(task.projectId, labelIds)?.let { labelIds += it }
             val result = if (parentTaskId != null) tasks.createSubtask(parentTaskId, task) else tasks.createQueued(task)
             when (result) {
                 is NetworkResult.Success -> {
@@ -65,8 +69,11 @@ class DraftWriter(
                     created += id
                     byDraft += id
                     for (labelId in labelIds) labels.addToTask(id, labelId)
+                    val subtaskLabel = if (draft.subtasks.isEmpty()) null else workMode?.labelIdForNewTask(draft.projectId, emptyList(), announce = false)
                     for (title in draft.subtasks) {
-                        tasks.createSubtask(id, Task(id = 0, title = title, projectId = draft.projectId))
+                        val subtask = tasks.createSubtask(id, Task(id = 0, title = title, projectId = draft.projectId))
+                        val subtaskId = (subtask as? NetworkResult.Success)?.data?.id
+                        if (subtaskLabel != null && subtaskId != null) labels.addToTask(subtaskId, subtaskLabel)
                     }
                     val place = draft.place?.let { p -> places.firstOrNull { it.id == p.placeId }?.let { it to p.trigger } }
                     if (place != null && locations != null) {

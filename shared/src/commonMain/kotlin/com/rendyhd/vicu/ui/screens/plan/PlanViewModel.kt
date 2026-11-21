@@ -1,5 +1,9 @@
 package com.rendyhd.vicu.ui.screens.plan
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.WorkState
+import com.rendyhd.vicu.data.repository.inWorkMode
+import com.rendyhd.vicu.data.repository.stateOrOff
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.auth.AuthManager
@@ -112,6 +116,8 @@ data class PlanUiState(
     val projectRows: List<PlanProjectRow> = emptyList(),
     /** Your own Events and the phone's calendars for the days around the strip (contract 20). */
     val calendar: PlanCalendarDays = PlanCalendarDays(),
+    /** The device's mode (contract 22.4): a time block of the other mode is drawn muted. */
+    val work: WorkState = WorkState.OFF,
 ) {
     /** A block follows the task's permissions (contract 16.8). */
     fun canChange(task: Task): Boolean = collab.access(task.projectId).canWrite
@@ -146,6 +152,8 @@ class PlanViewModel(
     navigationTicker: NavigationTicker = NavigationTicker(),
     completionToast: CompletionToast = NoCompletionToast,
     private val time: TimeSource = SystemTimeSource,
+    /** Work and Personal (contract 22): the lists follow the mode, the timeline keeps every block as busy time; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     /** A task ticked in the top row stays there, struck through, for the hold (contract 7). */
@@ -196,7 +204,7 @@ class PlanViewModel(
     /** A project's open tasks in its task order: the Inbox's list and a project's. */
     private fun projectList(projectId: Long?): Flow<List<Task>> {
         if (projectId == null) return flowOf(emptyList())
-        return combine(taskRepository.getByProjectId(projectId), taskOrders, projects) { tasks, orders, all ->
+        return combine(taskRepository.getByProjectId(projectId).inWorkMode(workMode), taskOrders, projects) { tasks, orders, all ->
             sortProjectTasks(tasks.filter { !it.done }, orders.orderFor(projectId, all))
         }
     }
@@ -209,10 +217,10 @@ class PlanViewModel(
     private val sourceLists: Flow<SourceLists> = combine(source, authManager.inboxProjectId) { list, inbox -> list to inbox }
         .distinctUntilChanged()
         .flatMapLatest { (list, inbox) ->
-            val nextSeven = combine(taskRepository.getUpcomingTasks(), dayClock.day) { tasks, day ->
+            val nextSeven = combine(taskRepository.getUpcomingTasks().inWorkMode(workMode), dayClock.day) { tasks, day ->
                 tasks.filter { PlanSource.inNextSevenDays(it.dueDate, day.date, day.zone) }
             }
-            val noDate = taskRepository.getAnytimeTasks(inbox ?: 0L).map { tasks ->
+            val noDate = taskRepository.getAnytimeTasks(inbox ?: 0L).inWorkMode(workMode).map { tasks ->
                 tasks.filter { DueDates.localDateOf(it.dueDate, dayClock.day.value.zone) == null }
             }
             // The counts start at nothing, so the timeline never waits for a list it does not show.
@@ -274,11 +282,11 @@ class PlanViewModel(
     val uiState: StateFlow<PlanUiState> = combine(
         dayInputs,
         listInputs,
-        prefs,
+        combine(prefs, workMode.stateOrOff()) { p, w -> p to w },
         combine(routines, calendarDays) { r, c -> r to c },
         combine(sharing, dayClock.day, completions.state) { share, day, held -> Triple(share, day, held.keys) },
-    ) { day, list, prefs, (routines, calendar), (share, clock, held) ->
-        build(day, list, prefs, routines, calendar, share.first, share.second, clock, held)
+    ) { day, list, (prefs, work), (routines, calendar), (share, clock, held) ->
+        build(day, list, prefs, routines, calendar, share.first, share.second, clock, held, work)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlanUiState())
 
     private fun build(
@@ -291,6 +299,7 @@ class PlanViewModel(
         collab: CollabState,
         clock: ClockDay,
         held: Set<Long>,
+        work: WorkState = WorkState.OFF,
     ): PlanUiState {
         val byId = projects.associateBy { it.id }
         // Tasks of an archived or unknown project are not on the timeline, as on every list.
@@ -298,8 +307,10 @@ class PlanViewModel(
         val now = time.now()
         val isHeld: (Task) -> Boolean = { it.id in held }
         val counting = calendar.counting
+        // The day's lists follow the mode; its blocks stay on the timeline as busy time (contract 22.4).
         fun dayContent(day: LocalDate, held: (Task) -> Boolean = { false }) =
             planDayContent(tasks, day, now, prefs.hours, clock.zone, calendar.events, counting, held)
+                .let { if (work.filtering) it.copy(withoutTime = work.filter(it.withoutTime), topRow = work.filter(it.topRow)) else it }
         val read = dayContent(input.day, isHeld)
         val content = read.copy(topRow = completions.merge(read.topRow))
         // The stored list outlives a project (archived, deleted, another account): back to the first list.
@@ -332,6 +343,7 @@ class PlanViewModel(
             defaultLength = prefs.length,
             projects = byId,
             collab = collab,
+            work = work,
             source = source,
             sourceCounts = mapOf(
                 PlanSource.Day.key to content.withoutTime.size,
@@ -642,7 +654,7 @@ class PlanViewModel(
             val prefs = notificationPrefsStore.getPrefs().first()
             DefaultReminder.build(task.dueDate, prefs.defaultReminderOffset, prefs.defaultReminderRelativeTo, task.startDate, task.endDate)
                 ?.let { task = task.copy(reminders = listOf(it)) }
-            when (val made = taskRepository.create(task)) {
+            when (val made = taskRepository.create(workMode?.forNewTask(task) ?: task)) {
                 is NetworkResult.Success -> appMessages.post(
                     message = "Added to the Inbox",
                     actionLabel = "Undo",

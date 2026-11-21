@@ -38,6 +38,8 @@ class TaskTemplateStore(
     private val notificationPrefs: NotificationPrefsStore,
     private val dayClock: DayClock,
     private val time: TimeSource,
+    /** Work and Personal (contract 22.6): a new task gets the work label in Work mode when it would not be work; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) {
     /** The account's templates, oldest first. */
     val templates: Flow<List<TaskTemplate>> = synced.entries
@@ -78,27 +80,30 @@ class TaskTemplateStore(
             DefaultReminder.build(task.dueDate, prefs.defaultReminderOffset, prefs.defaultReminderRelativeTo)
                 ?.let { task = task.copy(reminders = listOf(it)) }
         }
+        // In Work mode the task and its steps get the work label when they would not be work (contract 22.6).
+        val workLabel = workMode?.labelIdForNewTask(task.projectId, template.labels)
         val made = when (val created = tasks.create(task)) {
             is NetworkResult.Success -> created.data
             is NetworkResult.Error -> return created
             is NetworkResult.Loading -> return NetworkResult.Error("Could not make the task")
         }
         val known = labels.getAll().first().mapTo(mutableSetOf()) { it.id }
-        val complete = followUp(template, made, known)
+        val complete = followUp(template, made, known, workLabel)
         return NetworkResult.Success(MadeFromTemplate(made, complete))
     }
 
-    private suspend fun followUp(template: TaskTemplate, task: Task, known: Set<Long>): Boolean {
+    private suspend fun followUp(template: TaskTemplate, task: Task, known: Set<Long>, workLabel: Long?): Boolean {
         val day = dayClock.day.value
         var complete = true
         for (label in template.labels) {
             if (label !in known) continue
             if (labels.addToTask(task.id, label) is NetworkResult.Error) complete = false
         }
+        if (workLabel != null && workLabel !in template.labels && labels.addToTask(task.id, workLabel) is NetworkResult.Error) complete = false
         for (subtask in template.subtasks) {
             val child = TaskTemplates.taskOf(subtask, task.projectId, day.date, day.zone)
             when (val made = tasks.createSubtask(task.id, child)) {
-                is NetworkResult.Success -> complete = followUp(subtask, made.data, known) && complete
+                is NetworkResult.Success -> complete = followUp(subtask, made.data, known, workLabel) && complete
                 else -> complete = false
             }
         }

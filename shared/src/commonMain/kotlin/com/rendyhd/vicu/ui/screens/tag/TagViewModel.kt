@@ -1,5 +1,8 @@
 package com.rendyhd.vicu.ui.screens.tag
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.stateOrOff
+import com.rendyhd.vicu.ui.components.WorkHidden
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -45,6 +48,8 @@ data class TagUiState(
     val proView: AvailabilityView? = null,
     /** Open tasks the view leaves out. */
     val proHidden: Int = 0,
+    /** Tasks the Work or Personal mode leaves out, with a way to show them until the screen is left (contract 22.4). */
+    val workHidden: WorkHidden = WorkHidden.NONE,
 )
 
 class TagViewModel(
@@ -58,6 +63,8 @@ class TagViewModel(
     /** Pro's Available / Remaining / All (contract 21.2); none in tests. */
     private val proWorld: ProWorldSource? = null,
     private val proActions: ProActions? = null,
+    /** Work and Personal (contract 22); none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val labelId: Long = savedStateHandle["labelId"]!!
@@ -67,6 +74,13 @@ class TagViewModel(
 
     /** Rows completed on this screen, kept in place for a moment (see [CompletionHold]). */
     val completions = CompletionHold(viewModelScope, navigationTicker = navigationTicker, toast = completionToast)
+
+    /** The tasks of the other mode are shown for now; lasts until this screen is left. */
+    private val showWorkHidden = MutableStateFlow(false)
+
+    fun setShowWorkHidden(show: Boolean) {
+        showWorkHidden.value = show
+    }
 
     init {
         viewModelScope.launch {
@@ -82,20 +96,24 @@ class TagViewModel(
                 projectRepository.getAll(),
                 completions.state,
                 proWorld?.listState(ProListKeys.tag(labelId)) ?: flowOf(ProListState.OFF),
-            ) { tasks, projects, _, pro ->
+                combine(workMode.stateOrOff(), showWorkHidden) { work, showing -> work to showing },
+            ) { tasks, projects, _, pro, (work, showing) ->
                 val activeIds = projects.mapTo(mutableSetOf()) { it.id }
                 // Filter first, then hide nested subtasks among the matches: a labeled subtask
                 // shows even when its parent does not carry the label (X-16).
-                val filtered = tasks
+                val labelled = tasks
                     .filter { task -> task.projectId in activeIds && task.labels.any { it.id == labelId } }
                     .withoutNestedSubtasks(hideChildrenOfCompletedParents = false)
+                // The mode applies after the label, before Pro's view and the count (contract 22.4).
+                val split = work.split(labelled, showing)
+                val filtered = split.tasks
                 // With Pro off the filter keeps every task (contract 21.1, O1).
                 val viewed = pro.filter(filtered)
                 val shown = completions.merge(viewed.tasks)
-                TagLists(shown, buildTaskProjectGroups(shown, projects, inboxId = null), pro.view, viewed.hidden)
+                TagLists(shown, buildTaskProjectGroups(shown, projects, inboxId = null), pro.view, viewed.hidden, WorkHidden(split.hidden, work.otherMode, showing))
             }.collect { lists ->
                 _uiState.update {
-                    it.copy(tasks = lists.shown, groups = lists.groups, isLoading = false, proView = lists.view, proHidden = lists.hidden)
+                    it.copy(tasks = lists.shown, groups = lists.groups, isLoading = false, proView = lists.view, proHidden = lists.hidden, workHidden = lists.workHidden)
                 }
             }
         }
@@ -160,4 +178,5 @@ private class TagLists(
     val groups: List<TaskProjectGroup>,
     val view: AvailabilityView?,
     val hidden: Int,
+    val workHidden: WorkHidden = WorkHidden.NONE,
 )

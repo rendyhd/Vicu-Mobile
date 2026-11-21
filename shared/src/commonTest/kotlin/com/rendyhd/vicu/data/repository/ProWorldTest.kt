@@ -151,7 +151,7 @@ class ProWorldTest {
     private val leadership = Label(id = 50, title = "LT Ops")
 
     @Test
-    fun `a promise line says who it was made to - a group, a person or a name`() {
+    fun `a promise line says who it was made to - a group and a person or a name`() {
         val due = DueDates.dateOnlyDue(today, zone).toString()
         val tasks = listOf(
             Task(id = 1, title = "Deck", projectId = 11, dueDate = due, labels = listOf(jan, leadership)),

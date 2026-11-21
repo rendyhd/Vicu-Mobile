@@ -4,6 +4,7 @@ import com.rendyhd.vicu.ai.organize.PlanCanWait
 import com.rendyhd.vicu.ai.organize.PlanDayRequest
 import com.rendyhd.vicu.ai.organize.PlanDayResult
 import com.rendyhd.vicu.ai.organize.PlanPick
+import com.rendyhd.vicu.data.repository.WorkState
 import com.rendyhd.vicu.domain.model.CollabState
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.domain.model.Task
@@ -95,6 +96,8 @@ internal data class PlanSessionData(
     val eventColors: Map<String, String> = emptyMap(),
     /** The events are the ones read for [day]: the assistant's request waits for them. */
     val eventsRead: Boolean = true,
+    /** The device's mode (contract 22.4): a task of the other mode stays as busy time and is never planned here. */
+    val work: WorkState = WorkState.OFF,
 ) {
     private val projectIds = projects.mapTo(HashSet()) { it.id }
 
@@ -103,7 +106,8 @@ internal data class PlanSessionData(
         get() = CalendarEvents.eventBusyOfDay(events, day, zone, CalendarEvents.calendarCounts(countingCalendars))
 
     /** Tasks the person cannot change are left out of every step (contract 14.10). */
-    fun canChange(task: Task): Boolean = task.projectId in projectIds && collab.access(task.projectId).canWrite
+    fun canChange(task: Task): Boolean =
+        task.projectId in projectIds && collab.access(task.projectId).canWrite && (!work.filtering || work.passes(task))
 }
 
 data class PlanMyDayUiState(
@@ -169,9 +173,11 @@ data class PlanMyDayUiState(
 
     val projects: Map<Long, Project> = emptyMap(),
     val collab: CollabState = CollabState(),
+    val work: WorkState = WorkState.OFF,
 ) {
     val isToday: Boolean get() = day != null && day == today
-    fun canChange(task: Task): Boolean = task.projectId in projects && collab.access(task.projectId).canWrite
+    fun canChange(task: Task): Boolean =
+        task.projectId in projects && collab.access(task.projectId).canWrite && (!work.filtering || work.passes(task))
     fun draftOf(id: Long): DraftBlock? = draft.placed.firstOrNull { it.id == id }
 }
 
@@ -328,6 +334,7 @@ internal fun planMyDayState(
         nudge = data.nudge,
         projects = data.projects.associateBy { it.id },
         collab = data.collab,
+        work = data.work,
     )
 }
 

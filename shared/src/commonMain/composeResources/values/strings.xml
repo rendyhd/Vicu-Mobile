@@ -482,4 +482,38 @@
     <string name="pro_text_note_nothing">Nothing to report.</string>
     <!-- note.noGroups -->
     <string name="pro_text_note_no_groups">No groups yet.</string>
+
+    <!-- Work and Personal (docs/cross-app-semantics-v1.md, section 22): one account for work and private life; a device looks at one at a time. -->
+    <!-- The three modes of the control at the top of the drawer. All shows everything. -->
+    <string name="work_mode_all">All</string>
+    <string name="work_mode_work">Work</string>
+    <string name="work_mode_personal">Personal</string>
+    <!-- Describes the control for a screen reader. -->
+    <string name="work_mode_control">Show all tasks, work or personal</string>
+    <!-- A tick in a project's menu: the project and everything below it is work. -->
+    <string name="work_project_menu">Work project</string>
+    <!-- Describes the small mark next to a work project. -->
+    <string name="work_project_mark">Work project</string>
+    <!-- Settings: the section and its switch for this device. -->
+    <string name="work_settings_title">Work and Personal</string>
+    <string name="work_settings_switch">Work and Personal on this device</string>
+    <string name="work_settings_switch_description">Look at work or private life one at a time. Reminders still come and search finds everything. This choice is for this device.</string>
+    <!-- Settings: the label that marks a task as work. -->
+    <string name="work_settings_label">Work label</string>
+    <string name="work_settings_label_none">None</string>
+    <string name="work_settings_label_description">A task with this label is work, in any project. Shared with your other devices.</string>
+    <string name="work_settings_pro_only">Pro only in Work</string>
+    <string name="work_settings_pro_only_description">In Personal mode Pro is hidden on this device, as if it were off.</string>
+    <string name="work_settings_no_label_note">With no work label, a task you make in Work mode outside a work project stays Personal.</string>
+    <string name="work_settings_projects_note">Mark work projects in their menu, in Settings, Projects or in the drawer.</string>
+    <!-- Settings, Pro, Work area: the choice that applies Pro to the work projects. -->
+    <string name="work_pro_area_work">Work projects</string>
+    <string name="work_pro_area_work_note">Promises and people apply to the projects marked as work.</string>
+    <!-- Under a project or label screen: how many tasks the mode leaves out, and the buttons to show or hide them. %1$d is the number. -->
+    <string name="work_hidden_in_personal">%1$d more in Personal</string>
+    <string name="work_hidden_in_work">%1$d more in Work</string>
+    <string name="work_hidden_show">Show</string>
+    <string name="work_hidden_hide">Hide</string>
+    <!-- The message after a task was made in Work mode with no work label to give it. -->
+    <string name="work_added_to_personal">Added to Personal</string>
 </resources>

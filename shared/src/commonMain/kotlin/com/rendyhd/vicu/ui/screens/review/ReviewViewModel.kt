@@ -1,5 +1,10 @@
 package com.rendyhd.vicu.ui.screens.review
 
+import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.data.repository.inWorkMode
+import com.rendyhd.vicu.data.repository.stateOrOff
+import com.rendyhd.vicu.util.WorkProject
+import com.rendyhd.vicu.util.WorkScopeRules
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rendyhd.vicu.auth.AuthManager
@@ -79,6 +84,8 @@ class ReviewViewModel(
     private val reviewPrefsStore: ReviewPrefsStore,
     private val authManager: AuthManager,
     private val dayClock: DayClock,
+    /** Work and Personal (contract 22.4, 22.5): the projects reviewed and their tasks follow the mode; none in tests. */
+    private val workMode: WorkModeSource? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReviewUiState())
@@ -94,7 +101,19 @@ class ReviewViewModel(
         viewModelScope.launch { authManager.inboxProjectId.collect { inboxId.value = it } }
         viewModelScope.launch {
             combine(
-                projectRepository.getAll(),
+                combine(projectRepository.getAll(), workMode.stateOrOff(), inboxId) { all, work, inbox ->
+                    if (!work.filtering) {
+                        all
+                    } else {
+                        val shown = WorkScopeRules.projectsShownInMode(
+                            all.map { WorkProject(it.id, it.parentProjectId.takeIf { parent -> parent > 0 }) },
+                            work.scope.projects,
+                            work.mode,
+                            inbox,
+                        )
+                        all.filter { it.id in shown }
+                    }
+                },
                 reviewPrefsStore.getPrefs(),
                 inboxId,
                 reviewedThisSession,
@@ -195,13 +214,13 @@ class ReviewViewModel(
                 } else {
                     combine(
                         children.map { child ->
-                            taskRepository.getByProjectId(child.id)
+                            taskRepository.getByProjectId(child.id).inWorkMode(workMode)
                                 .map { tasks -> ReviewSubProject(child, tasks.filter { !it.done }) }
                         },
                     ) { it.toList() }
                 }
             }
-        return combine(taskRepository.getByProjectId(projectId), subProjects) { tasks, subs ->
+        return combine(taskRepository.getByProjectId(projectId).inWorkMode(workMode), subProjects) { tasks, subs ->
             ReviewProjectContent(tasks.filter { !it.done }, subs, isLoading = false)
         }
     }
