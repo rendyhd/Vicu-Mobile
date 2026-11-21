@@ -389,6 +389,9 @@ class ProGroupsFixtureTest {
                 "questions" to texts(contents.questions),
                 "issues" to texts(contents.issues),
                 "solved" to texts(contents.solved),
+                "blockers" to texts(contents.blockers),
+                "commitments" to texts(contents.commitments),
+                "stops" to texts(contents.stops),
             )
             assertEquals(case.getValue("expect"), json, roundId)
         }

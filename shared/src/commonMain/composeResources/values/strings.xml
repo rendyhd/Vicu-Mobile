@@ -274,6 +274,66 @@
     <string name="pro_people_groups">Groups</string>
     <!-- A label's menu: opens the page of the group whose label it is. -->
     <string name="pro_label_open_group">Open group</string>
+    <!-- A label's menu: marks the label private, so a 1:1 topic that carries it is left out of text copied for other people (contract 21.21). -->
+    <string name="pro_label_private">Mark as private</string>
+    <!-- A label's menu, on a private label: back to an ordinary label. -->
+    <string name="pro_label_not_private">Not private</string>
+    <!-- The group's open blockers, commitments and stops (contract 21.16), oldest first. -->
+    <string name="pro_group_blockers">Open blockers</string>
+    <string name="pro_group_commitments">Open commitments</string>
+    <string name="pro_group_stops">Stopped</string>
+    <!-- The group's 90-day plans (contract 21.20), open ones first. -->
+    <string name="pro_group_plans">Plans</string>
+
+    <!-- Pro, a person's page: the 1:1 topics (contract 21.21), for the next 1:1. -->
+    <string name="pro_person_topics">Topics</string>
+    <!-- The person's topics dated more than a week away. -->
+    <string name="pro_person_topics_later">Later</string>
+    <!-- A small mark on a topic with a private label: it is left out of copied text. -->
+    <string name="pro_person_topic_private">Private</string>
+    <!-- Next to the Topics heading: adds a task with this person's label, a topic for the next 1:1. -->
+    <string name="pro_person_topic_add">Add a topic</string>
+
+    <!-- Pro, a 90-day plan (contract 21.20): the project menu's entry that opens it. -->
+    <string name="pro_plan_open">Plan</string>
+    <!-- The title while the project's name is not known. -->
+    <string name="pro_plan_title">Plan</string>
+    <!-- A plan's page opened for a project that is not a plan. -->
+    <string name="pro_plan_none">This project is not a plan.</string>
+    <!-- The plan's days. %1$s is the first day, %2$s the last, both written out. -->
+    <string name="pro_plan_days">%1$s to %2$s</string>
+    <!-- While today is in the plan. %1$d is this week's number, %2$d how many weeks the plan has. -->
+    <string name="pro_plan_week">Week %1$d of %2$d</string>
+    <!-- A closed plan. %1$s is the day it was closed, written out. -->
+    <string name="pro_plan_closed">Closed %1$s</string>
+    <!-- The plan's totals. %1$d delivered, %2$d all milestones that count. -->
+    <string name="pro_plan_delivered">%1$d of %2$d delivered</string>
+    <!-- Open milestones whose date has passed. %1$d is how many. -->
+    <string name="pro_plan_overdue">%1$d overdue</string>
+    <!-- An item's milestones. %1$d delivered, %2$d all that count. -->
+    <string name="pro_plan_item_progress">%1$d of %2$d</string>
+    <!-- An item's next open milestone. %1$s is its title, %2$s its day, written out. -->
+    <string name="pro_plan_next">Next: %1$s, %2$s</string>
+    <!-- The same without a date. %1$s is its title. -->
+    <string name="pro_plan_next_no_date">Next: %1$s</string>
+    <!-- A plan without tasks. -->
+    <string name="pro_plan_no_items">No tasks in this plan yet.</string>
+    <!-- A week in an item's row of weeks, shortened. %1$d is the week's number. -->
+    <string name="pro_plan_week_short">W%1$d</string>
+    <!-- Counts in a week of an item: facts, never a judgement. %1$d is how many. -->
+    <string name="pro_plan_cell_due">%1$d due</string>
+    <string name="pro_plan_cell_delivered">%1$d delivered</string>
+    <string name="pro_plan_cell_late">%1$d late</string>
+    <string name="pro_plan_cell_slipped">%1$d slipped</string>
+    <string name="pro_plan_cell_dropped">%1$d dropped</string>
+    <!-- Read out for a week of an item. %1$d is the week's number, %2$s its counts (or the next string). -->
+    <string name="pro_plan_cell_description">Week %1$d: %2$s</string>
+    <!-- Read out for a week with nothing in it. -->
+    <string name="pro_plan_cell_empty">nothing</string>
+    <!-- Read out after a week's counts when it is this week. -->
+    <string name="pro_plan_cell_this_week">this week</string>
+    <!-- At the end of a plan's page: the phone shows a plan, the computer makes it. -->
+    <string name="pro_plan_read_only">Plans are made, closed and carried over in Vicu on a computer or the web.</string>
 
     <!--
       Text Vicu Pro writes for other people (docs/translating.md, "Text Vicu writes for other people"):
@@ -315,6 +375,14 @@
     <string name="pro_text_heading_issues_solved">Issues solved</string>
     <!-- heading.questions -->
     <string name="pro_text_heading_questions">Open questions</string>
+    <!-- heading.blockers -->
+    <string name="pro_text_heading_blockers">Open blockers</string>
+    <!-- heading.blockersRaised -->
+    <string name="pro_text_heading_blockers_raised">Blockers</string>
+    <!-- heading.commitments -->
+    <string name="pro_text_heading_commitments">Commitments</string>
+    <!-- heading.stops -->
+    <string name="pro_text_heading_stops">Stopped</string>
     <!-- action.owner: %1$s is who does it, %2$s is the task's title, %3$s is a day, already written out. -->
     <string name="pro_text_action_owner">%1$s: %2$s, by %3$s</string>
     <!-- action.ownerNoDate: %1$s is who does it, %2$s is the task's title. -->
@@ -398,6 +466,8 @@
     <string name="pro_text_note_decision">Decision: %1$s</string>
     <!-- note.issue: %1$s is what was written down. -->
     <string name="pro_text_note_issue">Open issue: %1$s</string>
+    <!-- note.blocker: %1$s is what was written down. -->
+    <string name="pro_text_note_blocker">Blocker: %1$s</string>
     <!-- note.pastDue: %1$d is how many. -->
     <plurals name="pro_text_note_past_due">
         <item quantity="one">%1$d action open past its date</item>

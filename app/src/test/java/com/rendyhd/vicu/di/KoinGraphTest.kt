@@ -19,6 +19,7 @@ import com.rendyhd.vicu.ui.screens.customlist.CustomListViewModel
 import com.rendyhd.vicu.ui.screens.guided.GuidedSortViewModel
 import com.rendyhd.vicu.ui.screens.pro.GroupViewModel
 import com.rendyhd.vicu.ui.screens.pro.PersonViewModel
+import com.rendyhd.vicu.ui.screens.pro.ProjectPlanViewModel
 import com.rendyhd.vicu.ui.screens.project.ProjectViewModel
 import com.rendyhd.vicu.ui.screens.tag.TagViewModel
 import com.rendyhd.vicu.util.NetworkMonitor
@@ -96,6 +97,7 @@ class KoinGraphTest {
                 withParameter<GuidedSortViewModel> { SavedStateHandle(mapOf("kind" to "inbox")) }
                 withParameter<PersonViewModel> { SavedStateHandle(mapOf("labelId" to 1L)) }
                 withParameter<GroupViewModel> { SavedStateHandle(mapOf("labelId" to 1L)) }
+                withParameter<ProjectPlanViewModel> { SavedStateHandle(mapOf("projectId" to 1L)) }
             },
         )
     }

@@ -21,6 +21,7 @@ import com.rendyhd.vicu.ui.screens.pro.PeopleScreen
 import com.rendyhd.vicu.ui.screens.pro.PersonScreen
 import com.rendyhd.vicu.ui.screens.pro.FollowUpsScreen
 import com.rendyhd.vicu.ui.screens.pro.GroupScreen
+import com.rendyhd.vicu.ui.screens.pro.ProjectPlanScreen
 import com.rendyhd.vicu.ui.screens.pro.WaitingOnScreen
 import com.rendyhd.vicu.ui.screens.customlist.CustomListScreen
 import com.rendyhd.vicu.ui.screens.guided.GuidedReviewScreen
@@ -55,6 +56,8 @@ fun AppNavHost(
     onNavigateToSearch: () -> Unit = {},
     onTaskClick: (Long) -> Unit = {},
     onShowTaskEntry: (Long?, String?) -> Unit = { _, _ -> },
+    /** Opens the task entry sheet with one label picked (a person's 1:1 topic). */
+    onShowTaskEntryWithLabel: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Setup finishes here (SetupScreen), not in VicuApp's auth effect: the session turns
@@ -171,6 +174,7 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onNavigateToSearch = onNavigateToSearch,
                 onShowTaskEntry = onShowTaskEntry,
+                onOpenPlan = { id -> navController.navigate(ProjectPlanRoute(id)) },
                 onProjectClick = { childProjectId ->
                     val currentProjectId = navController.currentBackStackEntry
                         ?.takeIf { it.destination.hasRoute(ProjectRoute::class) }
@@ -261,6 +265,15 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onNavigateToSearch = onNavigateToSearch,
                 onOpenSettings = openProSettings,
+                onOpenPlan = { id -> navController.navigate(ProjectPlanRoute(id)) },
+            )
+        }
+        screen<ProjectPlanRoute>(reveal) {
+            ProjectPlanScreen(
+                onTaskClick = onTaskClick,
+                onOpenDrawer = onOpenDrawer,
+                onNavigateToSearch = onNavigateToSearch,
+                onOpenSettings = openProSettings,
             )
         }
         screen<PersonRoute>(reveal) {
@@ -269,6 +282,7 @@ fun AppNavHost(
                 onOpenDrawer = onOpenDrawer,
                 onNavigateToSearch = onNavigateToSearch,
                 onOpenSettings = openProSettings,
+                onAddTopic = onShowTaskEntryWithLabel,
             )
         }
         screen<SearchRoute>(reveal) {

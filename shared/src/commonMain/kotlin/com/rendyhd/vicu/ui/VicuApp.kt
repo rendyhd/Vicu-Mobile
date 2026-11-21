@@ -610,11 +610,22 @@ fun VicuApp(
     }
 
     var taskEntryDefaultDueDate by rememberSaveable { mutableStateOf<String?>(null) }
+    // A label the sheet starts with: a person's page adding a 1:1 topic (contract 21.21).
+    var taskEntryDefaultLabelId by rememberSaveable { mutableStateOf<Long?>(null) }
     var templateToEdit by rememberSaveable { mutableStateOf<String?>(null) }
 
     val onShowTaskEntry: (Long?, String?) -> Unit = { projectId, dueDate ->
         taskEntryDefaultProjectId = projectId
         taskEntryDefaultDueDate = dueDate
+        taskEntryDefaultLabelId = null
+        showTaskEntrySheet = true
+    }
+
+    /** The sheet with one label picked (the Inbox as the project): a person's 1:1 topic. */
+    val onShowTaskEntryWithLabel: (Long) -> Unit = { labelId ->
+        taskEntryDefaultProjectId = null
+        taskEntryDefaultDueDate = null
+        taskEntryDefaultLabelId = labelId
         showTaskEntrySheet = true
     }
 
@@ -997,6 +1008,7 @@ fun VicuApp(
                             },
                             onTaskClick = onTaskClick,
                             onShowTaskEntry = onShowTaskEntry,
+                            onShowTaskEntryWithLabel = onShowTaskEntryWithLabel,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -1031,9 +1043,11 @@ fun VicuApp(
             TaskEntrySheet(
                 defaultProjectId = taskEntryDefaultProjectId,
                 defaultDueDate = taskEntryDefaultDueDate,
+                defaultLabelIds = taskEntryDefaultLabelId?.let { setOf(it) }.orEmpty(),
                 onDismiss = {
                     showTaskEntrySheet = false
                     taskEntryDefaultDueDate = null
+                    taskEntryDefaultLabelId = null
                     pendingSharedContent = null
                     taskEntryFromFab = false
                     templateToEdit = null

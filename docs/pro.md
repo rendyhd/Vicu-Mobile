@@ -42,7 +42,9 @@ Leadership team", "For Priya", "Yours, for Leadership team".
 ## Projects and labels
 
 In a project's menu: Type (Parallel, Sequential, Single actions) and Status (Active, On hold). On a
-label's screen, the menu has Put on hold and This is a person, or Open group for a group's label.
+label's screen, the menu has Put on hold and This is a person, or Open group for a group's label. A
+label that is neither can be marked as private (Mark as private): a 1:1 topic that carries it stays
+out of the agenda you share. A project that is a 90-day plan has Plan in its menu.
 
 ## Promises
 
@@ -53,7 +55,9 @@ label's screen, the menu has Put on hold and This is a person, or Open group for
 - **Waiting on** lists what others owe you, by person.
 - **People** lists everyone marked as a person, with counts. A person's page has what they owe you,
   what you owe them, what is still to confirm, how the last 90 days went in plain words, and the next
-  1:1 agenda to share.
+  1:1 agenda to share. Topics lists what you want to talk about with them: open tasks with their
+  label and no promise, those dated more than a week ahead under Later. Add a topic opens the task
+  sheet with the person's label picked. The shared agenda names the topics, without the private ones.
 - **Recap** (on the person page) shares what was agreed today, in the last 7 or 30 days; the promises
   in it are marked as sent.
 - **Follow-ups** is one list of what needs a move from you: verdicts due (the same verdict sheet),
@@ -68,8 +72,19 @@ A group is set up on the desktop or the web: a label, its members, its sessions.
 read-only: from People (Groups) or a group label's menu, a group's page has how its actions went over
 the last sessions (in counts, never a score), its actions by part (overdue since the last session,
 due, new, open, yours, done) and owner, with verdicts on their rows, and its open issues, recent
-decisions and open questions. Sessions, their agenda and recap, and the weekly note are not on the
-phone.
+decisions and open questions, and, when there are any, its open blockers, commitments and what it
+stopped doing, and its 90-day plans. Sessions, their agenda and recap, and the weekly note are not on
+the phone.
+
+## 90-day plans
+
+A 90-day plan is a project with a first and a last day, made on the desktop or the web (contract
+21.20). The phone shows it read-only, from Plan in the project's menu or Plans on a group's page: the
+days, which week it is, how many milestones were delivered, and a card per item with its owner,
+"2 of 4", the next open milestone and a row of the plan's weeks with what happened in each (due,
+delivered, late, slipped, dropped) in words. No status is shown or worked out. Items are ordered by
+position, and a plan with many old done milestones may count fewer than the desktop, because the
+phone loads done tasks in pages.
 
 Text written for other people (the check message) uses the `pro_text_` strings. On the phone it is
 written in the language the app is shown in, not the group's chosen language: the resource library

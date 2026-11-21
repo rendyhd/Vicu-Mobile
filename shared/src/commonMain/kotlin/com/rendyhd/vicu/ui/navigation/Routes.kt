@@ -34,6 +34,9 @@ import kotlinx.serialization.Serializable
 /** A group's page (section 21.16), by the group's label. */
 @Serializable data class GroupRoute(val labelId: Long)
 
+/** A 90-day plan's page (section 21.20), by the plan's project. */
+@Serializable data class ProjectPlanRoute(val projectId: Long)
+
 /** A person's page: a label marked as a person. */
 @Serializable data class PersonRoute(val labelId: Long)
 

@@ -29,6 +29,7 @@ import com.rendyhd.vicu.util.pro.Promises
 import com.rendyhd.vicu.util.pro.Recap
 import com.rendyhd.vicu.util.pro.RecapScope
 import com.rendyhd.vicu.util.pro.Recaps
+import com.rendyhd.vicu.util.pro.Topics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -153,12 +154,17 @@ data class PersonUiState(
     val pattern: String = "",
     val sections: PersonSections = PersonSections(),
     val agenda: Agenda = Agenda(emptyList(), ""),
+    /** The 1:1 topics (contract 21.21): for the next 1:1, and those dated later. */
+    val topics: List<Task> = emptyList(),
+    val laterTopics: List<Task> = emptyList(),
+    /** The topics with a private label: left out of copied text, marked on the page. */
+    val privateTopics: Set<Long> = emptySet(),
 )
 
 /**
  * A person's page (contract 21.5, plan 9.2): what they promised you, what you owe them, what waits
- * to be confirmed, the last 90 days in plain words, the next 1:1's agenda and a recap, both sent
- * through the share sheet.
+ * to be confirmed, the 1:1 topics (21.21), the last 90 days in plain words, the next 1:1's agenda
+ * and a recap, both sent through the share sheet.
  */
 class PersonViewModel(
     savedStateHandle: SavedStateHandle,
@@ -179,6 +185,7 @@ class PersonViewModel(
         val name = label?.title ?: "Person"
         val sections = ProScreens.personSections(labelId, world.open, world::promiseFor, world.peopleWithAliases)
         val counts = People.personCounts(labelId, world.ledger, { it in world.openById }, world.today, world.zone)
+        val topics = Topics.personTopics(labelId, world.open, world.ledger, world.today, world.zone, world.privateLabels)
         return PersonUiState(
             on = true,
             label = label,
@@ -189,7 +196,14 @@ class PersonViewModel(
                 mine = completions.merge(sections.mine, listScope = MINE),
                 confirm = completions.merge(sections.confirm, listScope = CONFIRM),
             ),
-            agenda = ProScreens.agenda(name, labelId, sections.theirs, sections.mine, world::promiseFor, world.ledger, world.today, world.zone),
+            agenda = ProScreens.agenda(
+                name, labelId, sections.theirs, sections.mine, world::promiseFor, world.ledger, world.today, world.zone,
+                topics = topics.now.mapNotNull { world.openById[it] },
+                hiddenTopics = topics.hidden.toSet(),
+            ),
+            topics = completions.merge(topics.now.mapNotNull { world.openById[it] }, listScope = TOPICS),
+            laterTopics = completions.merge(topics.later.mapNotNull { world.openById[it] }, listScope = LATER_TOPICS),
+            privateTopics = topics.hidden.toSet(),
         )
     }
 
@@ -254,6 +268,8 @@ class PersonViewModel(
         const val THEIRS = -1L
         const val MINE = -2L
         const val CONFIRM = -3L
+        const val TOPICS = -4L
+        const val LATER_TOPICS = -5L
     }
 }
 

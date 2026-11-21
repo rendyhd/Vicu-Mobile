@@ -91,6 +91,9 @@ object LedgerRules {
     /** Final kinds close a promise; `not_yet` and `renegotiated` keep it open with a new date. */
     val FINAL_VERDICT_KINDS: List<String> = listOf("delivered", "late", "dropped", "taken_over")
 
+    /** The log kinds that stay open until they are resolved; the others are a fact of their day. */
+    val OPEN_LOG_KINDS: List<String> = listOf("unknown", "issue", "blocker", "commitment", "stop")
+
     const val DEFAULT_CAP = 4
     const val DEFAULT_ESCALATION_THRESHOLD = 2
 
@@ -448,7 +451,7 @@ object LedgerRules {
         return when (collection) {
             "promises" -> finalVerdictOf(value)?.let { localDayOf(it.text("at"), zone) }
             "initiatives" -> if (value.text("status") == "closed") localDateOrNull(value["closed_on"]) else null
-            "log" -> if (value.text("kind") == "unknown" || value.text("kind") == "issue") {
+            "log" -> if (value.text("kind") in OPEN_LOG_KINDS) {
                 localDateOrNull(value["resolved"])
             } else {
                 localDateOrNull(value["at"])

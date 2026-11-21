@@ -59,10 +59,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.resources.Res
 import com.rendyhd.vicu.resources.pro_people_groups
+import com.rendyhd.vicu.resources.pro_person_topic_add
+import com.rendyhd.vicu.resources.pro_person_topic_private
+import com.rendyhd.vicu.resources.pro_person_topics
+import com.rendyhd.vicu.resources.pro_person_topics_later
 import com.rendyhd.vicu.ui.components.pro.LocalPro
 import com.rendyhd.vicu.ui.components.pro.PersonMark
 import com.rendyhd.vicu.ui.components.pro.ProHiddenSummary
 import com.rendyhd.vicu.ui.components.pro.ProIcons
+import com.rendyhd.vicu.ui.components.pro.ProTintChip
 import com.rendyhd.vicu.ui.components.pro.ProViewSwitch
 import com.rendyhd.vicu.ui.components.section.ProjectMeta
 import com.rendyhd.vicu.ui.components.section.SectionHeader
@@ -375,6 +380,8 @@ fun PersonScreen(
     onOpenDrawer: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** Opens the task entry with this person's label picked: a new 1:1 topic (contract 21.21). */
+    onAddTopic: (Long) -> Unit = {},
     viewModel: PersonViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -442,6 +449,20 @@ fun PersonScreen(
                 personSection("theirs", "From $name", state.sections.theirs, held, viewModel, onTaskClick)
                 personSection("mine", "You owe $name", state.sections.mine, held, viewModel, onTaskClick)
                 personSection("confirm", "To confirm", state.sections.confirm, held, viewModel, onTaskClick)
+                item(key = "topics_header", contentType = "header") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) {
+                            SectionHeader(title = stringResource(Res.string.pro_person_topics), count = openCount(state.topics, held))
+                        }
+                        state.label?.let { label ->
+                            TextButton(onClick = { onAddTopic(label.id) }, modifier = Modifier.padding(end = 8.dp)) {
+                                Text(stringResource(Res.string.pro_person_topic_add))
+                            }
+                        }
+                    }
+                }
+                topicSection("topics", null, state.topics, state.privateTopics, held, viewModel, onTaskClick)
+                topicSection("topics_later", Res.string.pro_person_topics_later, state.laterTopics, state.privateTopics, held, viewModel, onTaskClick)
             }
         }
     }
@@ -464,6 +485,33 @@ private fun LazyListScope.personSection(
     }
     items(tasks, key = { "${key}_${it.id}" }, contentType = { "task" }) { task ->
         ProTaskRow(task, held, viewModel, onTaskClick, Modifier.animateItem())
+    }
+}
+
+/** The 1:1 topics (contract 21.21), each opening its task; a topic with a private label is marked. */
+private fun LazyListScope.topicSection(
+    key: String,
+    /** The section's header, or null when the caller draws it. */
+    title: org.jetbrains.compose.resources.StringResource?,
+    tasks: List<Task>,
+    privateIds: Set<Long>,
+    held: Set<Long>,
+    viewModel: ProTaskListViewModel,
+    onTaskClick: (Long) -> Unit,
+) {
+    if (tasks.isEmpty()) return
+    if (title != null) {
+        item(key = "section_$key", contentType = "header") {
+            SectionHeader(title = stringResource(title), count = openCount(tasks, held))
+        }
+    }
+    items(tasks, key = { "${key}_${it.id}" }, contentType = { "topic" }) { task ->
+        Column(Modifier.animateItem()) {
+            ProTaskRow(task, held, viewModel, onTaskClick)
+            if (task.id in privateIds) {
+                ProTintChip(stringResource(Res.string.pro_person_topic_private), Modifier.padding(start = 56.dp, bottom = 4.dp))
+            }
+        }
     }
 }
 

@@ -302,7 +302,7 @@ object Groups {
         )
     }
 
-    // --- Decisions, questions and issues ---------------------------------------------------
+    // --- Decisions, questions, issues, blockers, commitments and stops ---------------------
 
     /** A group's log entries of one kind, newest first (`at`, then id). */
     fun groupLog(ledger: ProLedger?, label: Long, kind: String): List<LogEntry> =
@@ -320,6 +320,10 @@ object Groups {
         value is JsonPrimitive -> value.content != "false" && value.content != "0"
         else -> true
     }
+
+    /** A group's open entries of one kind (not resolved yet), oldest first (`at`, then id). */
+    fun openLog(ledger: ProLedger?, label: Long, kind: String): List<LogEntry> =
+        groupLog(ledger, label, kind).filter { !truthy(it.value["resolved"]) }.reversed()
 
     /** The group's open issues: by rank (lowest first, without one last), then `at`, then id. */
     fun openIssues(ledger: ProLedger?, label: Long): List<LogEntry> =

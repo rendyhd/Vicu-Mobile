@@ -29,13 +29,18 @@ import com.rendyhd.vicu.resources.pro_text_decision_by
 import com.rendyhd.vicu.resources.pro_text_decision_plain
 import com.rendyhd.vicu.resources.pro_text_heading_actions_due
 import com.rendyhd.vicu.resources.pro_text_heading_actions_open
+import com.rendyhd.vicu.resources.pro_text_heading_blockers
+import com.rendyhd.vicu.resources.pro_text_heading_blockers_raised
 import com.rendyhd.vicu.resources.pro_text_heading_changed
+import com.rendyhd.vicu.resources.pro_text_heading_commitments
 import com.rendyhd.vicu.resources.pro_text_heading_decisions
 import com.rendyhd.vicu.resources.pro_text_heading_delivered
 import com.rendyhd.vicu.resources.pro_text_heading_issues
 import com.rendyhd.vicu.resources.pro_text_heading_issues_solved
 import com.rendyhd.vicu.resources.pro_text_heading_new_actions
 import com.rendyhd.vicu.resources.pro_text_heading_questions
+import com.rendyhd.vicu.resources.pro_text_heading_stops
+import com.rendyhd.vicu.resources.pro_text_note_blocker
 import com.rendyhd.vicu.resources.pro_text_note_decision
 import com.rendyhd.vicu.resources.pro_text_note_dropped
 import com.rendyhd.vicu.resources.pro_text_note_issue
@@ -111,6 +116,10 @@ internal object ProText {
         ProTextEntry("heading.changed", listOf(), string = Res.string.pro_text_heading_changed),
         ProTextEntry("heading.issuesSolved", listOf(), string = Res.string.pro_text_heading_issues_solved),
         ProTextEntry("heading.questions", listOf(), string = Res.string.pro_text_heading_questions),
+        ProTextEntry("heading.blockers", listOf(), string = Res.string.pro_text_heading_blockers),
+        ProTextEntry("heading.blockersRaised", listOf(), string = Res.string.pro_text_heading_blockers_raised),
+        ProTextEntry("heading.commitments", listOf(), string = Res.string.pro_text_heading_commitments),
+        ProTextEntry("heading.stops", listOf(), string = Res.string.pro_text_heading_stops),
         ProTextEntry("action.owner", listOf("owner", "title", "date"), string = Res.string.pro_text_action_owner),
         ProTextEntry("action.ownerNoDate", listOf("owner", "title"), string = Res.string.pro_text_action_owner_no_date),
         ProTextEntry("action.forPerson", listOf("owner", "requester", "title", "date"), string = Res.string.pro_text_action_for_person),
@@ -145,6 +154,7 @@ internal object ProText {
         ProTextEntry("note.slipped.notYetBlocker", listOf("owner", "title", "blocker"), string = Res.string.pro_text_note_slipped_not_yet_blocker),
         ProTextEntry("note.decision", listOf("text"), string = Res.string.pro_text_note_decision),
         ProTextEntry("note.issue", listOf("text"), string = Res.string.pro_text_note_issue),
+        ProTextEntry("note.blocker", listOf("text"), string = Res.string.pro_text_note_blocker),
         ProTextEntry("note.pastDue", listOf("count"), plural = Res.plurals.pro_text_note_past_due),
         ProTextEntry("note.nextWeek", listOf("count"), plural = Res.plurals.pro_text_note_next_week),
         ProTextEntry("note.nothing", listOf(), string = Res.string.pro_text_note_nothing),

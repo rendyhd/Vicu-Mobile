@@ -42,6 +42,10 @@ data class SessionContents(
     val issues: List<String>,
     /** Issues solved in the session. */
     val solved: List<String>,
+    /** Blockers, commitments and stops captured in the session. */
+    val blockers: List<String>,
+    val commitments: List<String>,
+    val stops: List<String>,
 )
 
 /**
@@ -116,6 +120,9 @@ object Sessions {
             "decision" to mutableListOf(),
             "unknown" to mutableListOf(),
             "issue" to mutableListOf(),
+            "blocker" to mutableListOf(),
+            "commitment" to mutableListOf(),
+            "stop" to mutableListOf(),
         )
         val solved = mutableListOf<Pair<String, String>>()
         for ((id, value) in ledger?.values("log").orEmpty()) {
@@ -135,6 +142,9 @@ object Sessions {
             questions = ids(byKind.getValue("unknown")),
             issues = ids(byKind.getValue("issue")),
             solved = ids(solved),
+            blockers = ids(byKind.getValue("blocker")),
+            commitments = ids(byKind.getValue("commitment")),
+            stops = ids(byKind.getValue("stop")),
         )
     }
 

@@ -1,8 +1,10 @@
 package com.rendyhd.vicu.ui.screens.pro
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -11,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +23,8 @@ import com.rendyhd.vicu.data.repository.ProWorldSource
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.domain.repository.TaskRepository
 import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_group_blockers
+import com.rendyhd.vicu.resources.pro_group_commitments
 import com.rendyhd.vicu.resources.pro_group_decided_by
 import com.rendyhd.vicu.resources.pro_group_decisions
 import com.rendyhd.vicu.resources.pro_group_issues
@@ -37,12 +42,16 @@ import com.rendyhd.vicu.resources.pro_group_part_fresh
 import com.rendyhd.vicu.resources.pro_group_part_open
 import com.rendyhd.vicu.resources.pro_group_part_overdue
 import com.rendyhd.vicu.resources.pro_group_part_yours
+import com.rendyhd.vicu.resources.pro_group_plans
 import com.rendyhd.vicu.resources.pro_group_questions
 import com.rendyhd.vicu.resources.pro_group_read_only
 import com.rendyhd.vicu.resources.pro_group_reliability
 import com.rendyhd.vicu.resources.pro_group_reliability_more
+import com.rendyhd.vicu.resources.pro_group_stops
 import com.rendyhd.vicu.resources.pro_group_title
 import com.rendyhd.vicu.resources.pro_group_you
+import com.rendyhd.vicu.resources.pro_plan_closed
+import com.rendyhd.vicu.resources.pro_plan_days
 import com.rendyhd.vicu.ui.components.section.SectionHeader
 import com.rendyhd.vicu.ui.components.section.SectionLevel
 import com.rendyhd.vicu.ui.components.section.SectionTone
@@ -79,6 +88,9 @@ data class GroupPartUi(val part: GroupPart, val owners: List<GroupOwnerUi>) {
     val tasks: List<Task> get() = owners.flatMap { it.tasks }
 }
 
+/** One of the group's 90-day plans (contract 21.20): its project, the project's name and the plan's days. */
+data class GroupPlanUi(val project: Long, val name: String, val start: LocalDate, val end: LocalDate, val closed: LocalDate?)
+
 /** A decision of the group: what was decided, by whom (a name, or null) and when (a local day, or null). */
 data class GroupDecisionUi(val id: String, val text: String, val by: String?, val day: LocalDate?)
 
@@ -94,13 +106,20 @@ data class GroupUiState(
     val issues: List<String> = emptyList(),
     val decisions: List<GroupDecisionUi> = emptyList(),
     val questions: List<String> = emptyList(),
+    /** Open blockers, commitments and stops, oldest first (contract 21.16). */
+    val blockers: List<String> = emptyList(),
+    val commitments: List<String> = emptyList(),
+    val stops: List<String> = emptyList(),
+    /** The group's plans, open ones first (contract 21.20). */
+    val plans: List<GroupPlanUi> = emptyList(),
 )
 
 /**
  * A group's page, read-only on the phone (contract 21.16): the reliability line in counts, its
- * actions by part and owner (verdicts through each row's own verdict sheet), and its open issues,
- * recent decisions and open questions. Setting a group up, sessions and ranking issues are desktop
- * and web features.
+ * actions by part and owner (verdicts through each row's own verdict sheet), its open issues,
+ * recent decisions, open questions, open blockers, commitments and stops, and its 90-day plans
+ * (21.20). Setting a group up, sessions, ranking issues and making plans are desktop and web
+ * features.
  */
 class GroupViewModel(
     savedStateHandle: SavedStateHandle,
@@ -163,8 +182,18 @@ class GroupViewModel(
                 .filter { entry -> (entry.value["resolved"] as? JsonPrimitive)?.content.let { it == null || it == "false" || it == "" || it == "null" } }
                 .map { text(it.value) }
                 .filter { it.isNotEmpty() },
+            blockers = openLog(world, "blocker", text),
+            commitments = openLog(world, "commitment", text),
+            stops = openLog(world, "stop", text),
+            plans = world.plans.filter { it.plan.group == labelId }.map { entry ->
+                val name = world.projects.firstOrNull { it.id == entry.project }?.title.orEmpty()
+                GroupPlanUi(entry.project, name, entry.plan.start, entry.plan.end, entry.plan.closed)
+            },
         )
     }
+
+    private fun openLog(world: ProWorld, kind: String, text: (kotlinx.serialization.json.JsonObject) -> String): List<String> =
+        Groups.openLog(world.ledger, labelId, kind).map { text(it.value) }.filter { it.isNotEmpty() }
 
     val uiState: StateFlow<GroupUiState> = combine(worldSource.world, doneActions, completions.state) { world, done, _ -> build(world, done) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, build(worldSource.world.value, emptyList()))
@@ -181,6 +210,7 @@ fun GroupScreen(
     onOpenDrawer: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPlan: (Long) -> Unit = {},
     viewModel: GroupViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -261,6 +291,37 @@ fun GroupScreen(
                     }
                 }
                 logList("questions", Res.string.pro_group_questions, Res.string.pro_group_no_questions, state.questions)
+                // Blockers, commitments and stops (contract 21.16): shown when the group has any.
+                logList("blockers", Res.string.pro_group_blockers, null, state.blockers)
+                logList("commitments", Res.string.pro_group_commitments, null, state.commitments)
+                logList("stops", Res.string.pro_group_stops, null, state.stops)
+                if (state.plans.isNotEmpty()) {
+                    item(key = "plans_header", contentType = "header") {
+                        SectionHeader(title = stringResource(Res.string.pro_group_plans), count = state.plans.size)
+                    }
+                    items(state.plans, key = { "plan_${it.project}" }) { plan ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clickable(role = Role.Button) { onOpenPlan(plan.project) }
+                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(plan.name, style = MaterialTheme.typography.bodyMedium)
+                            Muted(
+                                stringResource(
+                                    Res.string.pro_plan_days,
+                                    DateDisplay.formatWeekdayDate(plan.start, today, fmt),
+                                    DateDisplay.formatWeekdayDate(plan.end, today, fmt),
+                                ),
+                            )
+                            plan.closed?.let { closed ->
+                                Muted(stringResource(Res.string.pro_plan_closed, DateDisplay.formatWeekdayDate(closed, today, fmt)))
+                            }
+                        }
+                    }
+                }
                 item(key = "read_only") {
                     Muted(stringResource(Res.string.pro_group_read_only), Modifier.padding(horizontal = 16.dp, vertical = 24.dp))
                 }
@@ -271,15 +332,17 @@ fun GroupScreen(
 
 private val LOG_PADDING = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)
 
-/** A plain read-only list of the group's log under a header: issues or questions. */
+/** A plain read-only list of the group's log under a header: issues, questions, blockers, commitments or stops. */
 private fun LazyListScope.logList(
     key: String,
     title: org.jetbrains.compose.resources.StringResource,
-    empty: org.jetbrains.compose.resources.StringResource,
+    empty: org.jetbrains.compose.resources.StringResource?,
     lines: List<String>,
 ) {
+    // Without an empty text the list is left out while it has nothing.
+    if (lines.isEmpty() && empty == null) return
     item(key = "${key}_header", contentType = "header") { SectionHeader(title = stringResource(title), count = lines.size) }
-    if (lines.isEmpty()) {
+    if (lines.isEmpty() && empty != null) {
         item(key = "${key}_none") { Muted(stringResource(empty), LOG_PADDING) }
     }
     lines.forEachIndexed { index, line ->

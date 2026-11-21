@@ -197,6 +197,31 @@ class ProScreensTest {
         assertTrue(agenda.text.startsWith("1:1 with Jan\n\n- What's still unclear?\n"))
     }
 
+    @Test
+    fun `the agenda names the topics for the next 1-1 after the promises, without private or later ones`() {
+        val labels = listOf(Label(id = 31, title = "Jan"))
+        val budget = Task(id = 10, title = "Budget overrun ", labels = labels, dueDate = due(LocalDate(2026, 11, 13)), created = "2026-11-01T08:00:00Z")
+        val vendor = Task(id = 11, title = "Vendor work", labels = labels, created = "2026-10-01T08:00:00Z")
+        val paper = Task(id = 12, title = "Board paper", labels = labels + Label(id = 90, title = "private"), created = "2026-11-02T08:00:00Z")
+        val career = Task(id = 13, title = "Career", labels = labels, dueDate = due(LocalDate(2026, 12, 20)), created = "2026-06-01T08:00:00Z")
+        val tasks = listOf(vendor, career, paper, budget)
+        val rule = Topics.personTopics(31, tasks, null, today, zone, setOf(90L))
+        assertEquals(listOf(10L, 11L, 12L), rule.now)
+        assertEquals(listOf(13L), rule.later)
+        val byId = tasks.associateBy { it.id }
+        val agenda = ProScreens.agenda(
+            "Jan", 31, emptyList(), emptyList(), { null }, null, today, zone,
+            topics = rule.now.map { byId.getValue(it) },
+            hiddenTopics = rule.hidden.toSet(),
+        )
+        assertEquals("1:1 with Jan\n\n- What's still unclear?\n\nTopics\n- Budget overrun\n- Vendor work", agenda.text)
+        assertEquals(listOf(ProScreens.UNCLEAR_ITEM), agenda.items)
+
+        val none = ProScreens.agenda("Jan", 31, emptyList(), emptyList(), { null }, null, today, zone, topics = listOf(paper), hiddenTopics = setOf(12L))
+        assertEquals("1:1 with Jan\n\n- What's still unclear?", none.text)
+        assertFalse(ProScreens.agenda("Jan", 31, emptyList(), emptyList(), { null }, null, today, zone).text.contains("Topics"))
+    }
+
     // --- Small words -----------------------------------------------------------------------------
 
     @Test

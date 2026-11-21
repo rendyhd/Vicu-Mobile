@@ -175,6 +175,9 @@ class TaskEntryViewModel(
     /** The due date the opening screen asked for; a fresh draft (mass-add) starts from it again. */
     private var seedDueDate: String? = null
 
+    /** Labels the sheet was opened with (a person's page adding a 1:1 topic), picked again after a reset. */
+    private var seedLabelIds: Set<Long> = emptySet()
+
     /** The project the sheet opened with, from the list it was opened in; null before it opened. */
     private var entryProjectId: Long? = null
 
@@ -294,17 +297,19 @@ class TaskEntryViewModel(
             weekStart = dayClock.day.value.weekStart,
         )
 
-    fun initWithDefaults(defaultProjectId: Long?, defaultDueDate: String? = null) {
+    fun initWithDefaults(defaultProjectId: Long?, defaultDueDate: String? = null, defaultLabelIds: Set<Long> = emptySet()) {
         isInitialized = true
         viewModelScope.launch {
             val projectId = resolveActiveProjectId(defaultProjectId)
             entryProjectId = projectId
             seedDueDate = defaultDueDate?.takeIf { it.isNotBlank() }
+            seedLabelIds = defaultLabelIds
             _uiState.update {
                 it.copy(
                     projectId = projectId,
                     dueDate = seedDueDate ?: "",
                     dueDateIsManual = false,
+                    selectedLabelIds = seedLabelIds,
                 )
             }
         }
@@ -1098,7 +1103,7 @@ class TaskEntryViewModel(
                 priority = 0,
                 priorityIsManual = false,
                 projectIsManual = false,
-                selectedLabelIds = emptySet(),
+                selectedLabelIds = seedLabelIds,
                 reminders = emptyList(),
                 manualRecurrence = null,
                 placeTrigger = null,

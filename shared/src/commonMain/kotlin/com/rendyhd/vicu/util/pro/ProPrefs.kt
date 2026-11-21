@@ -36,7 +36,7 @@ data class RepeatRule(
 /**
  * Pro's synced preference keys (docs/cross-app-semantics-v1.md sections 11.3 and 21), the same as
  * the desktop's `src/shared/pro/prefs.ts`: project types and statuses, label statuses and kinds,
- * repeat rules. A value that does not have the shape reads as the default and is kept unchanged
+ * repeat rules and 90-day plans (read in [ProjectPlans]). A value that does not have the shape reads as the default and is kept unchanged
  * (section 11.2). Values are the synced preference values by key.
  */
 object ProPrefs {
@@ -46,9 +46,12 @@ object ProPrefs {
     const val LABEL_KIND_PREFIX = "label_kind."
     const val REPEAT_RULE_PREFIX = "repeat_rule."
 
+    /** A project that is a 90-day plan (section 21.20): `{ start, end, group, closed, from }`. */
+    const val PROJECT_PLAN_PREFIX = "project_plan."
+
     /** Every key prefix Pro writes. */
     val PREFIXES: List<String> =
-        listOf(PROJECT_MODE_PREFIX, PROJECT_STATUS_PREFIX, LABEL_STATUS_PREFIX, LABEL_KIND_PREFIX, REPEAT_RULE_PREFIX)
+        listOf(PROJECT_MODE_PREFIX, PROJECT_STATUS_PREFIX, LABEL_STATUS_PREFIX, LABEL_KIND_PREFIX, REPEAT_RULE_PREFIX, PROJECT_PLAN_PREFIX)
 
     private val WHOLE_NUMBER = Regex("^[1-9]\\d*\$")
     private val LOCAL_DATE = Regex("^\\d{4}-\\d{2}-\\d{2}\$")
@@ -58,6 +61,7 @@ object ProPrefs {
     fun labelStatusKey(labelId: Long): String = "$LABEL_STATUS_PREFIX$labelId"
     fun labelKindKey(labelId: Long): String = "$LABEL_KIND_PREFIX$labelId"
     fun repeatRuleKey(taskId: Long): String = "$REPEAT_RULE_PREFIX$taskId"
+    fun projectPlanKey(projectId: Long): String = "$PROJECT_PLAN_PREFIX$projectId"
 
     /** The id at the end of a Pro key, or null when the key is not one of [prefix]'s. */
     fun idOfKey(key: String, prefix: String): Long? {
@@ -82,6 +86,9 @@ object ProPrefs {
 
     fun readIsGroup(value: JsonElement?): Boolean = value.asText() == "group"
 
+    /** A private label (section 21.21): a task that carries it is left out of text copied for other people. */
+    fun readIsPrivate(value: JsonElement?): Boolean = value.asText() == "private"
+
     fun projectMode(values: Map<String, JsonElement?>, projectId: Long): ProjectMode =
         readProjectMode(values[projectModeKey(projectId)])
 
@@ -104,6 +111,13 @@ object ProPrefs {
     /** The label ids marked as a group (section 21.16). */
     fun groupLabelIds(values: Map<String, JsonElement?>): Set<Long> =
         values.mapNotNull { (key, value) -> idOfKey(key, LABEL_KIND_PREFIX)?.takeIf { readIsGroup(value) } }.toSet()
+
+    fun isPrivateLabel(values: Map<String, JsonElement?>, labelId: Long): Boolean =
+        readIsPrivate(values[labelKindKey(labelId)])
+
+    /** The label ids marked private (section 21.21). */
+    fun privateLabelIds(values: Map<String, JsonElement?>): Set<Long> =
+        values.mapNotNull { (key, value) -> idOfKey(key, LABEL_KIND_PREFIX)?.takeIf { readIsPrivate(value) } }.toSet()
 
     /** The label ids on hold. */
     fun onHoldLabelIds(values: Map<String, JsonElement?>): Set<Long> =

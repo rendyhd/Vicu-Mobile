@@ -89,6 +89,8 @@ import com.rendyhd.vicu.ui.components.task.ReorderableTaskRow
 import com.rendyhd.vicu.ui.components.task.SwipeableTaskItem
 import com.rendyhd.vicu.ui.screens.shared.ProjectActions
 import com.rendyhd.vicu.domain.model.TaskOrder
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_plan_open
 import com.rendyhd.vicu.ui.components.pro.LocalPro
 import com.rendyhd.vicu.ui.components.pro.ProjectStatusDialog
 import com.rendyhd.vicu.ui.components.pro.ProjectTypeDialog
@@ -96,6 +98,7 @@ import com.rendyhd.vicu.ui.components.pro.proHiddenItem
 import com.rendyhd.vicu.ui.components.pro.proViewSwitchItem
 import com.rendyhd.vicu.util.pro.AvailabilityView
 import com.rendyhd.vicu.util.isManuallyOrdered
+import org.jetbrains.compose.resources.stringResource
 import com.rendyhd.vicu.util.moveOptions
 import com.rendyhd.vicu.util.parseHexColor
 import sh.calvin.reorderable.ReorderableItem
@@ -110,6 +113,8 @@ fun ProjectScreen(
     onOpenDrawer: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onShowTaskEntry: (Long?, String?) -> Unit = { _, _ -> },
+    /** Opens the project's 90-day plan (contract 21.20); offered only while it has one. */
+    onOpenPlan: (Long) -> Unit = {},
     onProjectClick: (Long) -> Unit = {},
     onProjectGone: () -> Unit = {},
     viewModel: ProjectViewModel = koinViewModel(),
@@ -130,6 +135,11 @@ fun ProjectScreen(
             "Type" to { openDialog = ProjectDialog.PRO_TYPE.name },
             "Status" to { openDialog = ProjectDialog.PRO_STATUS.name },
         )
+    } else {
+        emptyList()
+    } + if (pro.world.planOf(projectId) != null) {
+        // A 90-day plan (contract 21.20), shown while the promises layer is on.
+        listOf(stringResource(Res.string.pro_plan_open) to { onOpenPlan(projectId) })
     } else {
         emptyList()
     }

@@ -234,7 +234,7 @@ object Documents {
 
     // --- A session's documents -------------------------------------------------------------
 
-    /** The agenda: actions due, other open actions, open issues (weekly), the closing line. */
+    /** The agenda: actions due, other open actions, open issues (weekly), open blockers, the closing line. */
     fun agendaDocument(
         group: Group,
         kind: String,
@@ -254,6 +254,7 @@ object Documents {
         blocks += block("heading.actionsDue", lines(actions.verdicts))
         blocks += block("heading.actionsOpen", lines(actions.others))
         if (sessionKind == SessionKind.WEEKLY) blocks += block("heading.issues", issueLines(ledger, group.label))
+        blocks += block("heading.blockers", Groups.openLog(ledger, group.label, "blocker").map { literal(it.value.text("text").orEmpty().trim()) })
         blocks += DocBlock(text = line("agenda.close"))
         return ProDocument(line(titleKey("agenda", kind), "group" to text(group.name), "date" to day(date)), blocks)
     }
@@ -301,8 +302,8 @@ object Documents {
     }
 
     /**
-     * The recap of one session: decisions, new actions, delivered, changed, issues solved, open
-     * issues, open questions asked in it, and who was absent.
+     * The recap of one session: decisions, commitments, stops, new actions, delivered, changed,
+     * issues solved, open issues, blockers and open questions raised in it, and who was absent.
      */
     fun recapDocument(
         group: Group,
@@ -331,11 +332,14 @@ object Documents {
         fun literals(ids: List<String>) = ids.mapNotNull { id -> ledger?.value("log", id)?.let { literal(it.text("text").orEmpty().trim()) } }
         val blocks = mutableListOf<DocBlock>()
         blocks += block("heading.decisions", parts.decisions)
+        blocks += block("heading.commitments", literals(parts.contents.commitments))
+        blocks += block("heading.stops", literals(parts.contents.stops))
         blocks += block("heading.newActions", parts.created)
         blocks += block("heading.delivered", delivered)
         blocks += block("heading.changed", changed)
         blocks += block("heading.issuesSolved", literals(parts.contents.solved))
         blocks += block("heading.issues", issueLines(ledger, group.label))
+        blocks += block("heading.blockersRaised", literals(parts.contents.blockers))
         blocks += block("heading.questions", literals(parts.contents.questions))
         val absentNames = absent.distinct().map { names.person(it) }
         if (absentNames.isNotEmpty()) blocks += DocBlock(text = line("absent", "names" to text(absentNames.joinToString(", "))))
@@ -460,6 +464,7 @@ object Documents {
             val decisions = Groups.groupLog(ledger, group.label, "decision").filter { inPeriod(dayOf(it.value.text("at"))) }.reversed()
             items += decisions.map { line("note.decision", "text" to text(it.value.text("text").orEmpty().trim())) }
             items += Groups.openIssues(ledger, group.label).map { line("note.issue", "text" to text(it.value.text("text").orEmpty().trim())) }
+            items += Groups.openLog(ledger, group.label, "blocker").map { line("note.blocker", "text" to text(it.value.text("text").orEmpty().trim())) }
             if (pastDue != 0) items += line("note.pastDue", "count" to count(pastDue))
             if (next != 0) items += line("note.nextWeek", "count" to count(next))
             if (items.isEmpty()) items += line("note.nothing")

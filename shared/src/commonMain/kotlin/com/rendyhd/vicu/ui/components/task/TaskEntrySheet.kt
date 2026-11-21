@@ -188,6 +188,8 @@ import org.koin.compose.viewmodel.koinViewModel
 fun TaskEntrySheet(
     defaultProjectId: Long?,
     defaultDueDate: String? = null,
+    /** Labels picked from the start (a person's page adding a 1:1 topic); none by default. */
+    defaultLabelIds: Set<Long> = emptySet(),
     onDismiss: () -> Unit,
     onTaskCreated: (Long) -> Unit,
     sharedContent: SharedContent? = null,
@@ -251,7 +253,7 @@ fun TaskEntrySheet(
     // saved with the instance state; a new view model (process death) is initialised as usual.
     var initializedBeforeRecreation by rememberSaveable { mutableStateOf(false) }
     var firstRun by remember { mutableStateOf(true) }
-    LaunchedEffect(defaultProjectId, defaultDueDate, sharedContent, editTemplateId) {
+    LaunchedEffect(defaultProjectId, defaultDueDate, defaultLabelIds, sharedContent, editTemplateId) {
         val recreated = firstRun && initializedBeforeRecreation && viewModel.isInitialized
         firstRun = false
         if (!recreated) {
@@ -261,7 +263,7 @@ fun TaskEntrySheet(
             } else if (sharedContent != null) {
                 viewModel.initWithSharedContent(defaultProjectId, sharedContent)
             } else {
-                viewModel.initWithDefaults(defaultProjectId, defaultDueDate)
+                viewModel.initWithDefaults(defaultProjectId, defaultDueDate, defaultLabelIds)
             }
         }
         initializedBeforeRecreation = true

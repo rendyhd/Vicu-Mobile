@@ -254,6 +254,10 @@ object ProScreens {
         ledger: ProLedger?,
         today: LocalDate,
         zone: TimeZone,
+        /** The person's topics for the next 1:1 in the rule's order (contract 21.21). */
+        topics: List<Task> = emptyList(),
+        /** The topics that carry a private label: left out of the text. */
+        hiddenTopics: Set<Long> = emptySet(),
     ): Agenda {
         val items = mutableListOf(UNCLEAR_ITEM)
         val byDue = Comparator<Task> { a, b ->
@@ -288,8 +292,11 @@ object ProScreens {
             val what = owed.text("what")?.trim()?.takeIf { it.isNotEmpty() } ?: continue
             items.add("Decision needed: $what")
         }
+        // The topics come after the promises, without the private ones (contract 21.21).
+        val shown = topics.filter { it.id !in hiddenTopics }.map { it.title.trim() }
         val title = "1:1 with ${name.trim()}"
-        val text = (listOf(title, "") + items.map { "- $it" }).joinToString("\n")
+        val topicLines = if (shown.isEmpty()) emptyList() else listOf("", "Topics") + shown.map { "- $it" }
+        val text = (listOf(title, "") + items.map { "- $it" } + topicLines).joinToString("\n")
         return Agenda(items, text)
     }
 }

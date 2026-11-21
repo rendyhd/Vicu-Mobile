@@ -55,6 +55,10 @@ class ProPreferences(private val synced: SyncedEntries) {
     suspend fun setPerson(labelId: Long, person: Boolean): Boolean =
         write(SyncedPrefKeys.labelKindOf(labelId), if (person) JsonPrimitive(PERSON) else null)
 
+    /** A private label (section 21.21); a label has one kind, so this replaces person or group. */
+    suspend fun setPrivate(labelId: Long, isPrivate: Boolean): Boolean =
+        write(SyncedPrefKeys.labelKindOf(labelId), if (isPrivate) JsonPrimitive(PRIVATE) else null)
+
     /** A rule with none of its three parts is no rule: null. */
     suspend fun setRepeatRule(taskId: Long, rule: RepeatRule?): Boolean =
         write(SyncedPrefKeys.repeatRuleOf(taskId), rule?.toJson()?.takeIf { ProPrefs.readRepeatRule(it) != null })
@@ -73,5 +77,6 @@ class ProPreferences(private val synced: SyncedEntries) {
     private companion object {
         const val ON_HOLD = "on_hold"
         const val PERSON = "person"
+        const val PRIVATE = "private"
     }
 }

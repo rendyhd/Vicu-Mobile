@@ -192,6 +192,11 @@ class ProActions(
         scope.launch { proPreferences.setPerson(labelId, person) }
     }
 
+    /** Marks a label private (section 21.21): a topic that carries it stays out of copied text. */
+    fun setPrivate(labelId: Long, isPrivate: Boolean) {
+        scope.launch { proPreferences.setPrivate(labelId, isPrivate) }
+    }
+
     fun setArea(categoryIds: List<String>) {
         scope.launch { proPreferences.setArea(categoryIds) }
     }

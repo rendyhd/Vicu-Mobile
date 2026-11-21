@@ -24,12 +24,15 @@ import com.rendyhd.vicu.util.pro.Groups
 import com.rendyhd.vicu.util.pro.LedgerRules
 import com.rendyhd.vicu.util.pro.People
 import com.rendyhd.vicu.util.pro.Person
+import com.rendyhd.vicu.util.pro.PlanEntry
 import com.rendyhd.vicu.util.pro.ProLayer
 import com.rendyhd.vicu.util.pro.ProLedger
 import com.rendyhd.vicu.util.pro.ProPrefs
 import com.rendyhd.vicu.util.pro.ProScreens
 import com.rendyhd.vicu.util.pro.ProSettings
 import com.rendyhd.vicu.util.pro.ProjectMode
+import com.rendyhd.vicu.util.pro.ProjectPlan
+import com.rendyhd.vicu.util.pro.ProjectPlans
 import com.rendyhd.vicu.util.pro.Promises
 import com.rendyhd.vicu.util.pro.Requester
 import com.rendyhd.vicu.util.pro.TaskAvailability
@@ -153,6 +156,27 @@ class ProWorld internal constructor(
     /** A group's name by its label id: its own, else the label's title. */
     fun groupName(labelId: Long): String =
         groupByLabel[labelId]?.name?.trim()?.takeIf { it.isNotEmpty() } ?: label(labelId)?.title ?: "Someone"
+
+    /**
+     * The 90-day plans (section 21.20) of projects the device holds, open ones first, while the
+     * promises layer is on.
+     */
+    val plans: List<PlanEntry> by lazy {
+        if (!promisesOn) {
+            emptyList()
+        } else {
+            val known = projects.mapTo(HashSet()) { it.id }
+            ProjectPlans.plansOf(prefs).filter { it.project in known }
+        }
+    }
+
+    /** A project's plan while the promises layer is on, or null. */
+    fun planOf(projectId: Long): ProjectPlan? = if (promisesOn) ProjectPlans.planOf(prefs, projectId) else null
+
+    /** The labels marked private (section 21.21): a topic that carries one is left out of copied text. */
+    val privateLabels: Set<Long> by lazy { ProPrefs.privateLabelIds(prefs) }
+
+    fun isPrivate(labelId: Long): Boolean = ProPrefs.isPrivateLabel(prefs, labelId)
 
     /** Who a promise was made to, in words: a group, a person, a name; null when it was made to you. */
     fun requesterName(promise: JsonObject?): String? = when (val requester = Promises.requesterOf(promise)) {

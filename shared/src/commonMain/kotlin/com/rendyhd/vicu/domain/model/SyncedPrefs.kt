@@ -6,6 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import com.rendyhd.vicu.util.pro.ProPrefs
 import com.rendyhd.vicu.util.pro.ProSettings
+import com.rendyhd.vicu.util.pro.ProjectPlans
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -155,7 +156,9 @@ object SyncedPrefKeys {
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_MODE_PREFIX) != null -> text == "sequential" || text == "single"
             ProPrefs.idOfKey(key, ProPrefs.PROJECT_STATUS_PREFIX) != null ||
                 ProPrefs.idOfKey(key, ProPrefs.LABEL_STATUS_PREFIX) != null -> text == "on_hold"
-            ProPrefs.idOfKey(key, ProPrefs.LABEL_KIND_PREFIX) != null -> text == "person" || text == "group"
+            ProPrefs.idOfKey(key, ProPrefs.LABEL_KIND_PREFIX) != null -> text == "person" || text == "group" || text == "private"
+            // A 90-day plan (section 21.20): its two days, in order; other fields are kept as they are.
+            ProPrefs.idOfKey(key, ProPrefs.PROJECT_PLAN_PREFIX) != null -> ProjectPlans.readPlan(value) != null
             ProPrefs.idOfKey(key, ProPrefs.REPEAT_RULE_PREFIX) != null -> ProPrefs.readRepeatRule(value) != null
             else -> false
         }

@@ -66,7 +66,9 @@ import com.rendyhd.vicu.data.repository.ProActions
 import com.rendyhd.vicu.data.repository.ProWorld
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.pro_label_not_private
 import com.rendyhd.vicu.resources.pro_label_open_group
+import com.rendyhd.vicu.resources.pro_label_private
 import com.rendyhd.vicu.ui.components.picker.MonthCalendar
 import com.rendyhd.vicu.ui.components.shared.LocalClockDay
 import com.rendyhd.vicu.ui.components.shared.VicuDragHandle
@@ -186,6 +188,18 @@ fun LabelProMenu(labelId: Long, onOpenGroup: ((Long) -> Unit)? = null) {
                         pro.actions?.setPerson(labelId, !person)
                     },
                 )
+                // A private label (contract 21.21) keeps a 1:1 topic out of copied text; a label has
+                // one kind, so a person is never private.
+                val isPrivate = world.isPrivate(labelId)
+                if (!person) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (isPrivate) Res.string.pro_label_not_private else Res.string.pro_label_private)) },
+                        onClick = {
+                            open = false
+                            pro.actions?.setPrivate(labelId, !isPrivate)
+                        },
+                    )
+                }
             }
         }
     }
