@@ -6,6 +6,7 @@ import com.rendyhd.vicu.data.local.ProjectSectionPrefsStore
 import com.rendyhd.vicu.data.repository.InMemorySyncedEntries
 import com.rendyhd.vicu.data.repository.TaskOrderPreferences
 import com.rendyhd.vicu.data.repository.InMemoryPreferencesDataStore
+import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.domain.model.Project
 import com.rendyhd.vicu.domain.model.Task
 import com.rendyhd.vicu.ui.FakeLabelRepository
@@ -87,6 +88,43 @@ class ProjectViewModelStateTest {
         assertEquals(listOf(1L to listOf(PositionUpdate(7, 150.0))), rig.tasks.appliedPositions)
         assertFalse(vm.moveTaskBy(5, offset = -1), "the first task cannot move up")
         assertFalse(vm.moveTaskBy(99, offset = 1), "a task that is not on the screen")
+    }
+
+    @Test
+    fun `picked labels narrow the page and its sections, and Show all brings everything back`() = runTest {
+        val rig = Rig(listOf(Project(id = 1, title = "Trip"), Project(id = 2, title = "Bookings", parentProjectId = 1)))
+        val booking = Label(id = 30, title = "Booking")
+        val errand = Label(id = 31, title = "Errand")
+        rig.tasks.put(Task(id = 5, title = "Book flights", projectId = 1, position = 100.0, labels = listOf(booking)))
+        rig.tasks.put(Task(id = 6, title = "Buy adapter", projectId = 1, position = 200.0, labels = listOf(errand)))
+        rig.tasks.put(Task(id = 7, title = "Day plan", projectId = 1, position = 300.0))
+        rig.tasks.put(Task(id = 8, title = "Reserve hotel", projectId = 2, position = 100.0, labels = listOf(booking)))
+        val vm = rig.viewModel()
+        runCurrent()
+        assertEquals(listOf(30L to 2, 31L to 1), vm.uiState.value.labelChoices.map { it.label.id to it.count })
+
+        vm.toggleLabel(errand)
+        runCurrent()
+        var state = vm.uiState.value
+        assertEquals(listOf(6L), state.unsectionedTasks.map { it.id })
+        assertTrue(state.sections.isEmpty(), "a section without such a task is not drawn")
+        assertEquals(3, state.labelHidden)
+        assertEquals(setOf(31L), state.pickedLabels)
+        assertEquals(listOf(30L to 2, 31L to 1), state.labelChoices.map { it.label.id to it.count }, "picking does not change the counts")
+
+        vm.toggleLabel(booking)
+        runCurrent()
+        state = vm.uiState.value
+        assertEquals(listOf(5L, 6L), state.unsectionedTasks.map { it.id })
+        assertEquals(listOf(8L), state.sections.single().tasks.map { it.id })
+        assertEquals(1, state.labelHidden)
+
+        vm.clearLabels()
+        runCurrent()
+        state = vm.uiState.value
+        assertEquals(listOf(5L, 6L, 7L), state.unsectionedTasks.map { it.id })
+        assertEquals(0, state.labelHidden)
+        assertTrue(state.pickedLabels.isEmpty())
     }
 
     private fun Rig.abc() {

@@ -18,6 +18,7 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -133,6 +134,8 @@ fun ProjectScreen(
     val reviewUndo by viewModel.reviewUndo.collectAsStateWithLifecycle()
     // The options menu's open dialog, by name so a rotation keeps it.
     var openDialog by rememberSaveable { mutableStateOf<String?>(null) }
+    // The label filter's bar (contract 17.2); the picked labels live in the view model.
+    var labelBarOpen by rememberSaveable { mutableStateOf(false) }
     // Pro's Type and Status (contract 21.2), while its availability layer is on.
     val pro = LocalPro.current
     val proEntries = if (pro.world.availabilityOn) {
@@ -206,6 +209,13 @@ fun ProjectScreen(
                     onNavigateToSearch = onNavigateToSearch,
                     // No menu while the project is missing or archived.
                     trailingActions = {
+                        if (state.labelChoices.isNotEmpty()) {
+                            LabelFilterButton(
+                                picked = state.pickedLabels.size,
+                                open = labelBarOpen,
+                                onClick = { labelBarOpen = !labelBarOpen },
+                            )
+                        }
                         if (menu.project != null) {
                             ProjectOptionsMenu(
                                 entries = menu.entries(),
@@ -247,12 +257,22 @@ fun ProjectScreen(
         floatingActionButtonPosition = if (LocalFabAlignStart.current) FabPosition.Start else FabPosition.End,
         snackbarHost = { VicuSnackbarHost(snackbarHostState) },
     ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // The label filter's bar sits above the list, so opening it never lands out of view.
+        if (labelBarOpen && state.labelChoices.isNotEmpty() && !selectionActive) {
+            LabelFilterBar(
+                choices = state.labelChoices,
+                picked = state.pickedLabels,
+                onToggle = viewModel::toggleLabel,
+                onClear = viewModel::clearLabels,
+            )
+        }
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.refresh(showSpinner = true) },
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+                .fillMaxWidth()
+                .weight(1f),
         ) {
             val allEmpty = state.unsectionedTasks.isEmpty() &&
                 state.childProjects.isEmpty() &&
@@ -260,7 +280,7 @@ fun ProjectScreen(
 
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().listScrollbar(listState), contentPadding = PaddingValues(bottom = FabClearance)) {
                 proViewSwitchItem(state.proView, viewModel::setProView)
-                if (allEmpty && !state.isLoading && state.proHidden == 0 && state.workHidden.count == 0) {
+                if (allEmpty && !state.isLoading && state.proHidden == 0 && state.workHidden.count == 0 && state.labelHidden == 0) {
                     item {
                         EmptyState(
                             icon = Icons.Outlined.Folder,
@@ -358,9 +378,11 @@ fun ProjectScreen(
                         onAddTask = { pid -> onShowTaskEntry(pid, null) },
                     )
                 }
+                labelHiddenItem(state.labelHidden, viewModel::clearLabels)
                 proHiddenItem(state.proView, state.proHidden) { viewModel.setProView(AvailabilityView.REMAINING) }
                 workHiddenItem(state.workHidden, viewModel::setShowWorkHidden)
             }
+        }
         }
     }
 

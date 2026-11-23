@@ -170,4 +170,20 @@
     <string name="work_hidden_show">Toon</string>
     <string name="work_hidden_hide">Verberg</string>
     <string name="work_added_to_personal">Toegevoegd aan Persoonlijk</string>
+    <string name="project_label_filter">Filteren op label</string>
+    <plurals name="project_label_filter_picked">
+        <item quantity="one">Filteren op label, %1$d gekozen</item>
+        <item quantity="other">Filteren op label, %1$d gekozen</item>
+    </plurals>
+    <string name="project_label_bar">Labels om te tonen</string>
+    <plurals name="project_label_choice">
+        <item quantity="one">%1$s, %2$d taak</item>
+        <item quantity="other">%1$s, %2$d taken</item>
+    </plurals>
+    <string name="project_label_clear">Wissen</string>
+    <plurals name="project_label_more">
+        <item quantity="one">Nog %1$d taak in dit project</item>
+        <item quantity="other">Nog %1$d taken in dit project</item>
+    </plurals>
+    <string name="project_label_show_all">Alles tonen</string>
 </resources>

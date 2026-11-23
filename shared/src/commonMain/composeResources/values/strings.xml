@@ -516,4 +516,21 @@
     <string name="work_hidden_hide">Hide</string>
     <!-- The message after a task was made in Work mode with no work label to give it. -->
     <string name="work_added_to_personal">Added to Personal</string>
+    <!-- The label filter of a project page (contract 17.2). -->
+    <string name="project_label_filter">Filter by label</string>
+    <plurals name="project_label_filter_picked">
+        <item quantity="one">Filter by label, %1$d picked</item>
+        <item quantity="other">Filter by label, %1$d picked</item>
+    </plurals>
+    <string name="project_label_bar">Labels to show</string>
+    <plurals name="project_label_choice">
+        <item quantity="one">%1$s, %2$d task</item>
+        <item quantity="other">%1$s, %2$d tasks</item>
+    </plurals>
+    <string name="project_label_clear">Clear</string>
+    <plurals name="project_label_more">
+        <item quantity="one">%1$d more task in this project</item>
+        <item quantity="other">%1$d more tasks in this project</item>
+    </plurals>
+    <string name="project_label_show_all">Show all</string>
 </resources>

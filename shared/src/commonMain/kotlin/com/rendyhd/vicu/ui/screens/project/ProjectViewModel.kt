@@ -42,6 +42,9 @@ import com.rendyhd.vicu.util.NetworkResult
 import com.rendyhd.vicu.util.ReviewMetadata
 import com.rendyhd.vicu.util.ReviewState
 import com.rendyhd.vicu.util.moveTaskInList
+import com.rendyhd.vicu.util.LabelChoice
+import com.rendyhd.vicu.util.ProjectLabelFilter
+import com.rendyhd.vicu.domain.model.Label
 import com.rendyhd.vicu.util.neighbourForMove
 import com.rendyhd.vicu.util.sortProjectTasks
 import com.rendyhd.vicu.data.sync.ScreenRefresher
@@ -77,6 +80,12 @@ data class ProjectUiState(
     val proHidden: Int = 0,
     /** Tasks the Work or Personal mode leaves out, with a way to show them until the screen is left (contract 22.4). */
     val workHidden: WorkHidden = WorkHidden.NONE,
+    /** The labels the filter bar offers, with their counts (contract 17.2); empty: no filter button. */
+    val labelChoices: List<LabelChoice> = emptyList(),
+    /** The labels picked in the bar; lasts until this screen is left. */
+    val pickedLabels: Set<Long> = emptySet(),
+    /** Tasks the picked labels leave out, sections included. */
+    val labelHidden: Int = 0,
 )
 
 /** What the project screen's options menu offers, and what its dialogs need. */
@@ -227,6 +236,17 @@ class ProjectViewModel(
         showWorkHidden.value = show
     }
 
+    /** The labels picked in the filter bar (contract 17.2), with the labels themselves, so one no task carries keeps its name. */
+    private val pickedLabels = MutableStateFlow<Map<Long, Label>>(emptyMap())
+
+    fun toggleLabel(label: Label) {
+        pickedLabels.update { picked -> if (label.id in picked) picked - label.id else picked + (label.id to label) }
+    }
+
+    fun clearLabels() {
+        pickedLabels.value = emptyMap()
+    }
+
     init {
         viewModelScope.launch {
             completions.heldIds.collect { ids -> _uiState.update { it.copy(completedTaskIds = ids) } }
@@ -329,8 +349,10 @@ class ProjectViewModel(
                     completions.state,
                     proWorld?.listState(ProListKeys.project(projectId)) ?: flowOf(ProListState.OFF),
                     workMode.stateOrOff(),
-                    showWorkHidden,
-                ) { state, _, pro, work, showing -> withHeldRows(withProView(withWorkMode(state, work, showing), pro)) }
+                    combine(showWorkHidden, pickedLabels) { showing, labels -> showing to labels },
+                ) { state, _, pro, work, (showing, labels) ->
+                    withHeldRows(withLabels(withProView(withWorkMode(state, work, showing), pro), labels))
+                }
             }.collect { newState ->
                 val previousProjectError = projectError
                 projectError = newState.error
@@ -382,6 +404,35 @@ class ProjectViewModel(
         val unsectioned = shown(state.unsectionedTasks)
         val filteredSections = sections(state.sections)
         return state.copy(unsectionedTasks = unsectioned, sections = filteredSections, proView = pro.view, proHidden = hidden)
+    }
+
+    /**
+     * [state] with the label filter applied (contract 17.2): the choices are counted over what the
+     * page lists, then a task shows when it carries a picked label or sits under a shown row. A
+     * section left without tasks, in itself or its own sections, is not drawn while labels are picked.
+     */
+    private fun withLabels(state: ProjectUiState, picked: Map<Long, Label>): ProjectUiState {
+        if (state.project == null || state.project.isArchived) return state
+        fun all(list: List<ProjectSection>): List<Task> = list.flatMap { it.tasks + all(it.children) }
+        val choices = ProjectLabelFilter.choices(state.unsectionedTasks + all(state.sections), picked.keys, picked.values.toList())
+        if (picked.isEmpty()) return state.copy(labelChoices = choices, pickedLabels = emptySet(), labelHidden = 0)
+        var hidden = 0
+        fun shown(tasks: List<Task>): List<Task> =
+            ProjectLabelFilter.shown(tasks, picked.keys, ::parentTaskOf).also { hidden += tasks.size - it.size }
+        fun sections(list: List<ProjectSection>): List<ProjectSection> = list.mapNotNull { section ->
+            val tasks = shown(section.tasks)
+            val children = sections(section.children)
+            if (tasks.isEmpty() && children.isEmpty()) null else section.copy(tasks = tasks, children = children)
+        }
+        val unsectioned = shown(state.unsectionedTasks)
+        val filteredSections = sections(state.sections)
+        return state.copy(
+            unsectionedTasks = unsectioned,
+            sections = filteredSections,
+            labelChoices = choices,
+            pickedLabels = picked.keys,
+            labelHidden = hidden,
+        )
     }
 
     /** What the project shows while Pro's availability layer is on; per device and project. */
