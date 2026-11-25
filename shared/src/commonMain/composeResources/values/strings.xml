@@ -533,4 +533,56 @@
         <item quantity="other">%1$d more tasks in this project</item>
     </plurals>
     <string name="project_label_show_all">Show all</string>
+    <!-- Spoken action for tapping a time of day row in Settings, Input, When (opens its editor). -->
+    <string name="when_choices_edit_action">Edit</string>
+    <!-- Screen reader label of the button that removes a time of day in the When choices settings. %1$s is the time of day name. -->
+    <string name="when_choices_remove_time">Remove %1$s</string>
+    <!-- Row in the When choices settings that adds a named time of day. -->
+    <string name="when_choices_add_time">Add a time</string>
+    <!-- Button in the When choices settings that puts the day choices, times of day and Move by steps back to the defaults. -->
+    <string name="when_choices_reset">Reset to defaults</string>
+    <!-- Screen reader label of the drag handle that moves a day choice in the When choices settings. %1$s is the choice name. -->
+    <string name="when_choices_move_choice">Move %1$s</string>
+    <!-- Label of the name field when adding or editing a named time of day. -->
+    <string name="when_choices_time_name">Name</string>
+    <!-- Spoken action for the row that opens the time picker in the time of day editor. -->
+    <string name="when_choices_change_time">Change the time</string>
+    <!-- Row label in the time of day editor, beside the chosen clock time. -->
+    <string name="when_choices_time_label">Time</string>
+    <!-- Button that saves a time of day in its editor. -->
+    <string name="when_choices_save">Save</string>
+    <!-- Button that closes the time of day editor without saving. -->
+    <string name="when_choices_cancel">Cancel</string>
+    <!-- Back button of the When choices settings screen. -->
+    <string name="when_choices_back">Back</string>
+    <!-- Note under the quick-add chip presets when the pinned chips match no preset. -->
+    <string name="entry_chips_own_choice">Your own choice</string>
+    <!-- Screen reader label of the drag handle that moves a quick-add chip in Settings, Input. %1$s is the chip name. -->
+    <string name="entry_chips_move_chip">Move %1$s</string>
+    <!-- Switch label in Settings, Input, Quick add: the new-task sheet opens at full height. -->
+    <string name="entry_chips_open_full">Open at full height</string>
+    <!-- Back button of the quick-add chips settings screen. -->
+    <string name="entry_chips_back">Back</string>
+    <!-- Section heading in Settings, Input. -->
+    <string name="settings_input_quick_add">Quick add</string>
+    <!-- Switch label in Settings, Input, Quick add. -->
+    <string name="settings_input_keep_open">Keep add-task open</string>
+    <!-- Description under the Keep add-task open switch. -->
+    <string name="settings_input_keep_open_description">Stay in the new-task sheet after saving, to add several quickly</string>
+    <!-- Section heading in Settings, Input for the When choices. -->
+    <string name="settings_input_when">When</string>
+    <!-- Heading above the Move by chips in the When sheet (shown for a task that has a date). -->
+    <string name="when_choices_move_by">Move by</string>
+    <!-- A Move by chip. %1$s is the step name, %2$s the date it leads to. -->
+    <string name="when_choices_move_by_step">%1$s · %2$s</string>
+    <!-- Chip in the quick-add When tray that opens the When choices. -->
+    <string name="when_choices_edit_choices">Edit choices</string>
+    <!-- Last chip under Details in the new-task sheet; opens the quick-add chips settings. -->
+    <string name="entry_chips_customize">Customize</string>
+    <!-- Screen reader label of the button in the new-task sheet that shows every chip. -->
+    <string name="entry_chips_details">Details</string>
+    <!-- Labels chip in the new-task sheet while no label is set. -->
+    <string name="entry_chips_labels">Labels</string>
+    <!-- Repeat chip in the new-task sheet while no repeat is set. -->
+    <string name="entry_chips_repeat">Repeat</string>
 </resources>

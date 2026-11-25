@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.rendyhd.vicu.util.EntryChip
+import com.rendyhd.vicu.util.EntryChipLayout
+import com.rendyhd.vicu.util.EntryChips
 import com.rendyhd.vicu.util.WorkMode
 import com.rendyhd.vicu.util.WorkModeSwitches
 import com.rendyhd.vicu.util.WorkScopeRules
@@ -63,6 +66,8 @@ data class BehaviorPrefs(
     val swipeRight: SwipeAction = SwipeAction.COMPLETE,
     val swipeLeft: SwipeAction = SwipeAction.CHOOSE_WHEN,
     val keepEntryOpen: Boolean = false,
+    /** Which chips the quick-add sheet always shows, their order, and whether it opens at full height. */
+    val entryChips: EntryChipLayout = EntryChipLayout(),
     val fabAlignStart: Boolean = false,
     val subtaskDisplayMode: SubtaskDisplayMode = SubtaskDisplayMode.INSIDE_TASK,
     val rowDensity: RowDensity = RowDensity.COMPACT,
@@ -171,6 +176,9 @@ class BehaviorPrefsStore(
         internal fun legacySwipeLeft(scheduleAction: String?): SwipeAction =
             if (scheduleAction == "PRIORITY_URGENT") SwipeAction.URGENT else SwipeAction.CHOOSE_WHEN
         private val KEY_KEEP_ENTRY_OPEN = booleanPreferencesKey("keep_entry_open")
+        private val KEY_ENTRY_CHIP_ORDER = stringPreferencesKey("entry_chip_order")
+        private val KEY_ENTRY_CHIPS_PINNED = stringPreferencesKey("entry_chips_pinned")
+        private val KEY_ENTRY_OPEN_FULL = booleanPreferencesKey("entry_open_full")
         private val KEY_FAB_ALIGN_START = booleanPreferencesKey("fab_align_start")
         private val KEY_SUBTASK_DISPLAY_MODE = stringPreferencesKey("subtask_display_mode")
         private val KEY_ROW_DENSITY = stringPreferencesKey("row_density")
@@ -231,6 +239,11 @@ class BehaviorPrefsStore(
                 swipeRight = swipeAction(prefs[KEY_SWIPE_RIGHT], SwipeAction.COMPLETE),
                 swipeLeft = swipeAction(prefs[KEY_SWIPE_LEFT], legacySwipeLeft(prefs[KEY_SCHEDULE_ACTION])),
                 keepEntryOpen = prefs[KEY_KEEP_ENTRY_OPEN] ?: false,
+                entryChips = EntryChipLayout(
+                    order = EntryChips.readOrder(prefs[KEY_ENTRY_CHIP_ORDER]),
+                    pinned = EntryChips.readPinned(prefs[KEY_ENTRY_CHIPS_PINNED]),
+                    openFull = prefs[KEY_ENTRY_OPEN_FULL] ?: false,
+                ),
                 fabAlignStart = prefs[KEY_FAB_ALIGN_START] ?: false,
                 subtaskDisplayMode = prefs[KEY_SUBTASK_DISPLAY_MODE]
                     ?.let { runCatching { SubtaskDisplayMode.valueOf(it) }.getOrNull() }
@@ -299,6 +312,23 @@ class BehaviorPrefsStore(
 
     suspend fun setKeepEntryOpen(enabled: Boolean) {
         dataStore.edit { it[KEY_KEEP_ENTRY_OPEN] = enabled }
+    }
+
+    /** The quick-add chips in the user's order; chips of a newer version keep their place at the end. */
+    suspend fun setEntryChipOrder(order: List<EntryChip>) {
+        dataStore.edit { it[KEY_ENTRY_CHIP_ORDER] = EntryChips.write(order, it[KEY_ENTRY_CHIP_ORDER]) }
+    }
+
+    /** The quick-add chips always on the row; empty is Minimal. */
+    suspend fun setEntryChipsPinned(pinned: Set<EntryChip>) {
+        dataStore.edit {
+            // In the default order, so the stored value does not depend on the order they were picked in.
+            it[KEY_ENTRY_CHIPS_PINNED] = EntryChips.write(EntryChip.entries.filter { chip -> chip in pinned }, it[KEY_ENTRY_CHIPS_PINNED])
+        }
+    }
+
+    suspend fun setEntryOpenFull(enabled: Boolean) {
+        dataStore.edit { it[KEY_ENTRY_OPEN_FULL] = enabled }
     }
 
     suspend fun setFabAlignStart(enabled: Boolean) {

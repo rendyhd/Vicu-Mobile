@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
@@ -62,7 +63,9 @@ import com.rendyhd.vicu.location.LocationTrigger
 import com.rendyhd.vicu.location.SavedPlace
 import com.rendyhd.vicu.ui.components.picker.MonthCalendar
 import com.rendyhd.vicu.ui.components.picker.projectPickerRows
+import com.rendyhd.vicu.ui.components.picker.timeOfDayLabel
 import com.rendyhd.vicu.ui.components.shared.LocalClockDay
+import com.rendyhd.vicu.ui.components.shared.LocalWhenChoices
 import com.rendyhd.vicu.ui.components.shared.LocalDateFormat
 import com.rendyhd.vicu.ui.screens.taskdetail.PresetChip
 import com.rendyhd.vicu.ui.screens.taskdetail.ReminderPreset
@@ -83,6 +86,9 @@ import com.rendyhd.vicu.util.parseHexArgb
 import com.rendyhd.vicu.util.recurrenceForPreset
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.when_choices_edit_choices
+import org.jetbrains.compose.resources.stringResource
 
 // The trays of the new-task sheet (design concept 3). In the compact sheet a chip opens its tray
 // where the keyboard was; in the full-height sheet the same content opens under its row. Every
@@ -171,9 +177,9 @@ private fun TrayHeading(text: String) {
 }
 
 /**
- * When: the day tiles ([whenTiles]), the times of day, and a month calendar behind "Pick a date".
- * [onPick] gets the new value; null clears the date. [onCustomTime] asks for a time the chips do
- * not offer.
+ * When: the account's day choices ([whenTiles], contract section 23.2), its times of day (23.1),
+ * and a month calendar behind "Pick a date". [onPick] gets the new value; null clears the date.
+ * [onCustomTime] asks for a time the chips do not offer; [onEditChoices] opens the When choices.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -183,10 +189,12 @@ internal fun WhenTrayContent(
     now: LocalTime,
     onPick: (WhenValue?) -> Unit,
     onCustomTime: () -> Unit,
+    onEditChoices: () -> Unit,
 ) {
     val fmt = LocalDateFormat.current
-    val tiles = whenTiles(current, today, now, fmt, LocalClockDay.current.weekStart)
-    val selected = selectedTile(tiles, current, today)
+    val choices = LocalWhenChoices.current
+    val tiles = whenTiles(current, today, now, fmt, LocalClockDay.current.weekStart, choices)
+    val selected = selectedTile(tiles, current)
     var calendarOpen by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (pair in tiles.chunked(2)) {
@@ -194,7 +202,7 @@ internal fun WhenTrayContent(
                 for (tile in pair) {
                     WhenTileButton(
                         tile = tile,
-                        selected = tile.id == selected,
+                        selected = tile == selected,
                         onClick = { onPick(tile.value) },
                         modifier = Modifier.weight(1f),
                     )
@@ -203,16 +211,16 @@ internal fun WhenTrayContent(
             }
         }
         TrayHeading("Time")
-        val timeIsPreset = current.time == null || current.time in WhenLogic.TIME_CHOICES
+        val timeIsPreset = current.time == null || choices.times.any { it.time == current.time }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PresetChip(label = "No time", selected = current.date != null && current.time == null, onClick = {
                 onPick(WhenLogic.withTime(current, null, today).takeIf { it.date != null })
             })
-            for (time in WhenLogic.TIME_CHOICES) {
+            for (timeOfDay in choices.times) {
                 PresetChip(
-                    label = WhenLogic.timeLabel(time, fmt),
-                    selected = current.time == time,
-                    onClick = { onPick(WhenLogic.withTime(current, time, today)) },
+                    label = timeOfDayLabel(timeOfDay, fmt),
+                    selected = current.time == timeOfDay.time,
+                    onClick = { onPick(WhenLogic.withTime(current, timeOfDay.time, today)) },
                 )
             }
             PresetChip(
@@ -221,12 +229,15 @@ internal fun WhenTrayContent(
                 onClick = onCustomTime,
             )
         }
-        PresetChip(
-            label = if (calendarOpen) "Hide calendar" else "Pick a date…",
-            icon = Icons.Outlined.CalendarMonth,
-            selected = calendarOpen,
-            onClick = { calendarOpen = !calendarOpen },
-        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PresetChip(
+                label = if (calendarOpen) "Hide calendar" else "Pick a date…",
+                icon = Icons.Outlined.CalendarMonth,
+                selected = calendarOpen,
+                onClick = { calendarOpen = !calendarOpen },
+            )
+            PresetChip(label = stringResource(Res.string.when_choices_edit_choices), icon = Icons.Outlined.Tune, onClick = onEditChoices)
+        }
         if (calendarOpen) {
             MonthCalendar(
                 selected = current.date,

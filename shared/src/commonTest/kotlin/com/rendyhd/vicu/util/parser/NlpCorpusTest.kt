@@ -1,5 +1,7 @@
 package com.rendyhd.vicu.util.parser
 
+import com.rendyhd.vicu.util.TimeOfDay
+import com.rendyhd.vicu.util.WhenChoices
 import com.rendyhd.vicu.location.SavedPlace
 import com.rendyhd.vicu.util.WeekStart
 import com.rendyhd.vicu.util.readRepoFile
@@ -72,7 +74,12 @@ object NlpCorpusFixture {
         val estimate: Int? = null,
         val flag: Boolean = false,
         val request: Boolean = false,
+        /** The times of day the case is parsed with (section 5.6); the default ones when absent. */
+        val times: List<CorpusTime>? = null,
     )
+
+    @Serializable
+    data class CorpusTime(val name: String, val time: String)
 
     @Serializable
     data class Corpus(
@@ -109,7 +116,8 @@ class NlpCorpusTest {
             locale = case.locale,
             pro = case.pro,
         )
-        val result = TaskParser.parse(case.input, config, reference, zone, places, people, WeekStart.fromKey(case.weekStart))
+        val times = case.times?.map { TimeOfDay(it.name, WhenChoices.parseTime(it.time)!!) } ?: WhenChoices.DEFAULT_TIMES
+        val result = TaskParser.parse(case.input, config, reference, zone, places, people, WeekStart.fromKey(case.weekStart), times)
         val problems = mutableListOf<String>()
 
         if (result.title != case.title) problems += "title '${result.title}', expected '${case.title}'"
@@ -159,7 +167,7 @@ class NlpCorpusTest {
     @Test
     fun `the corpus is the contract version this parser implements`() {
         assertEquals(1, NlpCorpusFixture.corpus.contractVersion)
-        assertEquals(217, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
+        assertEquals(241, NlpCorpusFixture.corpus.cases.size, "the corpus changed size")
     }
 
     @Test

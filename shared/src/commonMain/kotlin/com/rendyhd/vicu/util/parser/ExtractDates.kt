@@ -1,7 +1,10 @@
 package com.rendyhd.vicu.util.parser
 
+import com.rendyhd.vicu.util.CurrentTimesOfDay
 import com.rendyhd.vicu.util.DueDates
+import com.rendyhd.vicu.util.TimeOfDay
 import com.rendyhd.vicu.util.WeekStart
+import com.rendyhd.vicu.util.WhenChoices
 import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
@@ -69,6 +72,8 @@ data class DateOptions(
     val hidden: List<IntRange> = emptyList(),
     /** The day weeks start on: which week `next week` and `next friday` mean (contract section 2.1). */
     val weekStart: WeekStart = WeekStart.DEFAULT,
+    /** The account's times of day: their names are time words (contract section 5.6). */
+    val timesOfDay: List<TimeOfDay> = CurrentTimesOfDay.value,
 )
 
 /** The local date and time on the device clock in [zone]. */
@@ -95,7 +100,8 @@ fun extractDate(
     val atoms = findAtoms(working, consumed, options)
     val phrases = mergeAtoms(atoms, working, consumed)
 
-    val usable = phrases.filter { !options.skipTimeOnly || it.namesDate }
+    // A time of day's name on its own ("morning run") is a word of the title (section 5.6).
+    val usable = phrases.filter { (!options.skipTimeOnly || it.namesDate) && !it.isBareName }
     val prefer = options.prefer
     val chosen = prefer?.let { region -> usable.firstOrNull { it.start <= region.last && it.end > region.first } }
         ?: usable.firstOrNull()
@@ -224,6 +230,10 @@ private class Atom(
     val movesWhenTimePassed: Boolean = false,
     /** A DATE atom named by a weekday ("friday", "next friday", "friday next week"). */
     val weekday: Boolean = false,
+    /** A DATE atom that also names its time: "this afternoon", "tonight" (section 5.6). */
+    val fixedTime: LocalTime? = null,
+    /** A TIME atom that is a time of day's name: a time only right after a date ("tomorrow morning"). */
+    val needsDate: Boolean = false,
 )
 
 /** One or two atoms next to each other: a date, a time, or a date and a time. */
@@ -233,6 +243,9 @@ private class Phrase(val atoms: List<Atom>) {
 
     /** True when the phrase names a day (a bare time or "in 2 hours" does not). */
     val namesDate: Boolean get() = atoms.any { it.kind == AtomKind.DATE }
+
+    /** A time of day's name with no date before it. */
+    val isBareName: Boolean get() = atoms.size == 1 && atoms[0].needsDate
 }
 
 private class Resolved(val dateTime: LocalDateTime, val hasTime: Boolean)
@@ -260,6 +273,8 @@ private fun mergeAtoms(atoms: List<Atom>, working: String, consumed: List<IntRan
  */
 private fun canMerge(first: Atom, second: Atom, working: String, consumed: List<IntRange>): Boolean {
     if (overlapsConsumed(first.end, second.start, consumed)) return false
+    // "this afternoon" and "tonight" are a day and a time already; a name goes after its date only.
+    if (first.fixedTime != null || second.fixedTime != null || first.needsDate) return false
     val gap = working.substring(first.end, second.start)
     return when {
         first.kind == AtomKind.DATE && second.kind == AtomKind.TIME -> GAP_DATE_THEN_TIME_RE.matches(gap)
@@ -275,7 +290,7 @@ private fun resolve(phrase: Phrase, options: DateOptions): Resolved {
     phrase.atoms.firstOrNull { it.kind == AtomKind.RELATIVE }?.let { return Resolved(it.moment!!, true) }
 
     val dateAtom = phrase.atoms.firstOrNull { it.kind == AtomKind.DATE }
-    val time = phrase.atoms.firstOrNull { it.kind == AtomKind.TIME }?.time
+    val time = phrase.atoms.firstOrNull { it.kind == AtomKind.TIME }?.time ?: dateAtom?.fixedTime
 
     return when {
         dateAtom != null && time != null -> {
@@ -402,6 +417,27 @@ private fun findAtoms(working: String, consumed: List<IntRange>, options: DateOp
         atoms += Atom(AtomKind.TIME, m.range.first, m.range.last + 1, time = time)
     }
 
+    // The times of day (section 5.6): "tomorrow morning", "at noon", "this afternoon", "tonight".
+    // Longer names first, so "after work" is read before "work".
+    val names = options.timesOfDay.filter { WhenChoices.isReadableName(it.name) }.sortedByDescending { it.name.length }
+    for (timeOfDay in names) {
+        val words = timeOfDay.name.split(' ').joinToString(NAME_GAP) { Regex.escape(it) }
+        for (m in Regex("$WB(?:(at|this)\\s+)?$words$WE", IC).findAll(working)) {
+            val start = m.range.first
+            val end = m.range.last + 1
+            atoms += when (m.groupValues[1].lowercase()) {
+                "this" -> Atom(AtomKind.DATE, start, end, date = today, fixedTime = timeOfDay.time)
+                "at" -> Atom(AtomKind.TIME, start, end, time = timeOfDay.time)
+                else -> Atom(AtomKind.TIME, start, end, time = timeOfDay.time, needsDate = true)
+            }
+        }
+    }
+    WhenChoices.eveningTime(options.timesOfDay)?.let { evening ->
+        for (m in TONIGHT_RE.findAll(working)) {
+            atoms += Atom(AtomKind.DATE, m.range.first, m.range.last + 1, date = today, fixedTime = evening)
+        }
+    }
+
     // Left to right; where two atoms overlap the earlier (then the longer) one wins. Text that
     // another extractor took is never part of a date.
     val sorted = atoms
@@ -511,6 +547,8 @@ private val IC = RegexOption.IGNORE_CASE
 
 private val RELATIVE_TIME_RE = Regex("""${WB}in\s+(\d+|an?)\s+(hours?|hrs?|minutes?|mins?)$WE""", IC)
 private val RELATIVE_DATE_RE = Regex("""${WB}in\s+(\d+|an?)\s+(days?|weeks?|months?|years?)$WE""", IC)
+private val TONIGHT_RE = Regex("""${WB}tonight$WE""", IC)
+private const val NAME_GAP = """\s+"""
 private val TODAY_TOMORROW_RE = Regex("""${WB}(today|tomorrow)$WE""", IC)
 private val NEXT_PERIOD_RE = Regex("""${WB}next\s+(week|month)$WE""", IC)
 private val WEEKDAY_RE = Regex("""${WB}(?:(this|next)\s+)?($WEEKDAY_NAMES)(\s+(?:this|next)\s+week)?$WE""", IC)

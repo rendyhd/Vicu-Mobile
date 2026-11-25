@@ -4,6 +4,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import com.rendyhd.vicu.auth.AuthDebugLog
 import com.rendyhd.vicu.data.repository.WeekStartPreferences
+import com.rendyhd.vicu.data.repository.WhenChoicesPreferences
 import com.rendyhd.vicu.di.iosModule
 import com.rendyhd.vicu.di.sharedModules
 import com.rendyhd.vicu.location.AppleLocationBridge
@@ -71,6 +72,8 @@ object IosApp {
         ).also { it.install() }
         // Every ClockDay carries the account's week start from here on (contract section 2.1).
         koin.get<DayClock>().follow(koin.get<WeekStartPreferences>().weekStart)
+        // The quick-add parser reads the account's times of day (contract section 5.6).
+        koin.get<WhenChoicesPreferences>().follow(koin.get<CoroutineScope>())
         koin.get<IosBackgroundTasks>().register()
         koin.get<IosWidgetSnapshots>().bridge = widgetBridge
         koin.get<IosLocationBridgeHolder>().bridge = locationBridge

@@ -1,6 +1,9 @@
 package com.rendyhd.vicu.ui
 
+import com.rendyhd.vicu.data.repository.WhenChoicesPreferences
 import com.rendyhd.vicu.i18n.load
+import com.rendyhd.vicu.ui.components.shared.LocalWhenChoices
+import com.rendyhd.vicu.util.WhenChoiceSet
 import com.rendyhd.vicu.ui.components.category.LocalProjectCategories
 import com.rendyhd.vicu.ui.components.shared.VicuSnackbar
 import com.rendyhd.vicu.ui.components.shared.snackbarColors
@@ -787,6 +790,9 @@ fun VicuApp(
         }
     }
 
+    // The account's When choices (section 23), for every When picker.
+    val whenChoices by koinInject<WhenChoicesPreferences>().choices.collectAsStateWithLifecycle(initialValue = WhenChoiceSet())
+
     // What every surface of the app is composed under, the sheets and dialogs as much as the
     // screens: the current day and zone, the user's clock and the date phrasing, the row actions.
     val appLocals = arrayOf<ProvidedValue<*>>(
@@ -795,6 +801,7 @@ fun VicuApp(
         LocalRowDensity provides rowDensity,
         LocalToday provides clockDay.date,
         LocalClockDay provides clockDay,
+        LocalWhenChoices provides whenChoices,
         LocalIs24Hour provides is24Hour,
         LocalDateFormat provides dateFormat,
         LocalTaskRowActions provides taskRowActions,

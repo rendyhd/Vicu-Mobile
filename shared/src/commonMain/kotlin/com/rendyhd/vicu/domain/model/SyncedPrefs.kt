@@ -63,6 +63,15 @@ object SyncedPrefKeys {
 
     /** The work hours, `["HH:mm", "HH:mm"]` (section 16.6). */
     const val PLANNER_HOURS = "planner.hours"
+
+    /** The times of day, `[{"name", "time"}]` (section 23.1). */
+    const val WHEN_TIMES = "when.times"
+
+    /** The When pickers' day choices (section 23.2). */
+    const val WHEN_DAYS = "when.days"
+
+    /** The When pickers' Move by steps (section 23.3). */
+    const val WHEN_MOVE_BY = "when.move_by"
     private const val TASK_ORDER_PROJECT_PREFIX = "task_order.project."
 
     fun taskOrderOf(projectId: Long): String = "$TASK_ORDER_PROJECT_PREFIX$projectId"

@@ -110,8 +110,8 @@
 4	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/DrawerArrangementSection.kt
 15	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/GeneralAccountSections.kt
 10	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/GeneralDataSections.kt
-44	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/GeneralPreferenceSections.kt
-6	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/GesturesTab.kt
+42	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/GeneralPreferenceSections.kt
+6	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/InputTab.kt
 34	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/NotificationsTab.kt
 13	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/ProSettingsSection.kt
 3	shared/src/commonMain/kotlin/com/rendyhd/vicu/ui/screens/settings/ProjectsTab.kt

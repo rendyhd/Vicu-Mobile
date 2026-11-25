@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddTask
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Gesture
@@ -29,7 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -42,7 +47,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rendyhd.vicu.data.local.SwipeAction
+import com.rendyhd.vicu.data.repository.WhenChoicesPreferences
+import com.rendyhd.vicu.ui.components.picker.WhenChoicesEditor
+import com.rendyhd.vicu.ui.components.task.EntryChipsEditor
+import com.rendyhd.vicu.ui.components.task.EntryOpenFullRow
 import com.rendyhd.vicu.ui.components.task.SwipeActions
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.settings_input_keep_open
+import com.rendyhd.vicu.resources.settings_input_keep_open_description
+import com.rendyhd.vicu.resources.settings_input_quick_add
+import com.rendyhd.vicu.resources.settings_input_when
+import org.jetbrains.compose.resources.stringResource
 
 /** Shown above the two swipe settings. */
 internal const val SWIPE_INTRO =
@@ -64,16 +81,23 @@ internal const val UNDO_TIP =
     "Tip: A task you complete stays in the list for a few seconds. " +
         "Tap its checkbox again to undo."
 
-// ========== Gestures Tab ==========
+// ========== Input Tab ==========
 
+/**
+ * The Input tab (the Gestures tab of earlier versions): how tasks are entered and handled. Quick add
+ * (its chips, open at full height, keep open), the title's parsing, the swipes and the other
+ * gestures.
+ */
 @Composable
-internal fun GesturesTab(
-    swipeRight: SwipeAction,
-    swipeLeft: SwipeAction,
-    onSwipeRightChange: (SwipeAction) -> Unit,
-    onSwipeLeftChange: (SwipeAction) -> Unit,
+internal fun InputTab(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
     listState: LazyListState,
 ) {
+    val swipeRight = state.behaviorPrefs.swipeRight
+    val swipeLeft = state.behaviorPrefs.swipeLeft
+    val onSwipeRightChange: (SwipeAction) -> Unit = viewModel::setSwipeRight
+    val onSwipeLeftChange: (SwipeAction) -> Unit = viewModel::setSwipeLeft
     // Which swipe is being chosen: true for the right one, false for the left, null for none.
     var choosingRight by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
@@ -81,6 +105,10 @@ internal fun GesturesTab(
         modifier = Modifier.fillMaxSize(),
         state = listState,
     ) {
+        quickAddSection(state, viewModel)
+        whenChoicesSection()
+        inputParsingSection(state, viewModel)
+
         item(key = "swipes_header") {
             SectionHeader(icon = Icons.Outlined.Swipe, title = "Swipes")
         }
@@ -276,4 +304,69 @@ private fun GestureRow(
             )
         }
     }
+}
+
+/**
+ * Quick add: which chips the sheet always shows and in what order ([EntryChipsEditor], also behind
+ * the sheet's own Customize chip), whether it opens at full height, and whether it stays open
+ * after adding.
+ */
+internal fun LazyListScope.quickAddSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    item(key = "quick_add_header") {
+        SectionHeader(icon = Icons.Outlined.AddTask, title = stringResource(Res.string.settings_input_quick_add))
+    }
+
+    item(key = "quick_add_chips") {
+        EntryChipsEditor(
+            layout = state.behaviorPrefs.entryChips,
+            onPinned = viewModel::setEntryChipsPinned,
+            onOrder = viewModel::setEntryChipOrder,
+        )
+    }
+
+    item(key = "quick_add_open_full") {
+        EntryOpenFullRow(checked = state.behaviorPrefs.entryChips.openFull, onChange = viewModel::setEntryOpenFull)
+    }
+
+    item(key = "keep_entry_open") {
+        SwitchRow(
+            label = stringResource(Res.string.settings_input_keep_open),
+            description = stringResource(Res.string.settings_input_keep_open_description),
+            checked = state.behaviorPrefs.keepEntryOpen,
+            onCheckedChange = viewModel::setKeepEntryOpen,
+        )
+    }
+
+    item(key = "quick_add_divider") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+/** When: the times of day, day choices and Move by steps every When picker offers (contract section 23). */
+internal fun LazyListScope.whenChoicesSection() {
+    item(key = "when_header") {
+        SectionHeader(icon = Icons.Outlined.CalendarMonth, title = stringResource(Res.string.settings_input_when))
+    }
+    item(key = "when_choices") { WhenChoicesSetting() }
+    item(key = "when_divider") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+@Composable
+private fun WhenChoicesSetting() {
+    val preferences = koinInject<WhenChoicesPreferences>()
+    val scope = rememberCoroutineScope()
+    val choices by preferences.choices.collectAsState(initial = null)
+    val current = choices ?: return
+    WhenChoicesEditor(
+        choices = current,
+        onTimes = { scope.launch { preferences.setTimes(it) } },
+        onDays = { scope.launch { preferences.setDays(it) } },
+        onMoveBy = { scope.launch { preferences.setMoveBy(it) } },
+        onReset = { scope.launch { preferences.reset() } },
+    )
 }

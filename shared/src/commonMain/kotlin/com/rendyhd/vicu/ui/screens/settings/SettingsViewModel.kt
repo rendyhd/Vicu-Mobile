@@ -1,6 +1,7 @@
 package com.rendyhd.vicu.ui.screens.settings
 
 import com.rendyhd.vicu.data.repository.WorkModeSource
+import com.rendyhd.vicu.util.EntryChip
 import com.rendyhd.vicu.util.countOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -806,6 +807,18 @@ class SettingsViewModel(
 
     fun setKeepEntryOpen(enabled: Boolean) {
         viewModelScope.launch { behaviorPrefsStore.setKeepEntryOpen(enabled) }
+    }
+
+    fun setEntryChipsPinned(pinned: Set<EntryChip>) {
+        viewModelScope.launch { behaviorPrefsStore.setEntryChipsPinned(pinned) }
+    }
+
+    fun setEntryChipOrder(order: List<EntryChip>) {
+        viewModelScope.launch { behaviorPrefsStore.setEntryChipOrder(order) }
+    }
+
+    fun setEntryOpenFull(enabled: Boolean) {
+        viewModelScope.launch { behaviorPrefsStore.setEntryOpenFull(enabled) }
     }
 
     fun setFabAlignStart(enabled: Boolean) {

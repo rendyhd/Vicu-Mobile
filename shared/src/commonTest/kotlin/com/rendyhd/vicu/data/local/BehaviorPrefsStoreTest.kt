@@ -4,6 +4,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.rendyhd.vicu.data.repository.InMemoryPreferencesDataStore
+import com.rendyhd.vicu.util.EntryChip
+import com.rendyhd.vicu.util.EntryChipLayout
+import com.rendyhd.vicu.util.EntryChipPreset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -124,5 +127,54 @@ class BehaviorPrefsStoreTest {
 
         store.setDrawerOrder(emptyList())
         assertNull(data.data.first()[orderKey])
+    }
+
+    private val chipOrderKey = stringPreferencesKey("entry_chip_order")
+    private val chipsPinnedKey = stringPreferencesKey("entry_chips_pinned")
+
+    @Test
+    fun `quick add starts with the Standard chips, compact`() = runTest {
+        val chips = BehaviorPrefsStore(InMemoryPreferencesDataStore()).getPrefs().first().entryChips
+        assertEquals(EntryChipLayout(), chips)
+        assertEquals(EntryChipPreset.STANDARD, chips.preset)
+    }
+
+    @Test
+    fun `the quick-add chips, their order and full height are kept`() = runTest {
+        val data = InMemoryPreferencesDataStore()
+        val store = BehaviorPrefsStore(data)
+
+        store.setEntryChipsPinned(emptySet())
+        assertEquals(EntryChipPreset.MINIMAL, store.getPrefs().first().entryChips.preset)
+        assertEquals("", data.data.first()[chipsPinnedKey])
+
+        store.setEntryChipsPinned(setOf(EntryChip.REPEAT, EntryChip.WHEN))
+        assertEquals(setOf(EntryChip.WHEN, EntryChip.REPEAT), store.getPrefs().first().entryChips.pinned)
+        // Stored in the default order, whatever order they were picked in.
+        assertEquals("WHEN,REPEAT", data.data.first()[chipsPinnedKey])
+
+        val order = listOf(EntryChip.PROJECT) + (EntryChip.entries - EntryChip.PROJECT)
+        store.setEntryChipOrder(order)
+        store.setEntryOpenFull(true)
+        val chips = store.getPrefs().first().entryChips
+        assertEquals(order, chips.order)
+        assertTrue(chips.openFull)
+    }
+
+    @Test
+    fun `chips a newer version wrote are kept when this one writes`() = runTest {
+        val data = InMemoryPreferencesDataStore()
+        data.edit {
+            it[chipOrderKey] = "ESTIMATE,WHEN"
+            it[chipsPinnedKey] = "ESTIMATE,WHEN"
+        }
+        val store = BehaviorPrefsStore(data)
+        assertEquals(setOf(EntryChip.WHEN), store.getPrefs().first().entryChips.pinned)
+        assertEquals(EntryChip.WHEN, store.getPrefs().first().entryChips.order.first())
+
+        store.setEntryChipsPinned(setOf(EntryChip.LABELS))
+        assertEquals("LABELS,ESTIMATE", data.data.first()[chipsPinnedKey])
+        store.setEntryChipOrder(EntryChip.entries)
+        assertTrue(data.data.first()[chipOrderKey]!!.endsWith(",ESTIMATE"))
     }
 }

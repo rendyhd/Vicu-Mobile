@@ -1,5 +1,11 @@
 package com.rendyhd.vicu.ui.components.picker
 
+import com.rendyhd.vicu.ui.components.shared.LocalWhenChoices
+import com.rendyhd.vicu.util.WhenChoices
+import com.rendyhd.vicu.ui.screens.taskentry.dayChoiceHint
+import com.rendyhd.vicu.util.DateUtils
+import com.rendyhd.vicu.util.DateDisplay
+import androidx.compose.material3.AssistChip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -48,11 +54,14 @@ import com.rendyhd.vicu.ui.components.shared.VicuDragHandle
 import com.rendyhd.vicu.util.DueDates
 import com.rendyhd.vicu.util.SystemTimeSource
 import com.rendyhd.vicu.util.WhenLogic
-import com.rendyhd.vicu.util.WhenQuickChoice
 import com.rendyhd.vicu.util.WhenValue
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toLocalDateTime
+import com.rendyhd.vicu.resources.Res
+import com.rendyhd.vicu.resources.when_choices_move_by
+import com.rendyhd.vicu.resources.when_choices_move_by_step
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The When sheet (design review card 3.4b), the Android counterpart of the desktop When panel:
@@ -148,18 +157,47 @@ fun WhenSheet(
                     keyboardActions = KeyboardActions(onDone = { typed?.let(::finish) }),
                 )
 
-                val choices = remember(today, clockDay.weekStart) { WhenLogic.quickChoices(today, clockDay.weekStart) }
+                // The account's day choices (contract section 23.2); a choice with its own time
+                // sets it, the others keep the time shown.
+                val whenChoices = LocalWhenChoices.current
+                val dayChoices = remember(today, clockDay.weekStart, whenChoices) {
+                    val now = SystemTimeSource.now().toLocalDateTime(zone)
+                    WhenChoices.days(whenChoices.days, now, whenChoices.times, clockDay.weekStart)
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (pair in choices.chunked(2)) {
+                    for (pair in dayChoices.chunked(2)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             for (choice in pair) {
                                 QuickChoiceButton(
-                                    choice = choice,
-                                    hint = WhenLogic.hint(choice, fmt),
-                                    onClick = { finish(WhenLogic.withDate(shown, choice.date)) },
+                                    label = choice.id.label,
+                                    hint = dayChoiceHint(choice, fmt),
+                                    onClick = {
+                                        val time = choice.time
+                                        finish(if (time != null) WhenValue(choice.date, time) else WhenLogic.withDate(shown, choice.date))
+                                    },
                                     modifier = Modifier.weight(1f),
                                 )
                             }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                // Move by (23.3): only for a task that has a date, counted from the stored due
+                // day or from today when that is earlier; the clock time stays.
+                val storedDue = remember(currentDate) { DateUtils.parseIsoDate(currentDate) }
+                if (initial.date != null && storedDue != null && whenChoices.moveBy.isNotEmpty()) {
+                    Text(stringResource(Res.string.when_choices_move_by), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (step in whenChoices.moveBy) {
+                            val day = WhenChoices.moveDay(initial.date, step, today)
+                            AssistChip(
+                                onClick = {
+                                    val moved = WhenChoices.moveBy(storedDue, step, today, zone)
+                                    close { onDateSelected(moved.toString()) }
+                                },
+                                label = { Text(stringResource(Res.string.when_choices_move_by_step, step.label, DateDisplay.formatWeekdayDay(day, fmt))) },
+                            )
                         }
                     }
                 }
@@ -173,7 +211,8 @@ fun WhenSheet(
                 )
 
                 Text("Time", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val timeIsPreset = shown.time != null && shown.time in WhenLogic.TIME_CHOICES
+                val namedTimes = whenChoices.times
+                val timeIsPreset = shown.time != null && namedTimes.any { it.time == shown.time }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -183,11 +222,11 @@ fun WhenSheet(
                         onClick = { apply(WhenLogic.withTime(shown, null, today)) },
                         label = { Text("None") },
                     )
-                    for (time in WhenLogic.TIME_CHOICES) {
+                    for (timeOfDay in namedTimes) {
                         FilterChip(
-                            selected = shown.time == time,
-                            onClick = { apply(WhenLogic.withTime(shown, time, today)) },
-                            label = { Text(WhenLogic.timeLabel(time, fmt)) },
+                            selected = shown.time == timeOfDay.time,
+                            onClick = { apply(WhenLogic.withTime(shown, timeOfDay.time, today)) },
+                            label = { Text(timeOfDayLabel(timeOfDay, fmt)) },
                         )
                     }
                     FilterChip(
@@ -233,7 +272,7 @@ fun WhenSheet(
 
 @Composable
 private fun QuickChoiceButton(
-    choice: WhenQuickChoice,
+    label: String,
     hint: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -242,7 +281,7 @@ private fun QuickChoiceButton(
         onClick = onClick,
         modifier = modifier
             .heightIn(min = 48.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "${choice.label}, $hint" },
+            .semantics(mergeDescendants = true) { contentDescription = "$label, $hint" },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
@@ -251,7 +290,7 @@ private fun QuickChoiceButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(choice.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
