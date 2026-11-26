@@ -35,3 +35,8 @@ object TaskWidgetStateDefinition : GlanceStateDefinition<Preferences> {
     fun encodeState(state: TaskWidgetState): String =
         json.encodeToString(TaskWidgetState.serializer(), state)
 }
+
+/** Timestamp changes alone do not affect the view, except when leaving the loading state. */
+internal fun TaskWidgetState.needsRedrawFrom(previous: TaskWidgetState): Boolean =
+    lastUpdated.isEmpty() != previous.lastUpdated.isEmpty() ||
+        this != previous.copy(lastUpdated = lastUpdated)

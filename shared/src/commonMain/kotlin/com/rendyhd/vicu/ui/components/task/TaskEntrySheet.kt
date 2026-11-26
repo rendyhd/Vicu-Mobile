@@ -166,7 +166,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * The new-task sheet (design concept 3, "one sheet, two heights"), drawn over the screens.
  *
  * Compact, it sits on the keyboard: the title (its parsed words highlighted), a Notes line, and one
- * line of chips for When, Remind and Priority that say their value in words (tags, a project and a
+ * line of chips for Project, When, Remind and Priority that say their value in words (tags and a
  * repeat join it once they hold something). A chip opens
  * its tray where the keyboard was, at the keyboard's height, so the sheet does not move; tapping
  * the title (or the chip again) brings the keyboard back. A chip shows what the parser read from
@@ -544,7 +544,10 @@ fun TaskEntrySheet(
                 projects = state.allProjects,
                 inboxProjectId = state.inboxProjectId,
                 selectedId = fields.projectId,
-                onPick = viewModel::setProjectId,
+                onPick = { projectId ->
+                    viewModel.setProjectId(projectId)
+                    if (!expanded) toggleTray(EntryTray.PROJECT)
+                },
             )
             EntryTray.REPEAT -> RepeatTrayContent(
                 current = fields.recurrence,
@@ -767,16 +770,21 @@ fun TaskEntrySheet(
                             }
                         } else {
                             Spacer(modifier = Modifier.height(4.dp))
-                            // One line of chips: When, Remind and Priority. A chip says its value in
-                            // words; the colour of a value read from the title is the colour of its
-                            // highlight. Labels, the project and a repeat live at full height and join
-                            // the line only once they hold something (typed in the title or picked
-                            // there); a line that does not fit scrolls sideways.
+                            // Keep the destination in view at the start of the scrolling chip row.
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                TaskEntryChip(
+                                    label = projectWords,
+                                    icon = Icons.Outlined.Folder,
+                                    modifier = Modifier.widthIn(max = 160.dp),
+                                    onClick = { toggleTray(EntryTray.PROJECT) },
+                                    selected = tray == EntryTray.PROJECT,
+                                    tint = if (fields.parsedProjectName != null) tokenChipColor(TokenType.PROJECT, isDarkTheme) else null,
+                                    tokenRect = { tokenRectOf(TokenType.PROJECT) },
+                                )
                                 TaskEntryChip(
                                     label = dateWords ?: "When",
                                     icon = Icons.Outlined.CalendarMonth,
@@ -812,18 +820,6 @@ fun TaskEntrySheet(
                                         selected = tray == EntryTray.TAGS,
                                         tint = if (parsedLabels.isNotEmpty()) tokenChipColor(TokenType.LABEL, isDarkTheme) else null,
                                         tokenRect = { tokenRectOf(TokenType.LABEL) },
-                                    )
-                                }
-                                // The project the sheet was opened in goes without saying; one typed
-                                // in the title or picked at full height shows.
-                                if (fields.parsedProjectName != null || state.projectIsManual) {
-                                    TaskEntryChip(
-                                        label = projectWords,
-                                        icon = Icons.Outlined.Folder,
-                                        onClick = { toggleTray(EntryTray.PROJECT) },
-                                        selected = tray == EntryTray.PROJECT,
-                                        tint = if (fields.parsedProjectName != null) tokenChipColor(TokenType.PROJECT, isDarkTheme) else null,
-                                        tokenRect = { tokenRectOf(TokenType.PROJECT) },
                                     )
                                 }
                                 if (repeatWords != null) {

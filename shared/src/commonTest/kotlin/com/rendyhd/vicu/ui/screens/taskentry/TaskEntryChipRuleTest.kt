@@ -74,7 +74,7 @@ class TaskEntryChipRuleTest {
 
     private class Rig(val tasks: FakeTaskRepository, val vm: TaskEntryViewModel, val authScope: CoroutineScope)
 
-    private fun TestScope.rig(): Rig {
+    private suspend fun TestScope.rig(defaultProjectId: Long? = inboxId, configuredInboxId: Long = inboxId): Rig {
         val tasks = FakeTaskRepository().apply {
             createHandler = { NetworkResult.Success(it.copy(id = 500)) }
         }
@@ -88,7 +88,7 @@ class TaskEntryChipRuleTest {
             attachmentRepository = FakeAttachmentRepository(),
             authManager = AuthManager(
                 platformAuthHooks = RecordingAuthHooks(),
-                tokenStorage = InMemoryTokenStorage(),
+                tokenStorage = InMemoryTokenStorage().apply { storeInboxProjectId(configuredInboxId) },
                 apiServiceProvider = { error("no network in this test") },
                 appScope = authScope,
                 networkMonitor = FakeNetworkMonitor(),
@@ -102,7 +102,7 @@ class TaskEntryChipRuleTest {
             dayClock = DayClock(backgroundScope, FixedTimeSource(Clock.System.now(), zone), ticking = false),
         )
         runCurrent()
-        vm.initWithDefaults(defaultProjectId = inboxId, defaultDueDate = null)
+        vm.initWithDefaults(defaultProjectId, defaultDueDate = null)
         runCurrent()
         return Rig(tasks, vm, authScope)
     }
@@ -118,6 +118,22 @@ class TaskEntryChipRuleTest {
     private fun Rig.fields() = resolveEntryFields(vm.uiState.value, zone)
 
     private fun Rig.tokenTypes() = vm.uiState.value.parseResult?.tokens?.map { it.type }.orEmpty()
+
+    @Test
+    fun `main add starts in the configured inbox and the project chip can redirect the task`() = runTest {
+        val rig = rig(defaultProjectId = null, configuredInboxId = personalId)
+        assertEquals(personalId, rig.fields().projectId)
+        rig.vm.setTitle("Test task")
+        rig.vm.setProjectId(workId)
+        assertEquals(workId, saved(rig).projectId)
+    }
+
+    @Test
+    fun `project heading add starts in that project instead of the configured inbox`() = runTest {
+        val rig = rig(defaultProjectId = workId, configuredInboxId = personalId)
+        rig.vm.setTitle("Test task")
+        assertEquals(workId, saved(rig).projectId)
+    }
 
     // --- Without a chip set, the text is read --------------------------------------------------
 

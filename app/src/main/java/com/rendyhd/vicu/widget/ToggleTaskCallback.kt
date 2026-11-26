@@ -34,14 +34,18 @@ class ToggleTaskCallback : ActionCallback, KoinComponent {
             // feels instant. The refresh at the end reads the stored tasks, which now include
             // the completion, so the row does not come back; if the completion failed the
             // refresh shows it again.
+            var removedRow = false
             updateAppWidgetState(
                 context,
                 TaskWidgetStateDefinition,
                 glanceId,
             ) { prefs ->
                 val state = TaskWidgetStateDefinition.parseState(prefs)
+                val remaining = state.tasks.filter { it.id != taskId }
+                removedRow = remaining.size != state.tasks.size
+                if (!removedRow) return@updateAppWidgetState prefs
                 val updatedState = state.copy(
-                    tasks = state.tasks.filter { it.id != taskId },
+                    tasks = remaining,
                     totalCount = (state.totalCount - 1).coerceAtLeast(0),
                 )
                 prefs.toMutablePreferences().apply {
@@ -49,7 +53,7 @@ class ToggleTaskCallback : ActionCallback, KoinComponent {
                         TaskWidgetStateDefinition.encodeState(updatedState)
                 }
             }
-            TaskListWidget().update(context, glanceId)
+            if (removedRow) TaskListWidget().update(context, glanceId)
 
             // setDone, not a toggle: a second tap on a row that is already being completed must
             // not reopen it. The repository owns the recursive completion and the offline queue.
