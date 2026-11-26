@@ -13,14 +13,13 @@ import androidx.glance.LocalContext
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.action.Action
-import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -49,7 +48,6 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.rendyhd.vicu.MainActivity
 import com.rendyhd.vicu.putViewTarget
-import com.rendyhd.vicu.ui.navigation.ViewTarget
 import com.rendyhd.vicu.voice.VoiceAddActivity
 import com.rendyhd.vicu.ui.theme.VicuDarkColorScheme
 import com.rendyhd.vicu.ui.theme.VicuDarkColors
@@ -126,52 +124,19 @@ private fun GlanceModifier.widgetBackground(state: TaskWidgetState): GlanceModif
     if (state.transparentBackground) background(Color.Transparent)
     else background(GlanceTheme.colors.widgetBackground)
 
-// Action callbacks for deep linking
-class OpenTaskEntryAction : ActionCallback {
-    companion object {
-        val DefaultProjectIdKey = ActionParameters.Key<Long>("default_project_id")
+/**
+ * Builds an [Intent] to launch [MainActivity] for widget taps that open a screen.
+ *
+ * Must be dispatched via [androidx.glance.appwidget.action.actionStartActivity] rather than an
+ * [androidx.glance.appwidget.action.ActionCallback]. Callbacks execute inside a broadcast receiver,
+ * where `startActivity` is treated as a background launch on Android 10+. As a result, it is
+ * either blocked or hidden behind the launcher, making the tap appear unresponsive. Still keep callbacks
+ * only for background work, such as toggling a task.
+ */
+internal fun mainActivityIntent(context: Context): Intent =
+    Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
     }
-    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            putExtra(MainActivity.EXTRA_SHOW_TASK_ENTRY, true)
-            val projectId = parameters[DefaultProjectIdKey] ?: 0L
-            if (projectId != 0L) {
-                putExtra(MainActivity.EXTRA_DEFAULT_PROJECT_ID, projectId)
-            }
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    }
-}
-
-class OpenWidgetViewAction : ActionCallback {
-    companion object {
-        val ViewTypeKey = ActionParameters.Key<String>("view_type")
-        val ViewIdKey = ActionParameters.Key<String>("view_id")
-    }
-    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            // The action parameters can only carry strings; the intent carries the typed target.
-            ViewTarget.parse(parameters[ViewTypeKey], parameters[ViewIdKey])?.let { putViewTarget(it) }
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    }
-}
-
-class OpenTaskDetailAction : ActionCallback {
-    companion object {
-        val TaskIdKey = ActionParameters.Key<Long>("task_id")
-    }
-    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val taskId = parameters[TaskIdKey] ?: return
-        val intent = Intent(context, MainActivity::class.java).apply {
-            putExtra("task_id", taskId)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    }
-}
 
 /**
  * Resolves which project the + button should add tasks to, based on the widget state.
@@ -197,11 +162,8 @@ private fun resolveAddProjectId(state: TaskWidgetState): Long {
 private fun titleClickAction(state: TaskWidgetState): Action {
     val target = if (state.contextNav) state.viewType.toViewTarget(state.viewId) else null
     return if (target != null) {
-        actionRunCallback<OpenWidgetViewAction>(
-            actionParametersOf(
-                OpenWidgetViewAction.ViewTypeKey to target.typeName,
-                OpenWidgetViewAction.ViewIdKey to target.idOrEmpty,
-            )
+        actionStartActivity(
+            mainActivityIntent(LocalContext.current).apply { putViewTarget(target) }
         )
     } else {
         actionStartActivity<MainActivity>()
@@ -331,13 +293,14 @@ private fun VoiceButton() {
 @Composable
 private fun AddButton(state: TaskWidgetState) {
     val projectId = resolveAddProjectId(state)
-    val action = if (projectId != 0L) {
-        actionRunCallback<OpenTaskEntryAction>(
-            actionParametersOf(OpenTaskEntryAction.DefaultProjectIdKey to projectId)
-        )
-    } else {
-        actionRunCallback<OpenTaskEntryAction>()
-    }
+    val action = actionStartActivity(
+        mainActivityIntent(LocalContext.current).apply {
+            putExtra(MainActivity.EXTRA_SHOW_TASK_ENTRY, true)
+            if (projectId != 0L) {
+                putExtra(MainActivity.EXTRA_DEFAULT_PROJECT_ID, projectId)
+            }
+        }
+    )
     Box(
         modifier = GlanceModifier
             .height(36.dp)
@@ -363,8 +326,8 @@ private fun WidgetTaskRow(task: WidgetTaskItem) {
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable(
-                actionRunCallback<OpenTaskDetailAction>(
-                    actionParametersOf(OpenTaskDetailAction.TaskIdKey to task.id)
+                actionStartActivity(
+                    mainActivityIntent(LocalContext.current).apply { putExtra("task_id", task.id) }
                 )
             ),
         verticalAlignment = Alignment.CenterVertically,

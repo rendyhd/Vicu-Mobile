@@ -1,7 +1,6 @@
 package com.rendyhd.vicu.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.datastore.preferences.core.Preferences
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
@@ -14,6 +13,8 @@ import androidx.glance.GlanceTheme
 import android.text.format.DateFormat
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
@@ -22,6 +23,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -45,7 +47,6 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.rendyhd.vicu.MainActivity
 import com.rendyhd.vicu.putViewTarget
 import com.rendyhd.vicu.ui.navigation.ViewTarget
 import com.rendyhd.vicu.R
@@ -138,14 +139,12 @@ class RoutineWidget : GlanceAppWidget() {
     }
 }
 
-class OpenRoutinesWidgetAction : ActionCallback {
-    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        context.startActivity(Intent(context, MainActivity::class.java).apply {
-            putViewTarget(ViewTarget.Routines)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        })
-    }
-}
+/** Returns an [Action] that launches the Routines screen directly. See [mainActivityIntent]. */
+@Composable
+private fun openRoutinesAction(): Action =
+    actionStartActivity(
+        mainActivityIntent(LocalContext.current).apply { putViewTarget(ViewTarget.Routines) }
+    )
 
 class ToggleRoutineWidgetAction : ActionCallback {
     companion object {
@@ -206,7 +205,7 @@ private fun CompactRoutineWidget(state: RoutineWidgetState, rings: RoutineRingCo
     Row(
         modifier = GlanceModifier.fillMaxSize().cornerRadius(16.dp)
             .background(GlanceTheme.colors.widgetBackground).padding(16.dp)
-            .clickable(actionRunCallback<OpenRoutinesWidgetAction>()),
+            .clickable(openRoutinesAction()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = GlanceModifier.defaultWeight()) {
@@ -240,7 +239,7 @@ private fun LargeRoutineWidget(state: RoutineWidgetState, rings: RoutineRingColo
             .background(GlanceTheme.colors.widgetBackground).padding(16.dp),
     ) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth().clickable(actionRunCallback<OpenRoutinesWidgetAction>()),
+            modifier = GlanceModifier.fillMaxWidth().clickable(openRoutinesAction()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
