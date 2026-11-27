@@ -1,7 +1,10 @@
 package com.rendyhd.vicu.widget
 
 import android.content.Context
+import android.text.format.DateFormat
 import android.util.Log
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.work.CoroutineWorker
@@ -18,6 +21,7 @@ class TaskWidgetWorker(
 
     companion object {
         private const val TAG = "TaskWidgetWorker"
+        private val renderContextKey = stringPreferencesKey("task_widget_render_context")
     }
 
     override suspend fun doWork(): Result {
@@ -30,6 +34,11 @@ class TaskWidgetWorker(
                 return Result.success()
             }
 
+            dayClock.refresh()
+            val day = dayClock.day.value
+            val renderContext = "${day.date}|${day.zone.id}|${DateFormat.is24HourFormat(applicationContext)}"
+            val forceRedraw = runAttemptCount > 0 || inputData.getBoolean("force_redraw", false)
+
             // Auth guard: if not logged in, show message instead of stale data
             if (!states.isSignedIn()) {
                 Log.d(TAG, "User not logged in, showing login prompt on all widgets")
@@ -38,8 +47,7 @@ class TaskWidgetWorker(
                     val config = WidgetConfigStore.getConfig(applicationContext, appWidgetId)
                     val state = states.signedOut()
                         .copy(transparentBackground = config?.transparentBackground ?: false)
-                    write(glanceId, state)
-                    TaskListWidget().update(applicationContext, glanceId)
+                    renderIfChanged(glanceId, state, renderContext, forceRedraw)
                 }
                 return Result.success()
             }
@@ -47,10 +55,7 @@ class TaskWidgetWorker(
             val singleWidgetId = inputData.getInt("app_widget_id", -1)
             val updateAll = inputData.getBoolean("update_all", false)
 
-            // The day is re-read first: this runs from a worker that may wake long after the
-            // clock last ticked.
-            dayClock.refresh()
-            val batch = states.prepare(dayClock.day.value)
+            val batch = states.prepare(day)
 
             Log.d(TAG, "doWork: glanceIds=${glanceIds.size}, singleWidgetId=$singleWidgetId, updateAll=$updateAll")
 
@@ -66,9 +71,7 @@ class TaskWidgetWorker(
                 Log.d(TAG, "Widget $appWidgetId config=$config (null means default TODAY)")
                 val state = batch.build(config ?: WidgetConfig())
                     .copy(transparentBackground = config?.transparentBackground ?: false)
-                write(glanceId, state)
-                TaskListWidget().update(applicationContext, glanceId)
-                Log.d(TAG, "Widget $appWidgetId updated with ${state.tasks.size} of ${state.totalCount} tasks")
+                renderIfChanged(glanceId, state, renderContext, forceRedraw)
             }
 
             Result.success()
@@ -78,15 +81,27 @@ class TaskWidgetWorker(
         }
     }
 
-    private suspend fun write(glanceId: androidx.glance.GlanceId, state: TaskWidgetState) {
+    private suspend fun renderIfChanged(
+        glanceId: GlanceId,
+        state: TaskWidgetState,
+        renderContext: String,
+        forceRedraw: Boolean,
+    ) {
+        var redraw = false
         updateAppWidgetState(
             applicationContext,
             TaskWidgetStateDefinition,
             glanceId,
         ) { prefs ->
+            val previous = TaskWidgetStateDefinition.parseState(prefs)
+            redraw = forceRedraw || prefs[renderContextKey] != renderContext || state.needsRedrawFrom(previous)
+            if (!redraw) return@updateAppWidgetState prefs
+
             prefs.toMutablePreferences().apply {
+                this[renderContextKey] = renderContext
                 this[TaskWidgetStateDefinition.KEY_STATE] = TaskWidgetStateDefinition.encodeState(state)
             }
         }
+        if (redraw) TaskListWidget().update(applicationContext, glanceId)
     }
 }

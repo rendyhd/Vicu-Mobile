@@ -30,7 +30,7 @@ class AndroidSettingsHooks(
     override val hasWidgetVoiceButton: Boolean = true
 
     override fun updateWidgets() {
-        WidgetUpdateScheduler.enqueueImmediateUpdateAll(context)
+        WidgetUpdateScheduler.enqueueImmediateUpdateAll(context, forceRedraw = true)
         CoroutineScope(Dispatchers.IO).launch { runCatching { RoutineWidget().updateAllWidgets(context) } }
     }
 

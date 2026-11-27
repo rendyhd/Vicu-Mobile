@@ -274,10 +274,68 @@ private fun ScrollableWidget(state: TaskWidgetState) {
             }
         } else {
             LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                items(state.tasks, itemId = { it.id }) { task ->
-                    WidgetTaskRow(task)
+                if (state.groupByProject) {
+                    state.projectGroups().forEach { tasks ->
+                        items(tasks, itemId = { it.id }) { task ->
+                            if (task.id == tasks.first().id) {
+                                Column {
+                                    WidgetProjectHeader(task)
+                                    WidgetTaskRow(task)
+                                }
+                            } else {
+                                WidgetTaskRow(task)
+                            }
+                        }
+                    }
+                    if (state.viewType != WidgetViewType.ALL_TASKS && state.totalCount > state.tasks.size) {
+                        item {
+                            Text(
+                                text = "Showing ${state.tasks.size} of ${state.totalCount} tasks",
+                                modifier = GlanceModifier.padding(vertical = 8.dp).clickable(titleClickAction(state)),
+                                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp),
+                            )
+                        }
+                    }
+                } else {
+                    items(state.tasks, itemId = { it.id }) { task ->
+                        WidgetTaskRow(task)
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WidgetProjectHeader(task: WidgetTaskItem) {
+    Row(
+        modifier = GlanceModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = task.projectName,
+            modifier = GlanceModifier.defaultWeight(),
+            style = TextStyle(
+                color = GlanceTheme.colors.onSurface,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+            ),
+            maxLines = 1,
+        )
+        Box(
+            modifier = GlanceModifier.size(48.dp).clickable(
+                actionRunCallback<OpenTaskEntryAction>(
+                    actionParametersOf(OpenTaskEntryAction.DefaultProjectIdKey to task.projectId),
+                ),
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_add),
+                contentDescription = "Add task to ${task.projectName}",
+                modifier = GlanceModifier.size(32.dp),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
+            )
         }
     }
 }

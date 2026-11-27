@@ -30,6 +30,7 @@ class WidgetViewTargetTest {
         assertNull(WidgetViewType.PROJECT.toViewTarget(""))
         assertNull(WidgetViewType.PROJECT.toViewTarget("not-a-number"))
         assertNull(WidgetViewType.CUSTOM_LIST.toViewTarget(" "))
+        assertNull(WidgetViewType.ALL_TASKS.toViewTarget(""))
     }
 
     @Test
@@ -44,6 +45,7 @@ class WidgetViewTargetTest {
             WidgetViewType.CUSTOM_LIST to "abc",
         )
         WidgetViewType.entries.forEach { type ->
+            if (type == WidgetViewType.ALL_TASKS) return@forEach
             val target = type.toViewTarget(withIds.getValue(type))!!
             assertEquals(type.name, target.typeName)
             assertEquals(target, ViewTarget.parse(target.typeName, target.idOrEmpty))

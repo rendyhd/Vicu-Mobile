@@ -143,6 +143,7 @@ object WidgetSnapshots {
         WidgetViewType.INBOX -> "inbox"
         WidgetViewType.UPCOMING -> "upcoming"
         WidgetViewType.ANYTIME -> "anytime"
+        WidgetViewType.ALL_TASKS -> "all-tasks"
         WidgetViewType.PROJECT -> "project-$id"
         WidgetViewType.CUSTOM_LIST -> "list-" + id.map { if (it.isLetterOrDigit() || it == '-' || it == '_') it else '_' }.joinToString("")
     }
@@ -156,7 +157,8 @@ object WidgetSnapshots {
      */
     fun entityId(type: WidgetViewType, key: String, account: String): String = when (type) {
         WidgetViewType.PROJECT, WidgetViewType.CUSTOM_LIST -> if (account.isEmpty()) key else "$key@$account"
-        WidgetViewType.TODAY, WidgetViewType.INBOX, WidgetViewType.UPCOMING, WidgetViewType.ANYTIME -> key
+        WidgetViewType.TODAY, WidgetViewType.INBOX, WidgetViewType.UPCOMING, WidgetViewType.ANYTIME,
+        WidgetViewType.ALL_TASKS -> key
     }
 
     /**

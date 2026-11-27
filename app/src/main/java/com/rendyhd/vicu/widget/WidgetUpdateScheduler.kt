@@ -37,15 +37,15 @@ object WidgetUpdateScheduler {
         WorkManager.getInstance(context).enqueue(request)
     }
 
-    fun enqueueImmediateUpdateAll(context: Context) {
+    fun enqueueImmediateUpdateAll(context: Context, forceRedraw: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<TaskWidgetWorker>()
-            .setInputData(workDataOf("update_all" to true))
+            .setInputData(workDataOf("update_all" to true, "force_redraw" to forceRedraw))
             .expeditedFromAndroid12()
             .build()
         // Unique + REPLACE: rapid mutations collapse into one refresh instead of queueing
         // a redundant worker per repository write.
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "widget_immediate_refresh",
+            if (forceRedraw) "widget_appearance_refresh" else "widget_immediate_refresh",
             ExistingWorkPolicy.REPLACE,
             request,
         )
